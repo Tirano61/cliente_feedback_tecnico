@@ -2,7 +2,9 @@
 
 ## Descripción general
 
-App Flutter para registro de casos de servicio técnico de balanzas electrónicas para uso agropecuario. El técnico carga casos desde el celular (APK Android) o desde la PC (Flutter Web). Un panel separado de desarrollo (Flutter Web, mismo proyecto, distinto rol) permite analizar los datos.
+App Flutter para registro de servicios técnicos (órdenes de servicio) de balanzas electrónicas para uso agropecuario. El técnico carga servicios desde el celular (APK Android) o desde la PC (Flutter Web). Un panel separado de desarrollo (Flutter Web, mismo proyecto, distinto rol) permite analizar los datos.
+
+Nota de nomenclatura: funcionalmente usar "servicios" / "órdenes de servicio". En código/backend puede seguir existiendo `casos` como nombre técnico heredado.
 
 ---
 

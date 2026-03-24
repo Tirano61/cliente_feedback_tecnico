@@ -6,7 +6,7 @@ class FormularioCaso extends StatelessWidget {
 	@override
 	Widget build(BuildContext context) {
 		return const Center(
-			child: Text('Formulario de caso en construccion'),
+			child: Text('Formulario de orden de servicio en construccion'),
 		);
 	}
 }

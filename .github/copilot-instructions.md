@@ -33,7 +33,7 @@ Referencia de arquitectura, entidades, eventos/estados y endpoints:
 
 ## Pitfalls
 - Si falla Android release con `classes.dex ... being used by another process`, ejecutar `./android/gradlew --stop`, cerrar procesos Java/Gradle y reintentar build.
-- Si el backend NestJS no arranca por `EADDRINUSE 3000`, liberar el puerto antes de probar login/carga de casos.
+- Si el backend NestJS no arranca por `EADDRINUSE 3000`, liberar el puerto antes de probar login/carga de servicios.
 
 ## Key Files
 - `copilot-instructions.md`: especificacion funcional y tecnica completa del proyecto.
