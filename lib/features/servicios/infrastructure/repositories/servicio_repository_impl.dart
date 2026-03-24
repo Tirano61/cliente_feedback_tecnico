@@ -3,20 +3,20 @@ import 'dart:convert';
 import 'package:cliente_feedback_tecnico/core/api/api_client.dart';
 import 'package:cliente_feedback_tecnico/core/api/api_constants.dart';
 import 'package:cliente_feedback_tecnico/core/error/failures.dart';
-import 'package:cliente_feedback_tecnico/features/casos/domain/entities/caso.dart';
-import 'package:cliente_feedback_tecnico/features/casos/domain/repositories/i_caso_repository.dart';
-import 'package:cliente_feedback_tecnico/features/casos/infrastructure/dtos/caso_dto.dart';
+import 'package:cliente_feedback_tecnico/features/servicios/domain/entities/servicio.dart';
+import 'package:cliente_feedback_tecnico/features/servicios/domain/repositories/i_servicio_repository.dart';
+import 'package:cliente_feedback_tecnico/features/servicios/infrastructure/dtos/servicio_dto.dart';
 
-class CasoRepositoryImpl implements ICasoRepository {
+class ServicioRepositoryImpl implements IServicioRepository {
 	final ApiClient apiClient;
 
-	CasoRepositoryImpl(this.apiClient);
+	ServicioRepositoryImpl(this.apiClient);
 
 	@override
-	Future<void> cargarCaso(Caso caso) async {
+	Future<void> cargarServicio(Servicio servicio) async {
 		final response = await apiClient.post(
-			ApiConstants.casos,
-			CasoDto.desdeEntidad(caso).toJson(),
+			ApiConstants.servicios,
+			ServicioDto.desdeEntidad(servicio).toJson(),
 		);
 
 		if (response.statusCode != 200 && response.statusCode != 201) {
@@ -28,8 +28,8 @@ class CasoRepositoryImpl implements ICasoRepository {
 	}
 
 	@override
-	Future<List<Caso>> obtenerMisCasos() async {
-		final response = await apiClient.get(ApiConstants.casosMios);
+	Future<List<Servicio>> obtenerMisServicios() async {
+		final response = await apiClient.get(ApiConstants.serviciosMios);
 
 		if (response.statusCode != 200) {
 			throw ServerException(
@@ -43,7 +43,7 @@ class CasoRepositoryImpl implements ICasoRepository {
 
 		return lista
 				.whereType<Map<String, dynamic>>()
-				.map((item) => CasoDto.fromJson(item).aEntidad())
+				.map((item) => ServicioDto.fromJson(item).aEntidad())
 				.toList();
 	}
 
@@ -62,3 +62,5 @@ class CasoRepositoryImpl implements ICasoRepository {
 		return const [];
 	}
 }
+
+

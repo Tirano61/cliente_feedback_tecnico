@@ -2,7 +2,7 @@ import 'package:equatable/equatable.dart';
 
 enum Canal { campo, remoto, fabrica }
 
-class Caso extends Equatable {
+class Servicio extends Equatable {
 	final String id;
 	final String tecnicoId;
 	final String productoId;
@@ -17,7 +17,7 @@ class Caso extends Equatable {
 	final bool aprobado;
 	final String? observaciones;
 
-	const Caso({
+	const Servicio({
 		required this.id,
 		required this.tecnicoId,
 		required this.productoId,

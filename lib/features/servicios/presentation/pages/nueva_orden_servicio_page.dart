@@ -1,10 +1,10 @@
-import 'package:cliente_feedback_tecnico/features/casos/presentation/widgets/formulario_caso.dart';
+import 'package:cliente_feedback_tecnico/features/servicios/presentation/widgets/formulario_servicio.dart';
 import 'package:flutter/material.dart';
 
-import 'package:cliente_feedback_tecnico/features/casos/presentation/pages/mis_casos_page.dart';
+import 'package:cliente_feedback_tecnico/features/servicios/presentation/pages/mis_servicios_page.dart';
 
-class NuevoCasoPage extends StatelessWidget {
-	const NuevoCasoPage({super.key});
+class NuevaOrdenServicioPage extends StatelessWidget {
+	const NuevaOrdenServicioPage({super.key});
 
 	@override
 	Widget build(BuildContext context) {
@@ -15,7 +15,7 @@ class NuevoCasoPage extends StatelessWidget {
 					IconButton(
 						onPressed: () {
 							Navigator.of(context).push(
-								MaterialPageRoute(builder: (_) => const MisCasosPage()),
+								MaterialPageRoute(builder: (_) => const MisServiciosPage()),
 							);
 						},
 						icon: const Icon(Icons.list_alt),
@@ -25,8 +25,9 @@ class NuevoCasoPage extends StatelessWidget {
 			),
 			body: const Padding(
 				padding: EdgeInsets.all(16),
-				child: FormularioCaso(),
+				child: FormularioServicio(),
 			),
 		);
 	}
 }
+

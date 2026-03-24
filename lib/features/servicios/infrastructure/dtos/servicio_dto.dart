@@ -1,6 +1,6 @@
-import 'package:cliente_feedback_tecnico/features/casos/domain/entities/caso.dart';
+import 'package:cliente_feedback_tecnico/features/servicios/domain/entities/servicio.dart';
 
-class CasoDto {
+class ServicioDto {
 	final String id;
 	final String tecnicoId;
 	final String productoId;
@@ -15,7 +15,7 @@ class CasoDto {
 	final bool aprobado;
 	final String? observaciones;
 
-	const CasoDto({
+	const ServicioDto({
 		required this.id,
 		required this.tecnicoId,
 		required this.productoId,
@@ -31,8 +31,8 @@ class CasoDto {
 		this.observaciones,
 	});
 
-	factory CasoDto.fromJson(Map<String, dynamic> json) {
-		return CasoDto(
+	factory ServicioDto.fromJson(Map<String, dynamic> json) {
+		return ServicioDto(
 			id: json['id']?.toString() ?? '',
 			tecnicoId: json['tecnico_id']?.toString() ?? '',
 			productoId: json['producto_id']?.toString() ?? '',
@@ -67,8 +67,8 @@ class CasoDto {
 		};
 	}
 
-	Caso aEntidad() {
-		return Caso(
+	Servicio aEntidad() {
+		return Servicio(
 			id: id,
 			tecnicoId: tecnicoId,
 			productoId: productoId,
@@ -85,21 +85,21 @@ class CasoDto {
 		);
 	}
 
-	factory CasoDto.desdeEntidad(Caso caso) {
-		return CasoDto(
-			id: caso.id,
-			tecnicoId: caso.tecnicoId,
-			productoId: caso.productoId,
-			zonaId: caso.zonaId,
-			canal: caso.canal,
-			fecha: caso.fecha,
-			sintoma: caso.sintoma,
-			diagnosticoCatId: caso.diagnosticoCatId,
-			diagnosticoDetalle: caso.diagnosticoDetalle,
-			resolucionId: caso.resolucionId,
-			resuelto: caso.resuelto,
-			aprobado: caso.aprobado,
-			observaciones: caso.observaciones,
+	factory ServicioDto.desdeEntidad(Servicio servicio) {
+		return ServicioDto(
+			id: servicio.id,
+			tecnicoId: servicio.tecnicoId,
+			productoId: servicio.productoId,
+			zonaId: servicio.zonaId,
+			canal: servicio.canal,
+			fecha: servicio.fecha,
+			sintoma: servicio.sintoma,
+			diagnosticoCatId: servicio.diagnosticoCatId,
+			diagnosticoDetalle: servicio.diagnosticoDetalle,
+			resolucionId: servicio.resolucionId,
+			resuelto: servicio.resuelto,
+			aprobado: servicio.aprobado,
+			observaciones: servicio.observaciones,
 		);
 	}
 
@@ -141,3 +141,5 @@ class CasoDto {
 		);
 	}
 }
+
+

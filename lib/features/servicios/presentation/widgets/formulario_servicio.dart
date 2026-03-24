@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
-class FormularioCaso extends StatelessWidget {
-	const FormularioCaso({super.key});
+class FormularioServicio extends StatelessWidget {
+	const FormularioServicio({super.key});
 
 	@override
 	Widget build(BuildContext context) {

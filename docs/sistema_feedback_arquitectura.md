@@ -13,7 +13,7 @@ Digitalizar y sistematizar el trabajo del servicio técnico de la empresa. El si
 - **Administrativa** — el admin-técnico aprueba las salidas y servicios realizados, gestiona los precios y consulta la liquidación de cada técnico.
 - **Analítica** — el equipo de desarrollo filtra las órdenes para detectar patrones de falla y generar documentación para el bot de atención al cliente.
 
-Los tres objetivos se alimentan del mismo registro. Una orden de servicio es simultáneamente un comprobante para el cliente, una liquidación para el técnico y un servicio registrado como feedback para desarrollo.
+Los tres objetivos se alimentan del mismo registro. Una orden de servicio es simultáneamente un comprobante para el cliente, una liquidación para el técnico y un servicio de feedback para desarrollo.
 
 ---
 
@@ -204,6 +204,13 @@ Los roles se guardan como array en el usuario — una persona puede tener más d
 | admin-tecnico | Todo lo anterior + ver todas las órdenes + aprobar liquidaciones + administrar precios, repuestos y cotización del dólar + historial por cliente o equipo |
 | admin-desarrollo | Filtrar y exportar feedback + administrar catálogos de diagnóstico |
 
+### 8.2.1 Mapeo por aplicación
+
+- App técnico (carga de órdenes): `tecnico`
+- Web de administración técnica (operación): `admin-tecnico`
+- Web de feedback/desarrollo (análisis): `admin-desarrollo`
+- Compatibilidad temporal: usuarios con rol `admin` conservan acceso equivalente mientras se completa la migración.
+
 ### 8.3 Backend — módulos NestJS
 
 **Módulos existentes**
@@ -211,9 +218,14 @@ Los roles se guardan como array en el usuario — una persona puede tener más d
 | Módulo | Endpoints | Acceso |
 |---|---|---|
 | auth | POST /auth/login, POST /auth/register | Público |
-| casos (servicios) | POST /casos, GET /casos/mios, GET /casos, GET /casos/:id, PATCH /casos/:id | tecnico (mios) / admin (todos) |
-| catalogos | GET\|POST\|PATCH /cat/diagnosticos, /cat/resoluciones, /zonas | GET: tecnico / POST+PATCH: admin |
-| productos | GET\|POST\|PATCH /categorias-producto, /productos | GET: tecnico / POST+PATCH: admin |
+| servicios | POST /servicios, GET /servicios/mios, GET /servicios, GET /servicios/:id, PATCH /servicios/:id | tecnico (mios) / admin-tecnico+admin-desarrollo (todos) |
+| catalogos | GET\|POST\|PATCH /cat/diagnosticos, /cat/resoluciones, /zonas | GET: tecnico+admins / diag+res: admin-desarrollo / zonas: admin-tecnico |
+| productos | GET\|POST\|PATCH /categorias-producto, /productos | GET: tecnico+admins / POST+PATCH: admin-tecnico |
+| clientes | GET /clientes/buscar?q=, POST /clientes, PATCH /clientes/:id | tecnico, admin-tecnico |
+| cotizacion | GET /cotizacion, POST /cotizacion | GET: tecnico/admin-tecnico / POST: admin-tecnico |
+| repuestos | GET /repuestos?q=, POST /repuestos, PATCH /repuestos/:id, POST /servicios/:id/repuestos, GET /servicios/:id/repuestos | GET: tecnico/admin-tecnico / POST+PATCH: admin-tecnico / servicios: tecnico-admin-tecnico |
+| liquidacion | GET\|POST\|PATCH /tipos-salida, GET\|POST\|PATCH /tipos-servicio, POST /liquidaciones, GET /liquidaciones/mias, PATCH /liquidaciones/:id/aprobar, POST /liquidaciones/:id/items | tecnico/admin-tecnico segun endpoint |
+| analytics | GET /stats/por-canal, GET /stats/por-diagnostico, GET /stats/por-parte, GET /stats/por-periodo, GET /export | admin-desarrollo |
 
 **Módulos nuevos — orden de servicio**
 
@@ -222,10 +234,8 @@ Los roles se guardan como array en el usuario — una persona puede tener más d
 | clientes | GET\|POST\|PATCH /clientes, GET /clientes/buscar | tecnico, admin-tecnico |
 | repuestos | GET\|POST\|PATCH /repuestos | GET: tecnico / POST+PATCH: admin-tecnico |
 | cotizacion | GET\|POST /cotizacion | GET: todos / POST: admin-tecnico |
-| orden-repuestos | POST\|GET /casos/:id/repuestos | tecnico, admin-tecnico |
-| pdf | GET /casos/:id/pdf | tecnico, admin-tecnico |
-
-> Nota de nomenclatura: en funcional se usa "servicio" u "orden de servicio". En backend se conserva `casos` por compatibilidad de endpoints y tablas actuales.
+| orden-repuestos | POST\|GET /servicios/:id/repuestos | tecnico, admin-tecnico |
+| pdf | GET /servicios/:id/pdf | tecnico, admin-tecnico |
 
 **Módulos nuevos — liquidación**
 
@@ -314,7 +324,7 @@ lib/
 ├── features/
 │   ├── auth/         # Login
 │   ├── catalogos/    # Catálogos de feedback
-│   ├── casos/        # Orden de servicio (núcleo)
+│   ├── servicios/    # Orden de servicio (núcleo)
 │   ├── clientes/     # Alta y búsqueda de clientes
 │   ├── repuestos/    # Lista de repuestos
 │   ├── liquidacion/  # Liquidación del técnico
@@ -340,20 +350,37 @@ Para uso interno no se publica en Play Store. El APK se distribuye por WhatsApp 
 | GET\|POST\|PATCH | /api/v1/zonas | Implementado |
 | GET\|POST\|PATCH | /api/v1/categorias-producto | Implementado |
 | GET\|POST\|PATCH | /api/v1/productos | Implementado |
-| POST | /api/v1/casos | Implementado |
-| GET | /api/v1/casos/mios | Implementado |
-| GET | /api/v1/casos | Implementado |
-| GET | /api/v1/casos/:id | Implementado |
-| PATCH | /api/v1/casos/:id | Implementado |
-| GET\|POST\|PATCH | /api/v1/clientes | Pendiente |
-| GET\|POST\|PATCH | /api/v1/repuestos | Pendiente |
-| GET\|POST | /api/v1/cotizacion | Pendiente |
-| GET | /api/v1/casos/:id/pdf | Pendiente |
-| GET\|POST\|PATCH | /api/v1/tipos-salida | Pendiente |
-| GET\|POST\|PATCH | /api/v1/tipos-servicio | Pendiente |
-| GET\|POST\|PATCH | /api/v1/liquidaciones | Pendiente |
-| GET | /api/v1/stats/* | Pendiente |
-| GET | /api/v1/export | Pendiente |
+| POST | /api/v1/servicios | Implementado |
+| GET | /api/v1/servicios/mios | Implementado |
+| GET | /api/v1/servicios | Implementado |
+| GET | /api/v1/servicios/:id | Implementado |
+| PATCH | /api/v1/servicios/:id | Implementado |
+| GET | /api/v1/clientes/buscar?q= | Implementado |
+| POST | /api/v1/clientes | Implementado |
+| PATCH | /api/v1/clientes/:id | Implementado |
+| GET | /api/v1/repuestos?q= | Implementado |
+| POST | /api/v1/repuestos | Implementado |
+| PATCH | /api/v1/repuestos/:id | Implementado |
+| POST | /api/v1/servicios/:id/repuestos | Implementado |
+| GET | /api/v1/servicios/:id/repuestos | Implementado |
+| GET | /api/v1/cotizacion | Implementado |
+| POST | /api/v1/cotizacion | Implementado |
+| GET | /api/v1/tipos-salida | Implementado |
+| POST | /api/v1/tipos-salida | Implementado |
+| PATCH | /api/v1/tipos-salida/:id | Implementado |
+| GET | /api/v1/tipos-servicio | Implementado |
+| POST | /api/v1/tipos-servicio | Implementado |
+| PATCH | /api/v1/tipos-servicio/:id | Implementado |
+| POST | /api/v1/liquidaciones | Implementado |
+| GET | /api/v1/liquidaciones/mias | Implementado |
+| PATCH | /api/v1/liquidaciones/:id/aprobar | Implementado |
+| POST | /api/v1/liquidaciones/:id/items | Implementado |
+| GET | /api/v1/servicios/:id/pdf | Pendiente |
+| GET | /api/v1/stats/por-canal | Implementado |
+| GET | /api/v1/stats/por-diagnostico | Implementado |
+| GET | /api/v1/stats/por-parte | Implementado |
+| GET | /api/v1/stats/por-periodo | Implementado |
+| GET | /api/v1/export | Implementado |
 
 ---
 
@@ -361,12 +388,12 @@ Para uso interno no se publica en Play Store. El APK se distribuye por WhatsApp 
 
 1. **Ampliar `caso_servicio`** — agregar los campos nuevos: cliente_id, equipo_nro_serie, equipo_modelo, equipo_ubicacion, equipo_anio, componente_fallo, km.
 2. **Módulo clientes** — alta, búsqueda por CUIT o nombre, edición.
-3. **Módulo repuestos** — carga de la lista de precios con código y precio USD, búsqueda por código o nombre.
-4. **Módulo cotización** — valor del dólar administrable, historial de cotizaciones.
+3. **Módulo repuestos** — implementado: lista de precios con código y precio USD, búsqueda por código o nombre, alta en órdenes con snapshot de cotización.
+4. **Módulo cotización** — implementado: valor del dólar administrable, historial de cotizaciones.
 5. **Seeds de catálogos** — datos iniciales de diagnósticos, resoluciones, zonas, categorías y modelos de producto.
 6. **App Flutter del técnico** — formulario completo con búsqueda de cliente, descripción del equipo, orden y repuestos.
 7. **Generación de PDF** — orden de servicio imprimible equivalente a la planilla actual.
-8. **Módulo liquidación** — tipos de salida, tipos de servicio, aprobación por admin-técnico.
+8. **Módulo liquidación** — implementado: tipos de salida, tipos de servicio, creación de liquidación por servicio, items (hasta 6) y aprobación por admin.
 9. **Panel admin-técnico** — aprobación de liquidaciones, administración de precios y repuestos.
 10. **Panel feedback / desarrollo** — dashboard con charts, tabla filtrable, exportación.
-11. **Módulo analytics** — endpoints de stats y export, a implementar cuando haya datos reales.
+11. **Módulo analytics** — implementado: queries agregadas y exportación (pendiente validación con volumen de datos reales).

@@ -3,10 +3,10 @@ import 'package:cliente_feedback_tecnico/core/auth/secure_storage.dart';
 import 'package:cliente_feedback_tecnico/features/auth/application/login_use_case.dart';
 import 'package:cliente_feedback_tecnico/features/auth/domain/repositories/i_auth_repository.dart';
 import 'package:cliente_feedback_tecnico/features/auth/infrastructure/repositories/auth_repository_impl.dart';
-import 'package:cliente_feedback_tecnico/features/casos/application/cargar_caso_use_case.dart';
-import 'package:cliente_feedback_tecnico/features/casos/application/obtener_mis_casos_use_case.dart';
-import 'package:cliente_feedback_tecnico/features/casos/domain/repositories/i_caso_repository.dart';
-import 'package:cliente_feedback_tecnico/features/casos/infrastructure/repositories/caso_repository_impl.dart';
+import 'package:cliente_feedback_tecnico/features/servicios/application/cargar_servicio_use_case.dart';
+import 'package:cliente_feedback_tecnico/features/servicios/application/obtener_mis_servicios_use_case.dart';
+import 'package:cliente_feedback_tecnico/features/servicios/domain/repositories/i_servicio_repository.dart';
+import 'package:cliente_feedback_tecnico/features/servicios/infrastructure/repositories/servicio_repository_impl.dart';
 import 'package:cliente_feedback_tecnico/features/catalogos/application/obtener_catalogos_use_case.dart';
 import 'package:cliente_feedback_tecnico/features/catalogos/domain/repositories/i_catalogo_repository.dart';
 import 'package:cliente_feedback_tecnico/features/catalogos/infrastructure/repositories/catalogo_repository_impl.dart';
@@ -18,23 +18,23 @@ class AppDependencies {
 
 	final IAuthRepository authRepository;
 	final ICatalogoRepository catalogoRepository;
-	final ICasoRepository casoRepository;
+	final IServicioRepository servicioRepository;
 
 	final LoginUseCase loginUseCase;
 	final ObtenerCatalogosUseCase obtenerCatalogosUseCase;
-	final CargarCasoUseCase cargarCasoUseCase;
-	final ObtenerMisCasosUseCase obtenerMisCasosUseCase;
+	final CargarServicioUseCase cargarServicioUseCase;
+	final ObtenerMisServiciosUseCase obtenerMisServiciosUseCase;
 
 	AppDependencies._({
 		required this.secureStorage,
 		required this.apiClient,
 		required this.authRepository,
 		required this.catalogoRepository,
-		required this.casoRepository,
+		required this.servicioRepository,
 		required this.loginUseCase,
 		required this.obtenerCatalogosUseCase,
-		required this.cargarCasoUseCase,
-		required this.obtenerMisCasosUseCase,
+		required this.cargarServicioUseCase,
+		required this.obtenerMisServiciosUseCase,
 	});
 
 	factory AppDependencies.create() {
@@ -43,18 +43,20 @@ class AppDependencies {
 
 		final authRepository = AuthRepositoryImpl(apiClient, secureStorage);
 		final catalogoRepository = CatalogoRepositoryImpl(apiClient);
-		final casoRepository = CasoRepositoryImpl(apiClient);
+		final servicioRepository = ServicioRepositoryImpl(apiClient);
 
 		return AppDependencies._(
 			secureStorage: secureStorage,
 			apiClient: apiClient,
 			authRepository: authRepository,
 			catalogoRepository: catalogoRepository,
-			casoRepository: casoRepository,
+			servicioRepository: servicioRepository,
 			loginUseCase: LoginUseCase(authRepository),
 			obtenerCatalogosUseCase: ObtenerCatalogosUseCase(catalogoRepository),
-			cargarCasoUseCase: CargarCasoUseCase(casoRepository),
-			obtenerMisCasosUseCase: ObtenerMisCasosUseCase(casoRepository),
+			cargarServicioUseCase: CargarServicioUseCase(servicioRepository),
+			obtenerMisServiciosUseCase:
+					ObtenerMisServiciosUseCase(servicioRepository),
 		);
 	}
 }
+

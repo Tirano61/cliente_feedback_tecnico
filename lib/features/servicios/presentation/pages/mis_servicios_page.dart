@@ -1,48 +1,48 @@
-import 'package:cliente_feedback_tecnico/features/casos/domain/entities/caso.dart';
-import 'package:cliente_feedback_tecnico/features/casos/presentation/bloc/caso_bloc.dart';
-import 'package:cliente_feedback_tecnico/features/casos/presentation/bloc/caso_event.dart';
-import 'package:cliente_feedback_tecnico/features/casos/presentation/bloc/caso_state.dart';
+import 'package:cliente_feedback_tecnico/features/servicios/domain/entities/servicio.dart';
+import 'package:cliente_feedback_tecnico/features/servicios/presentation/bloc/servicio_bloc.dart';
+import 'package:cliente_feedback_tecnico/features/servicios/presentation/bloc/servicio_event.dart';
+import 'package:cliente_feedback_tecnico/features/servicios/presentation/bloc/servicio_state.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
-class MisCasosPage extends StatefulWidget {
-	const MisCasosPage({super.key});
+class MisServiciosPage extends StatefulWidget {
+	const MisServiciosPage({super.key});
 
 	@override
-	State<MisCasosPage> createState() => _MisCasosPageState();
+	State<MisServiciosPage> createState() => _MisServiciosPageState();
 }
 
-class _MisCasosPageState extends State<MisCasosPage> {
+class _MisServiciosPageState extends State<MisServiciosPage> {
 	FiltroEstado _filtroSeleccionado = FiltroEstado.todos;
 
 	@override
 	void initState() {
 		super.initState();
-		context.read<CasoBloc>().add(const MisCasosSolicitados());
+		context.read<ServicioBloc>().add(const MisServiciosSolicitados());
 	}
 
 	@override
 	Widget build(BuildContext context) {
 		return Scaffold(
 			appBar: AppBar(title: const Text('Mis servicios')),
-			body: BlocBuilder<CasoBloc, CasoState>(
+			body: BlocBuilder<ServicioBloc, ServicioState>(
 				builder: (context, state) {
-					if (state is MisCasosLoading) {
+					if (state is MisServiciosLoading) {
 						return const Center(child: CircularProgressIndicator());
 					}
 
-					if (state is CasoError) {
+					if (state is ServicioError) {
 						return Center(child: Text(state.mensaje));
 					}
 
-					if (state is MisCasosLoaded) {
-						final casosFiltrados = _filtrarCasos(state.casos);
+					if (state is MisServiciosLoaded) {
+						final serviciosFiltrados = _filtrarServicios(state.servicios);
 
-						if (state.casos.isEmpty) {
+						if (state.servicios.isEmpty) {
 							return const Center(child: Text('No hay servicios cargados.'));
 						}
 
-						if (casosFiltrados.isEmpty) {
+						if (serviciosFiltrados.isEmpty) {
 							return Column(
 								children: [
 									const SizedBox(height: 12),
@@ -73,11 +73,11 @@ class _MisCasosPageState extends State<MisCasosPage> {
 								Expanded(
 									child: ListView.separated(
 										padding: const EdgeInsets.all(16),
-										itemCount: casosFiltrados.length,
+										itemCount: serviciosFiltrados.length,
 										separatorBuilder: (_, __) => const SizedBox(height: 12),
 										itemBuilder: (context, index) {
-											final caso = casosFiltrados[index];
-											return _TarjetaServicio(caso: caso);
+											final servicio = serviciosFiltrados[index];
+											return _TarjetaServicio(servicio: servicio);
 										},
 									),
 								),
@@ -91,14 +91,14 @@ class _MisCasosPageState extends State<MisCasosPage> {
 		);
 	}
 
-	List<Caso> _filtrarCasos(List<Caso> casos) {
+	List<Servicio> _filtrarServicios(List<Servicio> servicios) {
 		switch (_filtroSeleccionado) {
 			case FiltroEstado.aprobados:
-				return casos.where((caso) => caso.aprobado).toList();
+				return servicios.where((servicio) => servicio.aprobado).toList();
 			case FiltroEstado.pendientes:
-				return casos.where((caso) => !caso.aprobado).toList();
+				return servicios.where((servicio) => !servicio.aprobado).toList();
 			case FiltroEstado.todos:
-				return casos;
+				return servicios;
 		}
 	}
 }
@@ -145,17 +145,17 @@ class _FiltrosEstado extends StatelessWidget {
 }
 
 class _TarjetaServicio extends StatelessWidget {
-	final Caso caso;
+	final Servicio servicio;
 
-	const _TarjetaServicio({required this.caso});
+	const _TarjetaServicio({required this.servicio});
 
 	@override
 	Widget build(BuildContext context) {
-		final aprobado = caso.aprobado;
+		final aprobado = servicio.aprobado;
 		final colorEstado = aprobado ? Colors.green : Colors.orange;
 		final textoEstado = aprobado ? 'Aprobado' : 'Pendiente de aprobacion';
 		final iconoEstado = aprobado ? Icons.verified : Icons.pending_actions;
-		final fecha = _formatearFecha(caso.fecha);
+		final fecha = _formatearFecha(servicio.fecha);
 
 		return Card(
 			shape: RoundedRectangleBorder(
@@ -172,7 +172,7 @@ class _TarjetaServicio extends StatelessWidget {
 							children: [
 								Expanded(
 									child: Text(
-										'Canal: ${caso.canal.name}',
+										'Canal: ${servicio.canal.name}',
 										style: const TextStyle(fontWeight: FontWeight.w600),
 									),
 								),
@@ -210,7 +210,7 @@ class _TarjetaServicio extends StatelessWidget {
 						),
 						const SizedBox(height: 6),
 						Text(
-							caso.sintoma,
+							servicio.sintoma,
 							maxLines: 2,
 							overflow: TextOverflow.ellipsis,
 						),
@@ -230,3 +230,5 @@ class _TarjetaServicio extends StatelessWidget {
 		return '$dia/$mes/$anio - $hora:$minuto';
 	}
 }
+
+

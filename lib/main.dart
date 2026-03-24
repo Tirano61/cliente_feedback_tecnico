@@ -6,8 +6,8 @@ import 'package:cliente_feedback_tecnico/features/auth/presentation/bloc/auth_bl
 import 'package:cliente_feedback_tecnico/features/auth/presentation/bloc/auth_event.dart';
 import 'package:cliente_feedback_tecnico/features/auth/presentation/bloc/auth_state.dart';
 import 'package:cliente_feedback_tecnico/features/auth/presentation/pages/login_page.dart';
-import 'package:cliente_feedback_tecnico/features/casos/presentation/bloc/caso_bloc.dart';
-import 'package:cliente_feedback_tecnico/features/casos/presentation/pages/nuevo_caso_page.dart';
+import 'package:cliente_feedback_tecnico/features/servicios/presentation/bloc/servicio_bloc.dart';
+import 'package:cliente_feedback_tecnico/features/servicios/presentation/pages/nueva_orden_servicio_page.dart';
 import 'package:cliente_feedback_tecnico/features/catalogos/presentation/bloc/catalogo_bloc.dart';
 import 'package:cliente_feedback_tecnico/features/catalogos/presentation/bloc/catalogo_event.dart';
 
@@ -33,9 +33,9 @@ class App extends StatelessWidget {
           create: (_) => CatalogoBloc(deps.obtenerCatalogosUseCase),
         ),
         BlocProvider(
-          create: (_) => CasoBloc(
-            deps.cargarCasoUseCase,
-            deps.obtenerMisCasosUseCase,
+          create: (_) => ServicioBloc(
+            deps.cargarServicioUseCase,
+            deps.obtenerMisServiciosUseCase,
           ),
         ),
       ],
@@ -84,7 +84,7 @@ class App extends StatelessWidget {
                 );
               }
               if (state is AuthAuthenticated) {
-                return const NuevoCasoPage();
+                return const NuevaOrdenServicioPage();
               }
               return const LoginPage();
             },
@@ -94,6 +94,7 @@ class App extends StatelessWidget {
     );
   }
 }
+
 
 
 

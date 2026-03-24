@@ -1,14 +1,14 @@
-import 'package:cliente_feedback_tecnico/features/casos/domain/entities/caso.dart';
+import 'package:cliente_feedback_tecnico/features/servicios/domain/entities/servicio.dart';
 import 'package:equatable/equatable.dart';
 
-abstract class CasoEvent extends Equatable {
-	const CasoEvent();
+abstract class ServicioEvent extends Equatable {
+	const ServicioEvent();
 
 	@override
 	List<Object?> get props => [];
 }
 
-class CasoFormularioCambiado extends CasoEvent {
+class ServicioFormularioCambiado extends ServicioEvent {
 	final Canal? canal;
 	final String? zonaId;
 	final String? categoriaId;
@@ -19,7 +19,7 @@ class CasoFormularioCambiado extends CasoEvent {
 	final String? resolucionId;
 	final String? observaciones;
 
-	const CasoFormularioCambiado({
+	const ServicioFormularioCambiado({
 		this.canal,
 		this.zonaId,
 		this.categoriaId,
@@ -45,14 +45,16 @@ class CasoFormularioCambiado extends CasoEvent {
 			];
 }
 
-class CasoGuardarPressed extends CasoEvent {
-	const CasoGuardarPressed();
+class ServicioGuardarPressed extends ServicioEvent {
+	const ServicioGuardarPressed();
 }
 
-class MisCasosSolicitados extends CasoEvent {
-	const MisCasosSolicitados();
+class MisServiciosSolicitados extends ServicioEvent {
+	const MisServiciosSolicitados();
 }
 
-class CasoFormularioReiniciado extends CasoEvent {
-	const CasoFormularioReiniciado();
+class ServicioFormularioReiniciado extends ServicioEvent {
+	const ServicioFormularioReiniciado();
 }
+
+
