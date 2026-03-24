@@ -10,6 +10,6 @@ class ApiConstants {
 	static const String categoriasProducto = '/categorias-producto';
 	static const String productos = '/productos';
 
-	static const String casos = '/casos';
-	static const String casosMios = '/casos/mios';
+	static const String servicios = '/servicios';
+	static const String serviciosMios = '/servicios/mios';
 }
