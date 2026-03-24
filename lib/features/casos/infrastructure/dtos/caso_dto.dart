@@ -12,6 +12,7 @@ class CasoDto {
 	final String diagnosticoDetalle;
 	final String resolucionId;
 	final bool resuelto;
+	final bool aprobado;
 	final String? observaciones;
 
 	const CasoDto({
@@ -26,6 +27,7 @@ class CasoDto {
 		required this.diagnosticoDetalle,
 		required this.resolucionId,
 		required this.resuelto,
+		required this.aprobado,
 		this.observaciones,
 	});
 
@@ -42,6 +44,7 @@ class CasoDto {
 			diagnosticoDetalle: json['diagnostico_detalle']?.toString() ?? '',
 			resolucionId: json['resolucion_id']?.toString() ?? '',
 			resuelto: json['resuelto'] == true,
+			aprobado: _aprobadoDesdeJson(json),
 			observaciones: json['observaciones']?.toString(),
 		);
 	}
@@ -59,6 +62,7 @@ class CasoDto {
 			'diagnostico_detalle': diagnosticoDetalle,
 			'resolucion_id': resolucionId,
 			'resuelto': resuelto,
+			'aprobado': aprobado,
 			'observaciones': observaciones,
 		};
 	}
@@ -76,6 +80,7 @@ class CasoDto {
 			diagnosticoDetalle: diagnosticoDetalle,
 			resolucionId: resolucionId,
 			resuelto: resuelto,
+			aprobado: aprobado,
 			observaciones: observaciones,
 		);
 	}
@@ -93,8 +98,40 @@ class CasoDto {
 			diagnosticoDetalle: caso.diagnosticoDetalle,
 			resolucionId: caso.resolucionId,
 			resuelto: caso.resuelto,
+			aprobado: caso.aprobado,
 			observaciones: caso.observaciones,
 		);
+	}
+
+	static bool _aprobadoDesdeJson(Map<String, dynamic> json) {
+		if (json.containsKey('aprobado')) {
+			return _boolDesdeDynamic(json['aprobado']);
+		}
+
+		if (json.containsKey('aprobado_liquidacion')) {
+			return _boolDesdeDynamic(json['aprobado_liquidacion']);
+		}
+
+		final liquidacion = json['liquidacion'];
+		if (liquidacion is Map<String, dynamic>) {
+			return _boolDesdeDynamic(liquidacion['aprobado']);
+		}
+
+		return false;
+	}
+
+	static bool _boolDesdeDynamic(dynamic valor) {
+		if (valor is bool) {
+			return valor;
+		}
+		if (valor is num) {
+			return valor == 1;
+		}
+		if (valor is String) {
+			final normalizado = valor.toLowerCase().trim();
+			return normalizado == 'true' || normalizado == '1' || normalizado == 'si';
+		}
+		return false;
 	}
 
 	static Canal _canalDesdeString(String valor) {
