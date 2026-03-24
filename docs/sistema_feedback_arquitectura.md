@@ -13,7 +13,7 @@ Digitalizar y sistematizar el trabajo del servicio técnico de la empresa. El si
 - **Administrativa** — el admin-técnico aprueba las salidas y servicios realizados, gestiona los precios y consulta la liquidación de cada técnico.
 - **Analítica** — el equipo de desarrollo filtra las órdenes para detectar patrones de falla y generar documentación para el bot de atención al cliente.
 
-Los tres objetivos se alimentan del mismo registro. Una orden de servicio es simultáneamente un comprobante para el cliente, una liquidación para el técnico y un caso de feedback para desarrollo.
+Los tres objetivos se alimentan del mismo registro. Una orden de servicio es simultáneamente un comprobante para el cliente, una liquidación para el técnico y un servicio registrado como feedback para desarrollo.
 
 ---
 
@@ -171,7 +171,7 @@ Se acumulan órdenes con el mismo patrón
         ↓
 Desarrollo filtra por componente + categoría de falla + resolución
         ↓
-Exporta los casos que coinciden
+Exporta los servicios que coinciden
         ↓
 Un humano revisa y redacta el flujo del bot
         ↓
@@ -200,7 +200,7 @@ Los roles se guardan como array en el usuario — una persona puede tener más d
 
 | Rol | Qué puede hacer |
 |---|---|
-| tecnico | Cargar órdenes, ver sus casos, ver su liquidación aprobada, generar PDF |
+| tecnico | Cargar órdenes, ver sus servicios, ver su liquidación aprobada, generar PDF |
 | admin-tecnico | Todo lo anterior + ver todas las órdenes + aprobar liquidaciones + administrar precios, repuestos y cotización del dólar + historial por cliente o equipo |
 | admin-desarrollo | Filtrar y exportar feedback + administrar catálogos de diagnóstico |
 
@@ -211,7 +211,7 @@ Los roles se guardan como array en el usuario — una persona puede tener más d
 | Módulo | Endpoints | Acceso |
 |---|---|---|
 | auth | POST /auth/login, POST /auth/register | Público |
-| casos | POST /casos, GET /casos/mios, GET /casos, GET /casos/:id, PATCH /casos/:id | tecnico (mios) / admin (todos) |
+| casos (servicios) | POST /casos, GET /casos/mios, GET /casos, GET /casos/:id, PATCH /casos/:id | tecnico (mios) / admin (todos) |
 | catalogos | GET\|POST\|PATCH /cat/diagnosticos, /cat/resoluciones, /zonas | GET: tecnico / POST+PATCH: admin |
 | productos | GET\|POST\|PATCH /categorias-producto, /productos | GET: tecnico / POST+PATCH: admin |
 
@@ -224,6 +224,8 @@ Los roles se guardan como array en el usuario — una persona puede tener más d
 | cotizacion | GET\|POST /cotizacion | GET: todos / POST: admin-tecnico |
 | orden-repuestos | POST\|GET /casos/:id/repuestos | tecnico, admin-tecnico |
 | pdf | GET /casos/:id/pdf | tecnico, admin-tecnico |
+
+> Nota de nomenclatura: en funcional se usa "servicio" u "orden de servicio". En backend se conserva `casos` por compatibilidad de endpoints y tablas actuales.
 
 **Módulos nuevos — liquidación**
 

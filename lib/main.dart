@@ -18,6 +18,7 @@ void main() {
 
 class App extends StatelessWidget {
   final AppDependencies deps;
+  static const Color _azulOscuro = Color(0xFF0B2A4A);
 
   const App({required this.deps, super.key});
 
@@ -48,7 +49,32 @@ class App extends StatelessWidget {
           title: 'Feedback Tecnico',
           debugShowCheckedModeBanner: false,
           theme: ThemeData(
-            colorScheme: ColorScheme.fromSeed(seedColor: Colors.blue),
+            useMaterial3: true,
+            colorScheme: ColorScheme.fromSeed(
+              seedColor: _azulOscuro,
+              brightness: Brightness.light,
+            ).copyWith(
+              primary: _azulOscuro,
+              secondary: const Color(0xFF1D4E89),
+            ),
+            scaffoldBackgroundColor: const Color(0xFFF4F7FB),
+            appBarTheme: const AppBarTheme(
+              backgroundColor: _azulOscuro,
+              foregroundColor: Colors.white,
+              centerTitle: false,
+              elevation: 0,
+            ),
+            elevatedButtonTheme: ElevatedButtonThemeData(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: _azulOscuro,
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              ),
+            ),
+            floatingActionButtonTheme: const FloatingActionButtonThemeData(
+              backgroundColor: _azulOscuro,
+              foregroundColor: Colors.white,
+            ),
           ),
           home: BlocBuilder<AuthBloc, AuthState>(
             builder: (context, state) {

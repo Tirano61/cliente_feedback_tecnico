@@ -77,7 +77,7 @@ class CasoBloc extends Bloc<CasoEvent, CasoState> {
 			await _cargarCasoUseCase.ejecutar(caso);
 			emit(const CasoGuardadoExito());
 		} catch (_) {
-			emit(const CasoError(mensaje: 'No se pudo guardar el caso.'));
+			emit(const CasoError(mensaje: 'No se pudo guardar la orden de servicio.'));
 		}
 	}
 
@@ -90,7 +90,7 @@ class CasoBloc extends Bloc<CasoEvent, CasoState> {
 			final casos = await _obtenerMisCasosUseCase.ejecutar();
 			emit(MisCasosLoaded(casos: casos));
 		} catch (_) {
-			emit(const CasoError(mensaje: 'No se pudieron cargar los casos.'));
+			emit(const CasoError(mensaje: 'No se pudieron cargar los servicios.'));
 		}
 	}
 

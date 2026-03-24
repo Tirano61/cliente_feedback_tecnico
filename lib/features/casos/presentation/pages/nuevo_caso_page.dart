@@ -10,7 +10,7 @@ class NuevoCasoPage extends StatelessWidget {
 	Widget build(BuildContext context) {
 		return Scaffold(
 			appBar: AppBar(
-				title: const Text('Nuevo caso'),
+				title: const Text('Nueva orden de servicio'),
 				actions: [
 					IconButton(
 						onPressed: () {
