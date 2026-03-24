@@ -1,0 +1,133 @@
+
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+.wrap{padding:16px;font-family:var(--font-sans)}
+.step{display:flex;gap:12px;margin-bottom:10px;align-items:flex-start}
+.num{min-width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:500;flex-shrink:0;margin-top:1px}
+.content{flex:1;border-radius:8px;border:1px solid var(--color-border-secondary);padding:10px 12px;background:var(--color-background-secondary)}
+.content strong{display:block;font-size:13px;font-weight:500;color:var(--color-text-primary);margin-bottom:4px}
+.content p{font-size:12px;color:var(--color-text-secondary);line-height:1.5;margin-bottom:6px}
+.tags{display:flex;flex-wrap:wrap;gap:4px}
+.tag{font-size:10px;font-family:var(--font-mono);padding:2px 7px;border-radius:4px;background:var(--color-background-primary);border:1px solid var(--color-border-tertiary);color:var(--color-text-tertiary)}
+.dep{font-size:10px;color:var(--color-text-tertiary);margin-top:4px;font-style:italic}
+
+.n1{background:#EEEDFE;color:#3C3489}
+.n2{background:#EEEDFE;color:#3C3489}
+.n3{background:#E1F5EE;color:#085041}
+.n4{background:#E1F5EE;color:#085041}
+.n5{background:#FAECE7;color:#712B13}
+.n6{background:#FAEEDA;color:#633806}
+.n7{background:#EAF3DE;color:#27500A}
+
+.b1{border-color:#AFA9EC}
+.b2{border-color:#AFA9EC}
+.b3{border-color:#9FE1CB}
+.b4{border-color:#9FE1CB}
+.b5{border-color:#F0997B}
+.b6{border-color:#FAC775}
+.b7{border-color:#C0DD97}
+</style>
+<div class="wrap">
+
+  <div class="step">
+    <div class="num n1">1</div>
+    <div class="content b1">
+      <strong>Ampliar caso_servicio — campos nuevos</strong>
+      <p>Agregar al modelo existente: cliente_id, equipo_nro_serie, equipo_modelo, equipo_ubicacion, equipo_anio, partes_fallaron (array), km. Migración de la tabla existente sin romper los casos ya cargados.</p>
+      <div class="tags">
+        <span class="tag">PATCH entity</span>
+        <span class="tag">migration</span>
+        <span class="tag">DTO update</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="step">
+    <div class="num n2">2</div>
+    <div class="content b2">
+      <strong>Módulo clientes</strong>
+      <p>Alta, búsqueda por CUIT o nombre, edición. El técnico busca antes de cargar una orden. Si no existe, lo crea en el momento.</p>
+      <div class="tags">
+        <span class="tag">GET /clientes/buscar?q=</span>
+        <span class="tag">POST /clientes</span>
+        <span class="tag">PATCH /clientes/:id</span>
+      </div>
+      <div class="dep">⟶ necesario antes de poder crear órdenes con cliente_id</div>
+    </div>
+  </div>
+
+  <div class="step">
+    <div class="num n3">3</div>
+    <div class="content b3">
+      <strong>Módulo cotización del dólar</strong>
+      <p>Valor administrable con historial. Al crear una orden el backend toma la cotización activa y la congela en cada repuesto usado.</p>
+      <div class="tags">
+        <span class="tag">GET /cotizacion</span>
+        <span class="tag">POST /cotizacion</span>
+      </div>
+      <div class="dep">⟶ necesario antes del módulo de repuestos</div>
+    </div>
+  </div>
+
+  <div class="step">
+    <div class="num n4">4</div>
+    <div class="content b4">
+      <strong>Módulo repuestos</strong>
+      <p>Lista de precios con código y precio en USD. Búsqueda por código o nombre para que el técnico los agregue a la orden. El admin-técnico administra la lista.</p>
+      <div class="tags">
+        <span class="tag">GET /repuestos?q=</span>
+        <span class="tag">POST /repuestos</span>
+        <span class="tag">PATCH /repuestos/:id</span>
+        <span class="tag">POST /casos/:id/repuestos</span>
+        <span class="tag">GET /casos/:id/repuestos</span>
+      </div>
+      <div class="dep">⟶ depende de cotización para calcular el snapshot</div>
+    </div>
+  </div>
+
+  <div class="step">
+    <div class="num n5">5</div>
+    <div class="content b5">
+      <strong>Módulo liquidación</strong>
+      <p>Tipos de salida y tipos de servicio administrables por el admin-técnico. El técnico ve los suyos, el admin aprueba o rechaza cada item.</p>
+      <div class="tags">
+        <span class="tag">GET|POST|PATCH /tipos-salida</span>
+        <span class="tag">GET|POST|PATCH /tipos-servicio</span>
+        <span class="tag">POST /liquidaciones</span>
+        <span class="tag">GET /liquidaciones/mias</span>
+        <span class="tag">PATCH /liquidaciones/:id/aprobar</span>
+        <span class="tag">POST /liquidaciones/:id/items</span>
+      </div>
+      <div class="dep">⟶ depende de casos (una liquidación está asociada a una orden)</div>
+    </div>
+  </div>
+
+  <div class="step">
+    <div class="num n6">6</div>
+    <div class="content b6">
+      <strong>Generación de PDF</strong>
+      <p>A partir de un caso completo con cliente, equipo, repuestos y totales, genera el PDF equivalente a la orden de papel actual.</p>
+      <div class="tags">
+        <span class="tag">GET /casos/:id/pdf</span>
+      </div>
+      <div class="dep">⟶ depende de clientes, repuestos y cotización para armar los totales</div>
+    </div>
+  </div>
+
+  <div class="step">
+    <div class="num n7">7</div>
+    <div class="content b7">
+      <strong>Módulo analytics</strong>
+      <p>Queries agregadas sobre casos para el panel de desarrollo. Filtros por canal, diagnóstico, parte que falló, zona, producto y período. Endpoint de exportación.</p>
+      <div class="tags">
+        <span class="tag">GET /stats/por-canal</span>
+        <span class="tag">GET /stats/por-diagnostico</span>
+        <span class="tag">GET /stats/por-parte</span>
+        <span class="tag">GET /stats/por-periodo</span>
+        <span class="tag">GET /export</span>
+      </div>
+      <div class="dep">⟶ implementar último, cuando haya datos reales para validar las queries</div>
+    </div>
+  </div>
+
+</div>

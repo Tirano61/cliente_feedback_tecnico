@@ -41,7 +41,7 @@ class AppDependencies {
 		final secureStorage = SecureStorage();
 		final apiClient = ApiClient(http.Client(), secureStorage);
 
-		final authRepository = AuthRepositoryImpl(apiClient);
+		final authRepository = AuthRepositoryImpl(apiClient, secureStorage);
 		final catalogoRepository = CatalogoRepositoryImpl(apiClient);
 		final casoRepository = CasoRepositoryImpl(apiClient);
 
