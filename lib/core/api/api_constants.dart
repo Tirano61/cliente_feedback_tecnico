@@ -1,5 +1,5 @@
 class ApiConstants {
-	static const String baseUrl = 'http://localhost:3000/api/v1';
+	static const String baseUrl = 'https://l002n256-3000.brs.devtunnels.ms/api/v1';
 
 	static const String login = '/auth/login';
 	static const String register = '/auth/register';
