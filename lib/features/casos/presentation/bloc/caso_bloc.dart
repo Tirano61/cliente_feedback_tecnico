@@ -71,6 +71,7 @@ class CasoBloc extends Bloc<CasoEvent, CasoState> {
 				diagnosticoDetalle: _diagnosticoDetalle!,
 				resolucionId: _resolucionId!,
 				resuelto: true,
+				aprobado: false,
 				observaciones: _observaciones,
 			);
 			await _cargarCasoUseCase.ejecutar(caso);

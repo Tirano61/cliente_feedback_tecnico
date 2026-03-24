@@ -14,6 +14,7 @@ class Caso extends Equatable {
 	final String diagnosticoDetalle;
 	final String resolucionId;
 	final bool resuelto;
+	final bool aprobado;
 	final String? observaciones;
 
 	const Caso({
@@ -28,6 +29,7 @@ class Caso extends Equatable {
 		required this.diagnosticoDetalle,
 		required this.resolucionId,
 		required this.resuelto,
+		required this.aprobado,
 		this.observaciones,
 	});
 
@@ -44,6 +46,7 @@ class Caso extends Equatable {
 				diagnosticoDetalle,
 				resolucionId,
 				resuelto,
+				aprobado,
 				observaciones,
 			];
 }
