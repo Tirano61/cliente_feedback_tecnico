@@ -155,7 +155,7 @@ class _TarjetaServicio extends StatelessWidget {
 		final colorEstado = aprobado ? Colors.green : Colors.orange;
 		final textoEstado = aprobado ? 'Aprobado' : 'Pendiente de aprobacion';
 		final iconoEstado = aprobado ? Icons.verified : Icons.pending_actions;
-		final fecha = _formatearFecha(servicio.fecha);
+		final fecha = _formatearFecha(servicio.fecha ?? DateTime.now());
 
 		return Card(
 			shape: RoundedRectangleBorder(

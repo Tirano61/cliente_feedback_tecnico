@@ -13,5 +13,5 @@ abstract class ICatalogoRepository {
 
 	Future<List<CategoriaProducto>> obtenerCategorias();
 
-	Future<List<Producto>> obtenerProductos();
+	Future<List<Producto>> obtenerProductosPorCategoria(String categoriaId);
 }

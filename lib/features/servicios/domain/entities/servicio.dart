@@ -4,49 +4,74 @@ enum Canal { campo, remoto, fabrica }
 
 class Servicio extends Equatable {
 	final String id;
-	final String tecnicoId;
-	final String productoId;
-	final String zonaId;
 	final Canal canal;
-	final DateTime fecha;
+	final String clienteId;
+	final String lugarProvinciaId;
+	final String lugarDetalle;
+	final String equipoNroSerie;
+	final String equipoModelo;
+	final String equipoUbicacion;
+	final int equipoAnio;
+	final List<String> partesFallaron;
+	final int km;
 	final String sintoma;
-	final String diagnosticoCatId;
 	final String diagnosticoDetalle;
+	final String diagnosticoCatId;
 	final String resolucionId;
+	final String? observaciones;
+	final List<String> productoIds;
+
+	final String tecnicoId;
+	final DateTime? fecha;
 	final bool resuelto;
 	final bool aprobado;
-	final String? observaciones;
 
 	const Servicio({
 		required this.id,
-		required this.tecnicoId,
-		required this.productoId,
-		required this.zonaId,
 		required this.canal,
-		required this.fecha,
+		required this.clienteId,
+		required this.lugarProvinciaId,
+		required this.lugarDetalle,
+		required this.equipoNroSerie,
+		required this.equipoModelo,
+		required this.equipoUbicacion,
+		required this.equipoAnio,
+		required this.partesFallaron,
+		required this.km,
 		required this.sintoma,
-		required this.diagnosticoCatId,
 		required this.diagnosticoDetalle,
+		required this.diagnosticoCatId,
 		required this.resolucionId,
-		required this.resuelto,
-		required this.aprobado,
 		this.observaciones,
+		required this.productoIds,
+		this.tecnicoId = '',
+		this.fecha,
+		this.resuelto = true,
+		this.aprobado = false,
 	});
 
 	@override
 	List<Object?> get props => [
 				id,
-				tecnicoId,
-				productoId,
-				zonaId,
 				canal,
-				fecha,
+				clienteId,
+				lugarProvinciaId,
+				lugarDetalle,
+				equipoNroSerie,
+				equipoModelo,
+				equipoUbicacion,
+				equipoAnio,
+				partesFallaron,
+				km,
 				sintoma,
-				diagnosticoCatId,
 				diagnosticoDetalle,
+				diagnosticoCatId,
 				resolucionId,
+				observaciones,
+				productoIds,
+				tecnicoId,
+				fecha,
 				resuelto,
 				aprobado,
-				observaciones,
 			];
 }
