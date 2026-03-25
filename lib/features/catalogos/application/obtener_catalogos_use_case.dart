@@ -31,7 +31,21 @@ class ObtenerCatalogosUseCase {
 		final resoluciones = await _repository.obtenerResoluciones();
 		final zonas = await _repository.obtenerZonas();
 		final categorias = await _repository.obtenerCategorias();
-		final productos = await _repository.obtenerProductos();
+
+		final productosPorCategoria = await Future.wait(
+			categorias.map((categoria) {
+				return _repository.obtenerProductosPorCategoria(categoria.id);
+			}),
+		);
+
+		final mapaProductos = <String, Producto>{};
+		for (final productosCategoria in productosPorCategoria) {
+			for (final producto in productosCategoria) {
+				mapaProductos[producto.id] = producto;
+			}
+		}
+
+		final productos = mapaProductos.values.toList();
 
 		return CatalogosData(
 			diagnosticos: diagnosticos,

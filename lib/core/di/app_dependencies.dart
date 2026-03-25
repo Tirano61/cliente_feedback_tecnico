@@ -3,7 +3,9 @@ import 'package:cliente_feedback_tecnico/core/auth/secure_storage.dart';
 import 'package:cliente_feedback_tecnico/features/auth/application/login_use_case.dart';
 import 'package:cliente_feedback_tecnico/features/auth/domain/repositories/i_auth_repository.dart';
 import 'package:cliente_feedback_tecnico/features/auth/infrastructure/repositories/auth_repository_impl.dart';
+import 'package:cliente_feedback_tecnico/features/servicios/application/buscar_clientes_use_case.dart';
 import 'package:cliente_feedback_tecnico/features/servicios/application/cargar_servicio_use_case.dart';
+import 'package:cliente_feedback_tecnico/features/servicios/application/crear_cliente_rapido_use_case.dart';
 import 'package:cliente_feedback_tecnico/features/servicios/application/obtener_mis_servicios_use_case.dart';
 import 'package:cliente_feedback_tecnico/features/servicios/domain/repositories/i_servicio_repository.dart';
 import 'package:cliente_feedback_tecnico/features/servicios/infrastructure/repositories/servicio_repository_impl.dart';
@@ -24,6 +26,8 @@ class AppDependencies {
 	final ObtenerCatalogosUseCase obtenerCatalogosUseCase;
 	final CargarServicioUseCase cargarServicioUseCase;
 	final ObtenerMisServiciosUseCase obtenerMisServiciosUseCase;
+	final BuscarClientesUseCase buscarClientesUseCase;
+	final CrearClienteRapidoUseCase crearClienteRapidoUseCase;
 
 	AppDependencies._({
 		required this.secureStorage,
@@ -35,6 +39,8 @@ class AppDependencies {
 		required this.obtenerCatalogosUseCase,
 		required this.cargarServicioUseCase,
 		required this.obtenerMisServiciosUseCase,
+		required this.buscarClientesUseCase,
+		required this.crearClienteRapidoUseCase,
 	});
 
 	factory AppDependencies.create() {
@@ -56,6 +62,9 @@ class AppDependencies {
 			cargarServicioUseCase: CargarServicioUseCase(servicioRepository),
 			obtenerMisServiciosUseCase:
 					ObtenerMisServiciosUseCase(servicioRepository),
+			buscarClientesUseCase: BuscarClientesUseCase(servicioRepository),
+			crearClienteRapidoUseCase:
+					CrearClienteRapidoUseCase(servicioRepository),
 		);
 	}
 }

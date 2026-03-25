@@ -9,6 +9,8 @@ class ApiConstants {
 	static const String zonas = '/zonas';
 	static const String categoriasProducto = '/categorias-producto';
 	static const String productos = '/productos';
+	static const String clientesBuscar = '/clientes/buscar';
+	static const String clientes = '/clientes';
 
 	static const String servicios = '/servicios';
 	static const String serviciosMios = '/servicios/mios';

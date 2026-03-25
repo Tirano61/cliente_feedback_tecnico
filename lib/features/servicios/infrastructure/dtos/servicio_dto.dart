@@ -2,105 +2,206 @@ import 'package:cliente_feedback_tecnico/features/servicios/domain/entities/serv
 
 class ServicioDto {
 	final String id;
-	final String tecnicoId;
-	final String productoId;
-	final String zonaId;
 	final Canal canal;
-	final DateTime fecha;
+	final String clienteId;
+	final String lugarProvinciaId;
+	final String lugarDetalle;
+	final String equipoNroSerie;
+	final String equipoModelo;
+	final String equipoUbicacion;
+	final int equipoAnio;
+	final List<String> partesFallaron;
+	final int km;
 	final String sintoma;
-	final String diagnosticoCatId;
 	final String diagnosticoDetalle;
+	final String diagnosticoCatId;
 	final String resolucionId;
+	final String? observaciones;
+	final List<String> productoIds;
+
+	final String tecnicoId;
+	final DateTime? fecha;
 	final bool resuelto;
 	final bool aprobado;
-	final String? observaciones;
 
 	const ServicioDto({
 		required this.id,
-		required this.tecnicoId,
-		required this.productoId,
-		required this.zonaId,
 		required this.canal,
-		required this.fecha,
+		required this.clienteId,
+		required this.lugarProvinciaId,
+		required this.lugarDetalle,
+		required this.equipoNroSerie,
+		required this.equipoModelo,
+		required this.equipoUbicacion,
+		required this.equipoAnio,
+		required this.partesFallaron,
+		required this.km,
 		required this.sintoma,
-		required this.diagnosticoCatId,
 		required this.diagnosticoDetalle,
+		required this.diagnosticoCatId,
 		required this.resolucionId,
-		required this.resuelto,
-		required this.aprobado,
 		this.observaciones,
+		required this.productoIds,
+		this.tecnicoId = '',
+		this.fecha,
+		this.resuelto = true,
+		this.aprobado = false,
 	});
 
 	factory ServicioDto.fromJson(Map<String, dynamic> json) {
+		final productoIds = _listaString(
+			json['productoIds'] ?? json['producto_ids'] ?? json['producto_id'],
+		);
+
 		return ServicioDto(
 			id: json['id']?.toString() ?? '',
-			tecnicoId: json['tecnico_id']?.toString() ?? '',
-			productoId: json['producto_id']?.toString() ?? '',
-			zonaId: json['zona_id']?.toString() ?? '',
 			canal: _canalDesdeString(json['canal']?.toString() ?? 'campo'),
-			fecha: DateTime.tryParse(json['fecha']?.toString() ?? '') ?? DateTime.now(),
+			clienteId:
+					json['clienteId']?.toString() ??
+					json['cliente_id']?.toString() ??
+					'',
+			lugarProvinciaId:
+					json['lugarProvinciaId']?.toString() ??
+					json['lugar_provincia_id']?.toString() ??
+					json['zona_id']?.toString() ??
+					'',
+			lugarDetalle:
+					json['lugarDetalle']?.toString() ??
+					json['lugar_detalle']?.toString() ??
+					'',
+			equipoNroSerie:
+					json['equipoNroSerie']?.toString() ??
+					json['equipo_nro_serie']?.toString() ??
+					'',
+			equipoModelo:
+					json['equipoModelo']?.toString() ??
+					json['equipo_modelo']?.toString() ??
+					'',
+			equipoUbicacion:
+					json['equipoUbicacion']?.toString() ??
+					json['equipo_ubicacion']?.toString() ??
+					'',
+			equipoAnio: _intDesdeDynamic(json['equipoAnio'] ?? json['equipo_anio']),
+			partesFallaron:
+					_listaString(json['partesFallaron'] ?? json['partes_fallaron']),
+			km: _intDesdeDynamic(json['km']),
 			sintoma: json['sintoma']?.toString() ?? '',
-			diagnosticoCatId: json['diagnostico_cat_id']?.toString() ?? '',
 			diagnosticoDetalle: json['diagnostico_detalle']?.toString() ?? '',
-			resolucionId: json['resolucion_id']?.toString() ?? '',
+			diagnosticoCatId:
+					json['diagnosticoCatId']?.toString() ??
+					json['diagnostico_cat_id']?.toString() ??
+					'',
+			resolucionId:
+					json['resolucionId']?.toString() ??
+					json['resolucion_id']?.toString() ??
+					'',
+			observaciones: json['observaciones']?.toString(),
+			productoIds: productoIds,
+			tecnicoId: json['tecnicoId']?.toString() ?? json['tecnico_id']?.toString() ?? '',
+			fecha: DateTime.tryParse(json['fecha']?.toString() ?? ''),
 			resuelto: json['resuelto'] == true,
 			aprobado: _aprobadoDesdeJson(json),
-			observaciones: json['observaciones']?.toString(),
 		);
 	}
 
 	Map<String, dynamic> toJson() {
 		return {
-			'id': id,
-			'tecnico_id': tecnicoId,
-			'producto_id': productoId,
-			'zona_id': zonaId,
 			'canal': canal.name,
-			'fecha': fecha.toIso8601String(),
+			'clienteId': clienteId,
+			'lugarProvinciaId': lugarProvinciaId,
+			'lugarDetalle': lugarDetalle,
+			'equipoNroSerie': equipoNroSerie,
+			'equipoModelo': equipoModelo,
+			'equipoUbicacion': equipoUbicacion,
+			'equipoAnio': equipoAnio,
+			'partesFallaron': partesFallaron,
+			'km': km,
 			'sintoma': sintoma,
-			'diagnostico_cat_id': diagnosticoCatId,
-			'diagnostico_detalle': diagnosticoDetalle,
-			'resolucion_id': resolucionId,
-			'resuelto': resuelto,
-			'aprobado': aprobado,
+			'diagnosticoDetalle': diagnosticoDetalle,
+			'diagnosticoCatId': diagnosticoCatId,
+			'resolucionId': resolucionId,
 			'observaciones': observaciones,
+			'productoIds': productoIds,
 		};
 	}
 
 	Servicio aEntidad() {
 		return Servicio(
 			id: id,
-			tecnicoId: tecnicoId,
-			productoId: productoId,
-			zonaId: zonaId,
 			canal: canal,
-			fecha: fecha,
+			clienteId: clienteId,
+			lugarProvinciaId: lugarProvinciaId,
+			lugarDetalle: lugarDetalle,
+			equipoNroSerie: equipoNroSerie,
+			equipoModelo: equipoModelo,
+			equipoUbicacion: equipoUbicacion,
+			equipoAnio: equipoAnio,
+			partesFallaron: partesFallaron,
+			km: km,
 			sintoma: sintoma,
-			diagnosticoCatId: diagnosticoCatId,
 			diagnosticoDetalle: diagnosticoDetalle,
+			diagnosticoCatId: diagnosticoCatId,
 			resolucionId: resolucionId,
+			observaciones: observaciones,
+			productoIds: productoIds,
+			tecnicoId: tecnicoId,
+			fecha: fecha,
 			resuelto: resuelto,
 			aprobado: aprobado,
-			observaciones: observaciones,
 		);
 	}
 
 	factory ServicioDto.desdeEntidad(Servicio servicio) {
 		return ServicioDto(
 			id: servicio.id,
-			tecnicoId: servicio.tecnicoId,
-			productoId: servicio.productoId,
-			zonaId: servicio.zonaId,
 			canal: servicio.canal,
-			fecha: servicio.fecha,
+			clienteId: servicio.clienteId,
+			lugarProvinciaId: servicio.lugarProvinciaId,
+			lugarDetalle: servicio.lugarDetalle,
+			equipoNroSerie: servicio.equipoNroSerie,
+			equipoModelo: servicio.equipoModelo,
+			equipoUbicacion: servicio.equipoUbicacion,
+			equipoAnio: servicio.equipoAnio,
+			partesFallaron: servicio.partesFallaron,
+			km: servicio.km,
 			sintoma: servicio.sintoma,
-			diagnosticoCatId: servicio.diagnosticoCatId,
 			diagnosticoDetalle: servicio.diagnosticoDetalle,
+			diagnosticoCatId: servicio.diagnosticoCatId,
 			resolucionId: servicio.resolucionId,
+			observaciones: servicio.observaciones,
+			productoIds: servicio.productoIds,
+			tecnicoId: servicio.tecnicoId,
+			fecha: servicio.fecha,
 			resuelto: servicio.resuelto,
 			aprobado: servicio.aprobado,
-			observaciones: servicio.observaciones,
 		);
+	}
+
+	static int _intDesdeDynamic(dynamic valor) {
+		if (valor is int) {
+			return valor;
+		}
+		if (valor is num) {
+			return valor.toInt();
+		}
+		if (valor is String) {
+			return int.tryParse(valor) ?? 0;
+		}
+		return 0;
+	}
+
+	static List<String> _listaString(dynamic valor) {
+		if (valor is List) {
+			return valor.map((item) => item.toString()).where((item) => item.isNotEmpty).toList();
+		}
+		if (valor == null) {
+			return const [];
+		}
+		final texto = valor.toString().trim();
+		if (texto.isEmpty) {
+			return const [];
+		}
+		return [texto];
 	}
 
 	static bool _aprobadoDesdeJson(Map<String, dynamic> json) {

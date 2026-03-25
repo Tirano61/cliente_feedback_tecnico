@@ -36,6 +36,8 @@ class App extends StatelessWidget {
           create: (_) => ServicioBloc(
             deps.cargarServicioUseCase,
             deps.obtenerMisServiciosUseCase,
+            deps.buscarClientesUseCase,
+            deps.crearClienteRapidoUseCase,
           ),
         ),
       ],
