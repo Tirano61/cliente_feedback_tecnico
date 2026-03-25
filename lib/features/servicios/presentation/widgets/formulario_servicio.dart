@@ -22,7 +22,6 @@ class _FormularioServicioState extends State<FormularioServicio> {
 	final TextEditingController _buscarClienteController = TextEditingController();
 	final TextEditingController _lugarDetalleController = TextEditingController();
 	final TextEditingController _equipoNroSerieController = TextEditingController();
-	final TextEditingController _equipoModeloController = TextEditingController();
 	final TextEditingController _equipoUbicacionController = TextEditingController();
 	final TextEditingController _equipoAnioController = TextEditingController();
 	final TextEditingController _kmController = TextEditingController();
@@ -30,9 +29,7 @@ class _FormularioServicioState extends State<FormularioServicio> {
 	final TextEditingController _diagnosticoDetalleController = TextEditingController();
 	final TextEditingController _observacionesController = TextEditingController();
 
-	bool _equipoCargaManual = false;
 	String? _modeloIndicadorSeleccionadoId;
-	String? _serieIndicadorSeleccionada;
 
 	String _categoriaFallaSeleccionadaId = '';
 	final Map<String, String> _productosFallaSeleccionados = <String, String>{};
@@ -55,7 +52,6 @@ class _FormularioServicioState extends State<FormularioServicio> {
 		_buscarClienteController.dispose();
 		_lugarDetalleController.dispose();
 		_equipoNroSerieController.dispose();
-		_equipoModeloController.dispose();
 		_equipoUbicacionController.dispose();
 		_equipoAnioController.dispose();
 		_kmController.dispose();
@@ -69,12 +65,9 @@ class _FormularioServicioState extends State<FormularioServicio> {
 		_buscarClienteController.clear();
 		_lugarDetalleController.clear();
 		_equipoNroSerieController.clear();
-		_equipoModeloController.clear();
 		_equipoUbicacionController.clear();
 		_equipoAnioController.clear();
-		_equipoCargaManual = false;
 		_modeloIndicadorSeleccionadoId = null;
-		_serieIndicadorSeleccionada = null;
 		_categoriaFallaSeleccionadaId = '';
 		_productosFallaSeleccionados.clear();
 		_kmController.clear();
@@ -82,7 +75,10 @@ class _FormularioServicioState extends State<FormularioServicio> {
 		_diagnosticoDetalleController.clear();
 		_observacionesController.clear();
 		context.read<ServicioBloc>().add(
-			const ServicioFormularioCambiado(partesFallaronTexto: ''),
+			const ServicioFormularioCambiado(
+				partesFallaronTexto: '',
+				equipoModelo: '',
+			),
 		);
 	}
 
@@ -196,6 +192,23 @@ class _FormularioServicioState extends State<FormularioServicio> {
 						final catalogos = catalogoState as CatalogoLoaded;
 
 						final resolucionLabel = _labelResolucion(estadoFormulario.canal);
+						final categoriasIndicadorIds = catalogos.categorias
+								.where(
+									(categoria) =>
+											categoria.activo &&
+											categoria.nombre.toLowerCase().contains('indicador'),
+								)
+								.map((categoria) => categoria.id)
+								.toSet();
+
+						final indicadoresActivos = catalogos.productos
+								.where(
+									(producto) =>
+											producto.activo &&
+											(categoriasIndicadorIds.contains(producto.categoriaId) ||
+													producto.nombre.toLowerCase().contains('indicador')),
+								)
+								.toList();
 						final productosCategoriaFalla = _categoriaFallaSeleccionadaId.isEmpty
 								? const <Producto>[]
 								: catalogos.productos
@@ -208,8 +221,6 @@ class _FormularioServicioState extends State<FormularioServicio> {
 
 						return LayoutBuilder(
 							builder: (context, constraints) {
-								final esWeb = constraints.maxWidth > 800;
-
 								return SingleChildScrollView(
 									child: Column(
 										crossAxisAlignment: CrossAxisAlignment.start,
@@ -311,68 +322,26 @@ class _FormularioServicioState extends State<FormularioServicio> {
 											const SizedBox(height: 12),
 											Row(
 												children: [
-													Expanded(
-														child: Text(
-															'Equipo modelo y numero de serie',
-															style: Theme.of(context).textTheme.titleSmall,
-														),
-													),
-													Switch(
-														value: _equipoCargaManual,
-														onChanged: (value) {
-															setState(() {
-																_equipoCargaManual = value;
-																_modeloIndicadorSeleccionadoId = null;
-																_serieIndicadorSeleccionada = null;
-																if (!value) {
-																	_equipoModeloController.clear();
-																	_equipoNroSerieController.clear();
-																}
-															});
-														},
+													Text(
+														'Equipo modelo y numero de serie',
+														style: Theme.of(context).textTheme.titleSmall,
 													),
 												],
 											),
 											Align(
 												alignment: Alignment.centerLeft,
 												child: Text(
-													_equipoCargaManual
-															? 'Modo manual activo'
-															: 'Modo lista de indicadores activo',
+													'Modelo por selector de indicadores y numero de serie manual.',
 													style: Theme.of(context).textTheme.bodySmall,
 												),
 											),
 											const SizedBox(height: 8),
-											if (_equipoCargaManual)
-												_estructuraResponsiva(
-													esWeb: esWeb,
-													izquierda: TextField(
-														controller: _equipoModeloController,
-														decoration: const InputDecoration(labelText: 'Equipo modelo'),
-														onChanged: (valor) {
-															context.read<ServicioBloc>().add(
-																	ServicioFormularioCambiado(equipoModelo: valor),
-															);
-														},
-													),
-													derecha: TextField(
-														controller: _equipoNroSerieController,
-														decoration: const InputDecoration(labelText: 'Equipo nro de serie'),
-														onChanged: (valor) {
-															context.read<ServicioBloc>().add(
-																	ServicioFormularioCambiado(equipoNroSerie: valor),
-															);
-														},
-													),
-												)
-											else
-												_builderSeleccionEquipoDesdeIndicadores(
-													context,
-													esWeb,
-												),
+											_builderSeleccionEquipoDesdeIndicadores(
+												context,
+												indicadoresActivos,
+											),
 											const SizedBox(height: 12),
-											_estructuraResponsiva(
-												esWeb: esWeb,
+											_filaDosCampos(
 												izquierda: TextField(
 													controller: _equipoUbicacionController,
 													decoration: const InputDecoration(labelText: 'Equipo ubicacion'),
@@ -600,22 +569,6 @@ class _FormularioServicioState extends State<FormularioServicio> {
 		final valor = _productosFallaSeleccionados.values.join(', ');
 		final productoIds = _productosFallaSeleccionados.keys.toList();
 
-		if (_modeloIndicadorSeleccionadoId != null &&
-				!_productosFallaSeleccionados.containsKey(_modeloIndicadorSeleccionadoId)) {
-			_modeloIndicadorSeleccionadoId = null;
-			context.read<ServicioBloc>().add(
-				const ServicioFormularioCambiado(equipoModelo: ''),
-			);
-		}
-
-		if (_serieIndicadorSeleccionada != null &&
-				!_productosFallaSeleccionados.containsKey(_serieIndicadorSeleccionada)) {
-			_serieIndicadorSeleccionada = null;
-			context.read<ServicioBloc>().add(
-				const ServicioFormularioCambiado(equipoNroSerie: ''),
-			);
-		}
-
 		context.read<ServicioBloc>().add(
 			ServicioFormularioCambiado(
 				partesFallaronTexto: valor,
@@ -626,9 +579,9 @@ class _FormularioServicioState extends State<FormularioServicio> {
 
 	Widget _builderSeleccionEquipoDesdeIndicadores(
 		BuildContext context,
-		bool esWeb,
+		List<Producto> indicadores,
 	) {
-		final opciones = _productosFallaSeleccionados.entries.toList();
+		final opciones = indicadores;
 
 		if (opciones.isEmpty) {
 			return Container(
@@ -639,21 +592,20 @@ class _FormularioServicioState extends State<FormularioServicio> {
 					borderRadius: BorderRadius.circular(8),
 				),
 				child: const Text(
-					'Primero seleccioná indicadores en Partes que mostraban falla para elegir modelo y numero de serie.',
+					'No hay indicadores activos para seleccionar modelo.',
 				),
 			);
 		}
 
-		return _estructuraResponsiva(
-			esWeb: esWeb,
+		return _filaDosCampos(
 			izquierda: DropdownButtonFormField<String>(
 				value: _modeloIndicadorSeleccionadoId,
 				decoration: const InputDecoration(labelText: 'Equipo modelo (desde indicadores)'),
 				items: opciones
 						.map(
-							(entry) => DropdownMenuItem<String>(
-								value: entry.key,
-								child: Text(entry.value),
+							(producto) => DropdownMenuItem<String>(
+								value: producto.id,
+								child: Text(producto.nombre),
 							),
 						)
 						.toList(),
@@ -664,29 +616,18 @@ class _FormularioServicioState extends State<FormularioServicio> {
 					setState(() {
 						_modeloIndicadorSeleccionadoId = valor;
 					});
+					final productoSeleccionado = opciones.firstWhere(
+						(producto) => producto.id == valor,
+					);
 					context.read<ServicioBloc>().add(
-						ServicioFormularioCambiado(equipoModelo: _productosFallaSeleccionados[valor]),
+						ServicioFormularioCambiado(equipoModelo: productoSeleccionado.nombre),
 					);
 				},
 			),
-			derecha: DropdownButtonFormField<String>(
-				value: _serieIndicadorSeleccionada,
-				decoration: const InputDecoration(labelText: 'Equipo nro de serie (seleccionado)'),
-				items: opciones
-						.map(
-							(entry) => DropdownMenuItem<String>(
-								value: entry.key,
-								child: Text(entry.key),
-							),
-						)
-						.toList(),
+			derecha: TextField(
+				controller: _equipoNroSerieController,
+				decoration: const InputDecoration(labelText: 'Equipo nro de serie'),
 				onChanged: (valor) {
-					if (valor == null) {
-						return;
-					}
-					setState(() {
-						_serieIndicadorSeleccionada = valor;
-					});
 					context.read<ServicioBloc>().add(
 						ServicioFormularioCambiado(equipoNroSerie: valor),
 					);
@@ -695,21 +636,7 @@ class _FormularioServicioState extends State<FormularioServicio> {
 		);
 	}
 
-	Widget _estructuraResponsiva({
-		required bool esWeb,
-		required Widget izquierda,
-		required Widget derecha,
-	}) {
-		if (!esWeb) {
-			return Column(
-				children: [
-					izquierda,
-					const SizedBox(height: 12),
-					derecha,
-				],
-			);
-		}
-
+	Widget _filaDosCampos({required Widget izquierda, required Widget derecha}) {
 		return Row(
 			crossAxisAlignment: CrossAxisAlignment.start,
 			children: [
