@@ -31,7 +31,7 @@ class _FormularioServicioState extends State<FormularioServicio> {
 
 	String? _modeloIndicadorSeleccionadoId;
 
-	String _categoriaFallaSeleccionadaId = '';
+	final Set<String> _categoriasFallaSeleccionadasIds = <String>{};
 	final Map<String, String> _productosFallaSeleccionados = <String, String>{};
 
 	@override
@@ -68,7 +68,7 @@ class _FormularioServicioState extends State<FormularioServicio> {
 		_equipoUbicacionController.clear();
 		_equipoAnioController.clear();
 		_modeloIndicadorSeleccionadoId = null;
-		_categoriaFallaSeleccionadaId = '';
+		_categoriasFallaSeleccionadasIds.clear();
 		_productosFallaSeleccionados.clear();
 		_kmController.clear();
 		_sintomaController.clear();
@@ -77,6 +77,7 @@ class _FormularioServicioState extends State<FormularioServicio> {
 		context.read<ServicioBloc>().add(
 			const ServicioFormularioCambiado(
 				partesFallaronTexto: '',
+				diagnosticoCatIdsSeleccionados: <String>[],
 				equipoModelo: '',
 			),
 		);
@@ -209,93 +210,135 @@ class _FormularioServicioState extends State<FormularioServicio> {
 													producto.nombre.toLowerCase().contains('indicador')),
 								)
 								.toList();
-						final productosCategoriaFalla = _categoriaFallaSeleccionadaId.isEmpty
+						final productosCategoriaFalla = _categoriasFallaSeleccionadasIds.isEmpty
 								? const <Producto>[]
 								: catalogos.productos
 										.where(
 											(producto) =>
-													producto.categoriaId == _categoriaFallaSeleccionadaId &&
+													_categoriasFallaSeleccionadasIds.contains(producto.categoriaId) &&
 													producto.activo,
 										)
 										.toList();
 
 						return LayoutBuilder(
 							builder: (context, constraints) {
+								final colorScheme = Theme.of(context).colorScheme;
+								final temaBase = Theme.of(context);
+
 								return SingleChildScrollView(
-									child: Column(
+									padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+									child: Center(
+										child: ConstrainedBox(
+											constraints: const BoxConstraints(maxWidth: 1080),
+											child: Container(
+												padding: const EdgeInsets.all(16),
+												decoration: BoxDecoration(
+													color: colorScheme.surface,
+													borderRadius: BorderRadius.circular(20),
+													border: Border.all(color: colorScheme.outlineVariant),
+													boxShadow: [
+														BoxShadow(
+															color: colorScheme.shadow.withValues(alpha: 0.08),
+															blurRadius: 24,
+															offset: const Offset(0, 12),
+														),
+													],
+												),
+												child: Theme(
+													data: temaBase.copyWith(
+														inputDecorationTheme: temaBase.inputDecorationTheme.copyWith(
+															filled: true,
+															fillColor: colorScheme.surfaceContainerHighest.withValues(alpha: 0.35),
+															border: OutlineInputBorder(
+																borderRadius: BorderRadius.circular(12),
+															),
+															enabledBorder: OutlineInputBorder(
+																borderRadius: BorderRadius.circular(12),
+																borderSide: BorderSide(color: colorScheme.outlineVariant),
+															),
+														),
+													),
+													child: ChipTheme(
+														data: temaBase.chipTheme.copyWith(
+															shape: RoundedRectangleBorder(
+																borderRadius: BorderRadius.circular(10),
+															),
+															side: BorderSide(color: colorScheme.outlineVariant),
+														),
+														child: Column(
 										crossAxisAlignment: CrossAxisAlignment.start,
 										children: [
-											Wrap(
-												spacing: 8,
-												runSpacing: 8,
-												children: Canal.values.map((canal) {
-													return ChoiceChip(
-														label: Text(canal.name),
-														selected: estadoFormulario.canal == canal,
-														onSelected: (_) {
-															context.read<ServicioBloc>().add(
-																	ServicioFormularioCambiado(canal: canal),
-															);
-														},
-													);
-												}).toList(),
-											),
-											const SizedBox(height: 16),
-											TextField(
-												controller: _buscarClienteController,
-												decoration: InputDecoration(
-													labelText: 'Cliente (buscar por nombre o CUIT)',
-													suffixIcon: estadoFormulario.buscandoClientes
-															? const Padding(
-																padding: EdgeInsets.all(12),
-																child: SizedBox(
-																	height: 16,
-																	width: 16,
-																	child: CircularProgressIndicator(strokeWidth: 2),
-																),
-															)
-															: IconButton(
-																onPressed: () {
+													_encabezadoSeccion(
+														titulo: 'Orden de servicio',
+														subtitulo: 'Registro tecnico con validacion y trazabilidad.',
+													),
+													const SizedBox(height: 8),
+											SingleChildScrollView(
+												scrollDirection: Axis.horizontal,
+												child: Row(
+													children: Canal.values.map((canal) {
+														return Padding(
+															padding: const EdgeInsets.only(right: 8),
+															child: ChoiceChip(
+																label: Text(canal.name),
+																selected: estadoFormulario.canal == canal,
+																onSelected: (_) {
 																	context.read<ServicioBloc>().add(
-																			ServicioBuscarClienteSolicitado(
-																				query: _buscarClienteController.text,
-																			),
+																			ServicioFormularioCambiado(canal: canal),
 																	);
 																},
-																icon: const Icon(Icons.search),
 															),
+														);
+													}).toList(),
 												),
-												onSubmitted: (valor) {
-													context.read<ServicioBloc>().add(
-															ServicioBuscarClienteSolicitado(query: valor),
-													);
-												},
 											),
-											const SizedBox(height: 8),
-											Wrap(
-												spacing: 8,
-												runSpacing: 8,
+											const SizedBox(height: 16),
+											Row(
+												crossAxisAlignment: CrossAxisAlignment.start,
 												children: [
-													for (final cliente in estadoFormulario.clientesEncontrados)
-														ChoiceChip(
-															label: Text(
-																cliente.cuit == null || cliente.cuit!.isEmpty
-																		? cliente.nombre
-																		: '${cliente.nombre} (${cliente.cuit})',
+													Expanded(
+														child: TextField(
+															controller: _buscarClienteController,
+															decoration: _decoracionCampoCompacta(
+																context,
+																labelText: 'Cliente (buscar por nombre o CUIT)',
+																suffixIcon: estadoFormulario.buscandoClientes
+																		? const Padding(
+																			padding: EdgeInsets.all(10),
+																			child: SizedBox(
+																				height: 14,
+																				width: 14,
+																				child: CircularProgressIndicator(strokeWidth: 2),
+																			),
+																		)
+																		: IconButton(
+																			onPressed: () {
+																				context.read<ServicioBloc>().add(
+																						ServicioBuscarClienteSolicitado(
+																							query: _buscarClienteController.text,
+																						),
+																				);
+																			},
+																			icon: const Icon(Icons.search),
+																		),
 															),
-															selected:
-																	estadoFormulario.clienteSeleccionado?.id ==
-																	cliente.id,
-															onSelected: (_) {
+															onSubmitted: (valor) {
 																context.read<ServicioBloc>().add(
-																		ServicioClienteSeleccionado(cliente: cliente),
+																		ServicioBuscarClienteSolicitado(query: valor),
 																);
 															},
 														),
+													),
+													const SizedBox(width: 8),
 													OutlinedButton.icon(
 														onPressed: estadoFormulario.creandoCliente
 															? null
 															: () => _mostrarDialogoAltaRapidaCliente(context),
+														style: OutlinedButton.styleFrom(
+															padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+															visualDensity: VisualDensity.compact,
+															tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+														),
 														icon: estadoFormulario.creandoCliente
 																? const SizedBox(
 																	height: 14,
@@ -303,21 +346,52 @@ class _FormularioServicioState extends State<FormularioServicio> {
 																	child: CircularProgressIndicator(strokeWidth: 2),
 																)
 																: const Icon(Icons.person_add_alt_1),
-														label: const Text('Alta rapida cliente'),
+														label: Text(
+															'Alta rapida cliente',
+															style: _estiloTextoCompacto(context),
+														),
 													),
 												],
 											),
+											//const SizedBox(height: 8),
+											SingleChildScrollView(
+												scrollDirection: Axis.horizontal,
+												child: Row(
+													children: estadoFormulario.clientesEncontrados.map((cliente) {
+														return Padding(
+															padding: const EdgeInsets.only(right: 8),
+															child: ChoiceChip(
+																label: Text(
+																	cliente.cuit == null || cliente.cuit!.isEmpty
+																			? cliente.nombre
+																			: '${cliente.nombre} (${cliente.cuit})',
+																),
+																selected: estadoFormulario.clienteSeleccionado?.id == cliente.id,
+																onSelected: (_) {
+																	context.read<ServicioBloc>().add(
+																			ServicioClienteSeleccionado(cliente: cliente),
+																	);
+																},
+															),
+														);
+													}).toList(),
+												),
+											),
 											const SizedBox(height: 16),
-											_dropdownZonas(context, catalogos, estadoFormulario),
-											const SizedBox(height: 12),
-											TextField(
-												controller: _lugarDetalleController,
-												decoration: InputDecoration(labelText: _labelLugarDetalle(estadoFormulario.canal)),
-												onChanged: (valor) {
-													context.read<ServicioBloc>().add(
-															ServicioFormularioCambiado(lugarDetalle: valor),
-													);
-												},
+											_filaDosCampos(
+												izquierda: _dropdownZonas(context, catalogos, estadoFormulario),
+												derecha: TextField(
+													controller: _lugarDetalleController,
+													decoration: _decoracionCampoCompacta(
+														context,
+														labelText: _labelLugarDetalle(estadoFormulario.canal),
+													),
+													onChanged: (valor) {
+														context.read<ServicioBloc>().add(
+																ServicioFormularioCambiado(lugarDetalle: valor),
+														);
+													},
+												),
 											),
 											const SizedBox(height: 12),
 											Row(
@@ -328,13 +402,7 @@ class _FormularioServicioState extends State<FormularioServicio> {
 													),
 												],
 											),
-											Align(
-												alignment: Alignment.centerLeft,
-												child: Text(
-													'Modelo por selector de indicadores y numero de serie manual.',
-													style: Theme.of(context).textTheme.bodySmall,
-												),
-											),
+											
 											const SizedBox(height: 8),
 											_builderSeleccionEquipoDesdeIndicadores(
 												context,
@@ -344,7 +412,10 @@ class _FormularioServicioState extends State<FormularioServicio> {
 											_filaDosCampos(
 												izquierda: TextField(
 													controller: _equipoUbicacionController,
-													decoration: const InputDecoration(labelText: 'Equipo ubicacion'),
+													decoration: _decoracionCampoCompacta(
+														context,
+														labelText: 'Equipo ubicacion',
+													),
 													onChanged: (valor) {
 														context.read<ServicioBloc>().add(
 																ServicioFormularioCambiado(equipoUbicacion: valor),
@@ -354,7 +425,10 @@ class _FormularioServicioState extends State<FormularioServicio> {
 												derecha: TextField(
 													controller: _equipoAnioController,
 													keyboardType: TextInputType.number,
-													decoration: const InputDecoration(labelText: 'Equipo anio'),
+													decoration: _decoracionCampoCompacta(
+														context,
+														labelText: 'Equipo anio',
+													),
 													onChanged: (valor) {
 														context.read<ServicioBloc>().add(
 																ServicioFormularioCambiado(equipoAnio: valor),
@@ -365,7 +439,9 @@ class _FormularioServicioState extends State<FormularioServicio> {
 											const SizedBox(height: 12),
 											Text(
 												'Partes que mostraban falla',
-												style: Theme.of(context).textTheme.titleSmall,
+												style: Theme.of(context).textTheme.titleSmall?.copyWith(
+													fontSize: 13,
+												),
 											),
 											const SizedBox(height: 8),
 											SingleChildScrollView(
@@ -374,15 +450,26 @@ class _FormularioServicioState extends State<FormularioServicio> {
 													children: catalogos.categorias
 															.where((categoria) => categoria.activo)
 															.map((categoria) {
+																final seleccionada = _categoriasFallaSeleccionadasIds.contains(
+																	categoria.id,
+																);
 																return Padding(
 																	padding: const EdgeInsets.only(right: 8),
-																	child: ChoiceChip(
-																		label: Text(categoria.nombre),
-																		selected:
-																				_categoriaFallaSeleccionadaId == categoria.id,
-																		onSelected: (_) {
+																	child: FilterChip(
+																		label: Text(
+																			categoria.nombre,
+																			style: _estiloTextoCompacto(context),
+																		),
+																		visualDensity: VisualDensity.compact,
+																		materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+																		selected: seleccionada,
+																		onSelected: (seleccionar) {
 																			setState(() {
-																				_categoriaFallaSeleccionadaId = categoria.id;
+																				if (seleccionar) {
+																					_categoriasFallaSeleccionadasIds.add(categoria.id);
+																				} else {
+																					_categoriasFallaSeleccionadasIds.remove(categoria.id);
+																				}
 																			});
 																		},
 																	),
@@ -391,47 +478,68 @@ class _FormularioServicioState extends State<FormularioServicio> {
 															.toList(),
 												),
 											),
+											if (_categoriasFallaSeleccionadasIds.isEmpty) ...[
+												const SizedBox(height: 8),
+												Text(
+													'Selecciona una o mas categorias para elegir partes con falla.',
+																			style: _estiloTextoCompacto(context),
+												),
+											],
 											if (productosCategoriaFalla.isNotEmpty) ...[
 												const SizedBox(height: 8),
-												Wrap(
-													spacing: 8,
-													runSpacing: 8,
-													children: productosCategoriaFalla.map((producto) {
-														final seleccionado =
-																_productosFallaSeleccionados.containsKey(producto.id);
-														return FilterChip(
-															label: Text(producto.nombre),
-															selected: seleccionado,
-															onSelected: (_) {
-																_toggleProductoFalla(producto);
+												OutlinedButton.icon(
+													onPressed: () {
+														_mostrarDialogoSeleccionPartes(
+															context: context,
+															productosDisponibles: productosCategoriaFalla,
+															nombresCategorias: {
+																for (final categoria in catalogos.categorias) categoria.id: categoria.nombre,
 															},
 														);
-													}).toList(),
+													},
+													icon: const Icon(Icons.checklist_rtl),
+													label: Text(
+														'Seleccionar partes (${_productosFallaSeleccionados.length})',
+														style: _estiloTextoCompacto(context),
+													),
 												),
 											],
 											if (_productosFallaSeleccionados.isNotEmpty) ...[
 												const SizedBox(height: 8),
-												Wrap(
-													spacing: 8,
-													runSpacing: 8,
-													children: _productosFallaSeleccionados.entries.map((entry) {
-														return InputChip(
-															label: Text(entry.value),
+														SingleChildScrollView(
+															scrollDirection: Axis.horizontal,
+															child: Row(
+																children: _productosFallaSeleccionados.entries.map((entry) {
+																	return Padding(
+																		padding: const EdgeInsets.only(right: 8),
+																		child: InputChip(
+																			label: Text(
+																				entry.value,
+																				style: _estiloTextoCompacto(context),
+																			),
+																			visualDensity: VisualDensity.compact,
+																			materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
 															onDeleted: () {
 																setState(() {
 																	_productosFallaSeleccionados.remove(entry.key);
 																});
 																_actualizarPartesFallaronEnBloc();
 															},
-														);
-													}).toList(),
-												),
+																				),
+																			);
+																		}).toList(),
+																	),
+																),
 											],
 											const SizedBox(height: 12),
 											TextField(
 												controller: _kmController,
 												keyboardType: TextInputType.number,
-												decoration: const InputDecoration(labelText: 'Kilometros (km)'),
+												style: _estiloTextoCompacto(context),
+												decoration: _decoracionCampoCompacta(
+													context,
+													labelText: 'Kilometros (km)',
+												),
 												onChanged: (valor) {
 													context.read<ServicioBloc>().add(
 															ServicioFormularioCambiado(km: valor),
@@ -441,8 +549,13 @@ class _FormularioServicioState extends State<FormularioServicio> {
 											const SizedBox(height: 12),
 											TextField(
 												controller: _sintomaController,
-												maxLines: 3,
-												decoration: const InputDecoration(labelText: 'Sintoma'),
+												minLines: 2,
+												maxLines: 2,
+												style: _estiloTextoCompacto(context),
+												decoration: _decoracionCampoCompacta(
+													context,
+													labelText: 'Sintoma',
+												),
 												onChanged: (valor) {
 													context.read<ServicioBloc>().add(
 															ServicioFormularioCambiado(sintoma: valor),
@@ -450,31 +563,57 @@ class _FormularioServicioState extends State<FormularioServicio> {
 												},
 											),
 											const SizedBox(height: 12),
-											Wrap(
-												spacing: 8,
-												runSpacing: 8,
-												children: catalogos.diagnosticos
+											SingleChildScrollView(
+												scrollDirection: Axis.horizontal,
+												child: Row(
+													children: catalogos.diagnosticos
 														.where((diagnostico) => diagnostico.activo)
 														.map((diagnostico) {
-															return ChoiceChip(
-																label: Text(diagnostico.nombre),
-																selected:
-																		estadoFormulario.diagnosticoCatId == diagnostico.id,
-																onSelected: (_) {
+															final seleccionado = estadoFormulario
+																	.diagnosticoCatIdsSeleccionados
+																	.contains(
+																diagnostico.id,
+																	);
+															return Padding(
+																padding: const EdgeInsets.only(right: 8),
+																child: ChoiceChip(
+																				label: Text(
+																					diagnostico.nombre,
+																					style: _estiloTextoCompacto(context),
+																				),
+																				visualDensity: VisualDensity.compact,
+																				materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+																selected: seleccionado,
+																onSelected: (seleccionar) {
+																	final seleccionados = estadoFormulario
+																			.diagnosticoCatIdsSeleccionados
+																			.toSet();
+																	if (seleccionar) {
+																		seleccionados.add(diagnostico.id);
+																	} else {
+																		seleccionados.remove(diagnostico.id);
+																	}
 																	context.read<ServicioBloc>().add(
 																			ServicioFormularioCambiado(
-																				diagnosticoCatId: diagnostico.id,
+																				diagnosticoCatIdsSeleccionados:
+																						seleccionados.toList(),
 																			),
 																	);
 																},
+																),
 															);
 														}).toList(),
+												),
 											),
 											const SizedBox(height: 12),
 											TextField(
 												controller: _diagnosticoDetalleController,
 												maxLines: 3,
-												decoration: const InputDecoration(labelText: 'Diagnostico detalle'),
+												style: _estiloTextoCompacto(context),
+												decoration: _decoracionCampoCompacta(
+													context,
+													labelText: 'Diagnostico detalle',
+												),
 												onChanged: (valor) {
 													context.read<ServicioBloc>().add(
 															ServicioFormularioCambiado(diagnosticoDetalle: valor),
@@ -484,31 +623,46 @@ class _FormularioServicioState extends State<FormularioServicio> {
 											const SizedBox(height: 12),
 											Text(
 												resolucionLabel,
-												style: Theme.of(context).textTheme.titleSmall,
+												style: Theme.of(context).textTheme.titleSmall?.copyWith(
+													fontSize: 11,
+												),
 											),
 											const SizedBox(height: 8),
-											Wrap(
-												spacing: 8,
-												runSpacing: 8,
-												children: catalogos.resoluciones
+											SingleChildScrollView(
+												scrollDirection: Axis.horizontal,
+												child: Row(
+													children: catalogos.resoluciones
 														.where((resolucion) => resolucion.activo)
 														.map((resolucion) {
-															return ChoiceChip(
-																label: Text(resolucion.nombre),
+															return Padding(
+																padding: const EdgeInsets.only(right: 8),
+																child: ChoiceChip(
+																				label: Text(
+																					resolucion.nombre,
+																					style: _estiloTextoCompacto(context),
+																				),
+																				visualDensity: VisualDensity.compact,
+																				materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
 																selected: estadoFormulario.resolucionId == resolucion.id,
 																onSelected: (_) {
 																	context.read<ServicioBloc>().add(
 																			ServicioFormularioCambiado(resolucionId: resolucion.id),
 																	);
 																},
+																),
 															);
 														}).toList(),
+												),
 											),
 											const SizedBox(height: 12),
 											TextField(
 												controller: _observacionesController,
 												maxLines: 3,
-												decoration: const InputDecoration(labelText: 'Observaciones (opcional)'),
+												style: _estiloTextoCompacto(context),
+												decoration: _decoracionCampoCompacta(
+													context,
+													labelText: 'Observaciones (opcional)',
+												),
 												onChanged: (valor) {
 													context.read<ServicioBloc>().add(
 															ServicioFormularioCambiado(observaciones: valor),
@@ -519,6 +673,12 @@ class _FormularioServicioState extends State<FormularioServicio> {
 											SizedBox(
 												width: double.infinity,
 												child: ElevatedButton.icon(
+													style: ElevatedButton.styleFrom(
+														padding: const EdgeInsets.symmetric(vertical: 14),
+														shape: RoundedRectangleBorder(
+															borderRadius: BorderRadius.circular(12),
+														),
+													),
 													onPressed: estadoFormulario.guardando
 															? null
 															: () {
@@ -538,6 +698,11 @@ class _FormularioServicioState extends State<FormularioServicio> {
 											),
 										],
 									),
+								),
+							),
+						),
+					),
+				),
 								);
 							},
 						);
@@ -547,22 +712,44 @@ class _FormularioServicioState extends State<FormularioServicio> {
 		);
 	}
 
+	Widget _encabezadoSeccion({required String titulo, required String subtitulo}) {
+		final colorScheme = Theme.of(context).colorScheme;
+		return Container(
+			width: double.infinity,
+			padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+			decoration: BoxDecoration(
+				color: colorScheme.primary.withValues(alpha: 0.07),
+				borderRadius: BorderRadius.circular(12),
+				border: Border.all(color: colorScheme.primary.withValues(alpha: 0.18)),
+			),
+			child: Column(
+				crossAxisAlignment: CrossAxisAlignment.start,
+				children: [
+					Text(
+						titulo,
+						style: Theme.of(context).textTheme.titleMedium?.copyWith(
+							fontWeight: FontWeight.w700,
+							letterSpacing: 0.2,
+						),
+					),
+					const SizedBox(height: 2),
+					/**Text(
+						subtitulo,
+						style: Theme.of(context).textTheme.bodySmall?.copyWith(
+							color: colorScheme.onSurfaceVariant,
+						),
+					),
+					),*/
+				],
+			),
+		);
+	}
+
 	void _limpiaFormularioDespuesDeExito(ServicioFormularioState estado) {
 		if (estado.exitoMensaje == null || estado.exitoMensaje!.isEmpty) {
 			return;
 		}
 		_limpiarFormularioVisual();
-	}
-
-	void _toggleProductoFalla(Producto producto) {
-		setState(() {
-			if (_productosFallaSeleccionados.containsKey(producto.id)) {
-				_productosFallaSeleccionados.remove(producto.id);
-			} else {
-				_productosFallaSeleccionados[producto.id] = producto.nombre;
-			}
-		});
-		_actualizarPartesFallaronEnBloc();
 	}
 
 	void _actualizarPartesFallaronEnBloc() {
@@ -574,6 +761,91 @@ class _FormularioServicioState extends State<FormularioServicio> {
 				partesFallaronTexto: valor,
 				productoIdsSeleccionados: productoIds,
 			),
+		);
+	}
+
+	Future<void> _mostrarDialogoSeleccionPartes({
+		required BuildContext context,
+		required List<Producto> productosDisponibles,
+		required Map<String, String> nombresCategorias,
+	}) async {
+		final seleccionTemporal = Map<String, String>.from(_productosFallaSeleccionados);
+		final productosPorCategoria = <String, List<Producto>>{};
+
+		for (final producto in productosDisponibles) {
+			productosPorCategoria.putIfAbsent(producto.categoriaId, () => <Producto>[]).add(producto);
+		}
+
+		for (final lista in productosPorCategoria.values) {
+			lista.sort((a, b) => a.nombre.toLowerCase().compareTo(b.nombre.toLowerCase()));
+		}
+
+		await showDialog<void>(
+			context: context,
+			builder: (dialogContext) {
+				return StatefulBuilder(
+					builder: (context, setDialogState) {
+						return AlertDialog(
+							title: const Text('Seleccionar partes con falla'),
+							content: SizedBox(
+								width: 640,
+								height: 420,
+								child: ListView(
+									children: productosPorCategoria.entries.map((entry) {
+										final categoriaId = entry.key;
+										final productos = entry.value;
+										final nombreCategoria =
+												nombresCategorias[categoriaId] ?? 'Categoria';
+
+										return ExpansionTile(
+											tilePadding: const EdgeInsets.symmetric(horizontal: 4),
+											title: Text(nombreCategoria),
+											children: productos.map((producto) {
+												final seleccionado =
+														seleccionTemporal.containsKey(producto.id);
+												return CheckboxListTile(
+													dense: true,
+													value: seleccionado,
+													title: Text(producto.nombre),
+													controlAffinity:
+															ListTileControlAffinity.leading,
+													onChanged: (valor) {
+														setDialogState(() {
+															if (valor == true) {
+																seleccionTemporal[producto.id] = producto.nombre;
+															} else {
+																seleccionTemporal.remove(producto.id);
+															}
+														});
+													},
+												);
+											}).toList(),
+										);
+									}).toList(),
+								),
+							),
+							actions: [
+								TextButton(
+									onPressed: () => Navigator.of(dialogContext).pop(),
+									child: const Text('Cancelar'),
+								),
+								ElevatedButton(
+									onPressed: () {
+										setState(() {
+											_productosFallaSeleccionados
+												..clear()
+												..addAll(seleccionTemporal);
+										});
+										_actualizarPartesFallaronEnBloc();
+										Navigator.of(dialogContext).pop();
+									},
+									child: const Text('Aplicar'),
+								),
+							],
+						);
+					},
+				);
+			},
 		);
 	}
 
@@ -600,15 +872,39 @@ class _FormularioServicioState extends State<FormularioServicio> {
 		return _filaDosCampos(
 			izquierda: DropdownButtonFormField<String>(
 				value: _modeloIndicadorSeleccionadoId,
-				decoration: const InputDecoration(labelText: 'Equipo modelo (desde indicadores)'),
+				isExpanded: true,
+				decoration: _decoracionCampoCompacta(
+					context,
+					labelText: 'Equipo modelo (desde indicadores)',
+				),
 				items: opciones
 						.map(
 							(producto) => DropdownMenuItem<String>(
 								value: producto.id,
-								child: Text(producto.nombre),
+								child: Text(
+									producto.nombre,
+									style: _estiloTextoCompacto(context),
+									overflow: TextOverflow.ellipsis,
+									maxLines: 1,
+								),
 							),
 						)
 						.toList(),
+				selectedItemBuilder: (context) {
+					return opciones
+							.map(
+								(producto) => Align(
+									alignment: Alignment.centerLeft,
+									child: Text(
+										producto.nombre,
+										style: _estiloTextoCompacto(context),
+										overflow: TextOverflow.ellipsis,
+										maxLines: 1,
+									),
+								),
+							)
+							.toList();
+				},
 				onChanged: (valor) {
 					if (valor == null) {
 						return;
@@ -626,7 +922,10 @@ class _FormularioServicioState extends State<FormularioServicio> {
 			),
 			derecha: TextField(
 				controller: _equipoNroSerieController,
-				decoration: const InputDecoration(labelText: 'Equipo nro de serie'),
+				decoration: _decoracionCampoCompacta(
+					context,
+					labelText: 'Equipo nro de serie',
+				),
 				onChanged: (valor) {
 					context.read<ServicioBloc>().add(
 						ServicioFormularioCambiado(equipoNroSerie: valor),
@@ -654,22 +953,66 @@ class _FormularioServicioState extends State<FormularioServicio> {
 	) {
 		return DropdownButtonFormField<String>(
 			value: estado.lugarProvinciaId.isEmpty ? null : estado.lugarProvinciaId,
-			decoration: const InputDecoration(labelText: 'Zona / Provincia'),
+			isExpanded: true,
+			decoration: _decoracionCampoCompacta(
+				context,
+				labelText: 'Zona / Provincia',
+			),
 			items: catalogos.zonas
 					.where((zona) => zona.activo)
 					.map(
 						(zona) => DropdownMenuItem(
 							value: zona.id,
-							child: Text('${zona.nombre} - ${zona.provincia}'),
+							child: Text(
+								'${zona.nombre} - ${zona.provincia}',
+								style: _estiloTextoCompacto(context),
+								overflow: TextOverflow.ellipsis,
+								maxLines: 1,
+							),
 						),
 					)
 					.toList(),
+			selectedItemBuilder: (context) {
+				return catalogos.zonas
+						.where((zona) => zona.activo)
+						.map(
+							(zona) => Align(
+								alignment: Alignment.centerLeft,
+								child: Text(
+									'${zona.nombre} - ${zona.provincia}',
+									style: _estiloTextoCompacto(context),
+									overflow: TextOverflow.ellipsis,
+									maxLines: 1,
+								),
+							),
+						)
+						.toList();
+			},
 			onChanged: (valor) {
 				if (valor == null) {
 					return;
 				}
 				context.read<ServicioBloc>().add(ServicioFormularioCambiado(zonaId: valor));
 			},
+		);
+	}
+
+	TextStyle _estiloTextoCompacto(BuildContext context) {
+		final base = Theme.of(context).textTheme.bodyMedium ?? const TextStyle();
+		return base.copyWith(fontSize: 12.5);
+	}
+
+	InputDecoration _decoracionCampoCompacta(
+		BuildContext context, {
+		required String labelText,
+		Widget? suffixIcon,
+	}) {
+		return InputDecoration(
+			labelText: labelText,
+			labelStyle: _estiloTextoCompacto(context),
+			isDense: true,
+			contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+			suffixIcon: suffixIcon,
 		);
 	}
 

@@ -16,7 +16,7 @@ class Servicio extends Equatable {
 	final int km;
 	final String sintoma;
 	final String diagnosticoDetalle;
-	final String diagnosticoCatId;
+	final List<String> diagnosticoCatIds;
 	final String resolucionId;
 	final String? observaciones;
 	final List<String> productoIds;
@@ -40,7 +40,7 @@ class Servicio extends Equatable {
 		required this.km,
 		required this.sintoma,
 		required this.diagnosticoDetalle,
-		required this.diagnosticoCatId,
+		required this.diagnosticoCatIds,
 		required this.resolucionId,
 		this.observaciones,
 		required this.productoIds,
@@ -65,7 +65,7 @@ class Servicio extends Equatable {
 				km,
 				sintoma,
 				diagnosticoDetalle,
-				diagnosticoCatId,
+				diagnosticoCatIds,
 				resolucionId,
 				observaciones,
 				productoIds,

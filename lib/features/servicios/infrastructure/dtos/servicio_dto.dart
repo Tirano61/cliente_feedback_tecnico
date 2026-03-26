@@ -14,7 +14,7 @@ class ServicioDto {
 	final int km;
 	final String sintoma;
 	final String diagnosticoDetalle;
-	final String diagnosticoCatId;
+	final List<String> diagnosticoCatIds;
 	final String resolucionId;
 	final String? observaciones;
 	final List<String> productoIds;
@@ -38,7 +38,7 @@ class ServicioDto {
 		required this.km,
 		required this.sintoma,
 		required this.diagnosticoDetalle,
-		required this.diagnosticoCatId,
+		required this.diagnosticoCatIds,
 		required this.resolucionId,
 		this.observaciones,
 		required this.productoIds,
@@ -86,15 +86,16 @@ class ServicioDto {
 					_listaString(json['partesFallaron'] ?? json['partes_fallaron']),
 			km: _intDesdeDynamic(json['km']),
 			sintoma: json['sintoma']?.toString() ?? '',
-			diagnosticoDetalle: json['diagnostico_detalle']?.toString() ?? '',
-			diagnosticoCatId:
-					json['diagnosticoCatId']?.toString() ??
-					json['diagnostico_cat_id']?.toString() ??
+			diagnosticoDetalle:
+					json['diagnosticoDetalle']?.toString() ??
+					json['diagnostico_detalle']?.toString() ??
 					'',
-			resolucionId:
-					json['resolucionId']?.toString() ??
-					json['resolucion_id']?.toString() ??
-					'',
+			diagnosticoCatIds: _listaString(
+				json['diagnosticoCatId'] ?? json['diagnostico_cat_id'],
+			),
+			resolucionId: _primerValorListaOString(
+				json['resolucionId'] ?? json['resolucion_id'],
+			),
 			observaciones: json['observaciones']?.toString(),
 			productoIds: productoIds,
 			tecnicoId: json['tecnicoId']?.toString() ?? json['tecnico_id']?.toString() ?? '',
@@ -105,7 +106,7 @@ class ServicioDto {
 	}
 
 	Map<String, dynamic> toJson() {
-		return {
+		final body = <String, dynamic>{
 			'canal': canal.name,
 			'clienteId': clienteId,
 			'lugarProvinciaId': lugarProvinciaId,
@@ -118,11 +119,17 @@ class ServicioDto {
 			'km': km,
 			'sintoma': sintoma,
 			'diagnosticoDetalle': diagnosticoDetalle,
-			'diagnosticoCatId': diagnosticoCatId,
-			'resolucionId': resolucionId,
-			'observaciones': observaciones,
+			'diagnosticoCatId': diagnosticoCatIds,
+			'resolucionId': resolucionId.trim().isEmpty ? const <String>[] : [resolucionId],
 			'productoIds': productoIds,
 		};
+
+		final observacionesNormalizadas = observaciones?.trim();
+		if (observacionesNormalizadas != null && observacionesNormalizadas.isNotEmpty) {
+			body['observaciones'] = observacionesNormalizadas;
+		}
+
+		return body;
 	}
 
 	Servicio aEntidad() {
@@ -140,7 +147,7 @@ class ServicioDto {
 			km: km,
 			sintoma: sintoma,
 			diagnosticoDetalle: diagnosticoDetalle,
-			diagnosticoCatId: diagnosticoCatId,
+			diagnosticoCatIds: diagnosticoCatIds,
 			resolucionId: resolucionId,
 			observaciones: observaciones,
 			productoIds: productoIds,
@@ -166,7 +173,7 @@ class ServicioDto {
 			km: servicio.km,
 			sintoma: servicio.sintoma,
 			diagnosticoDetalle: servicio.diagnosticoDetalle,
-			diagnosticoCatId: servicio.diagnosticoCatId,
+			diagnosticoCatIds: servicio.diagnosticoCatIds,
 			resolucionId: servicio.resolucionId,
 			observaciones: servicio.observaciones,
 			productoIds: servicio.productoIds,
@@ -202,6 +209,14 @@ class ServicioDto {
 			return const [];
 		}
 		return [texto];
+	}
+
+	static String _primerValorListaOString(dynamic valor) {
+		final lista = _listaString(valor);
+		if (lista.isEmpty) {
+			return '';
+		}
+		return lista.first;
 	}
 
 	static bool _aprobadoDesdeJson(Map<String, dynamic> json) {

@@ -25,7 +25,7 @@ class ServicioFormularioState extends ServicioState {
 	final String partesFallaronTexto;
 	final String km;
 	final String sintoma;
-	final String diagnosticoCatId;
+	final List<String> diagnosticoCatIdsSeleccionados;
 	final String diagnosticoDetalle;
 	final String resolucionId;
 	final String observaciones;
@@ -50,7 +50,7 @@ class ServicioFormularioState extends ServicioState {
 		this.partesFallaronTexto = '',
 		this.km = '',
 		this.sintoma = '',
-		this.diagnosticoCatId = '',
+		this.diagnosticoCatIdsSeleccionados = const [],
 		this.diagnosticoDetalle = '',
 		this.resolucionId = '',
 		this.observaciones = '',
@@ -76,7 +76,7 @@ class ServicioFormularioState extends ServicioState {
 		String? partesFallaronTexto,
 		String? km,
 		String? sintoma,
-		String? diagnosticoCatId,
+		List<String>? diagnosticoCatIdsSeleccionados,
 		String? diagnosticoDetalle,
 		String? resolucionId,
 		String? observaciones,
@@ -103,7 +103,8 @@ class ServicioFormularioState extends ServicioState {
 			partesFallaronTexto: partesFallaronTexto ?? this.partesFallaronTexto,
 			km: km ?? this.km,
 			sintoma: sintoma ?? this.sintoma,
-			diagnosticoCatId: diagnosticoCatId ?? this.diagnosticoCatId,
+			diagnosticoCatIdsSeleccionados:
+					diagnosticoCatIdsSeleccionados ?? this.diagnosticoCatIdsSeleccionados,
 			diagnosticoDetalle: diagnosticoDetalle ?? this.diagnosticoDetalle,
 			resolucionId: resolucionId ?? this.resolucionId,
 			observaciones: observaciones ?? this.observaciones,
@@ -134,7 +135,7 @@ class ServicioFormularioState extends ServicioState {
 				partesFallaronTexto,
 				km,
 				sintoma,
-				diagnosticoCatId,
+				diagnosticoCatIdsSeleccionados,
 				diagnosticoDetalle,
 				resolucionId,
 				observaciones,
