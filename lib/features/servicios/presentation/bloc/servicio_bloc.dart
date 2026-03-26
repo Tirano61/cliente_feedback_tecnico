@@ -11,6 +11,15 @@ import 'package:cliente_feedback_tecnico/features/servicios/presentation/bloc/se
 import 'package:flutter_bloc/flutter_bloc.dart';
 
 class ServicioBloc extends Bloc<ServicioEvent, ServicioState> {
+	static const Set<String> _partesFallaronPermitidas = {
+		'indicador',
+		'celda',
+		'app_movil',
+		'app_pc',
+		'tablet',
+		'otro',
+	};
+
 	final CargarServicioUseCase _cargarServicioUseCase;
 	final ObtenerMisServiciosUseCase _obtenerMisServiciosUseCase;
 	final BuscarClientesUseCase _buscarClientesUseCase;
@@ -57,7 +66,7 @@ class ServicioBloc extends Bloc<ServicioEvent, ServicioState> {
 				partesFallaronTexto: event.partesFallaronTexto,
 				km: event.km,
 				sintoma: event.sintoma,
-				diagnosticoCatId: event.diagnosticoCatId,
+				diagnosticoCatIdsSeleccionados: event.diagnosticoCatIdsSeleccionados,
 				diagnosticoDetalle: event.diagnosticoDetalle,
 				resolucionId: event.resolucionId,
 				observaciones: event.observaciones,
@@ -291,8 +300,8 @@ class ServicioBloc extends Bloc<ServicioEvent, ServicioState> {
 		if (estado.diagnosticoDetalle.trim().isEmpty) {
 			return 'Completa el detalle tecnico del diagnostico.';
 		}
-		if (estado.diagnosticoCatId.trim().isEmpty) {
-			return 'Selecciona una categoria de diagnostico.';
+		if (estado.diagnosticoCatIdsSeleccionados.isEmpty) {
+			return 'Selecciona al menos una categoria de diagnostico.';
 		}
 		if (estado.resolucionId.trim().isEmpty) {
 			return 'Selecciona una resolucion.';
@@ -318,7 +327,7 @@ class ServicioBloc extends Bloc<ServicioEvent, ServicioState> {
 			km: int.parse(estado.km.trim()),
 			sintoma: estado.sintoma.trim(),
 			diagnosticoDetalle: estado.diagnosticoDetalle.trim(),
-			diagnosticoCatId: estado.diagnosticoCatId.trim(),
+			diagnosticoCatIds: estado.diagnosticoCatIdsSeleccionados,
 			resolucionId: estado.resolucionId.trim(),
 			observaciones: estado.observaciones.trim().isEmpty
 					? null
@@ -330,10 +339,46 @@ class ServicioBloc extends Bloc<ServicioEvent, ServicioState> {
 	List<String> _partesFallaronDesdeTexto(String texto) {
 		return texto
 				.split(RegExp(r'[\n,;]'))
-				.map((item) => item.trim())
+				.map(_normalizarParteFallada)
 				.where((item) => item.isNotEmpty)
 				.toSet()
 				.toList();
+	}
+
+	String _normalizarParteFallada(String valorCrudo) {
+		final valor = valorCrudo.toLowerCase().trim();
+		if (valor.isEmpty) {
+			return '';
+		}
+
+		final valorNormalizado = valor.replaceAll(' ', '_').replaceAll('-', '_');
+		if (_partesFallaronPermitidas.contains(valorNormalizado)) {
+			return valorNormalizado;
+		}
+
+		if (valor.contains('indicador')) {
+			return 'indicador';
+		}
+		if (valor.contains('celda')) {
+			return 'celda';
+		}
+		if (valor.contains('app') && (valor.contains('movil') || valor.contains('mobile'))) {
+			return 'app_movil';
+		}
+		if (valor.contains('movil') || valor.contains('mobile') || valor.contains('celular')) {
+			return 'app_movil';
+		}
+		if (valor.contains('app') && valor.contains('pc')) {
+			return 'app_pc';
+		}
+		if (valor.contains('pc') || valor.contains('web') || valor.contains('escritorio')) {
+			return 'app_pc';
+		}
+		if (valor.contains('tablet')) {
+			return 'tablet';
+		}
+
+		return 'otro';
 	}
 }
 
