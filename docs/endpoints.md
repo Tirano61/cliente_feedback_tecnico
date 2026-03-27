@@ -28,11 +28,16 @@ Authorization: Bearer <token>
 | GET | `/servicios` | admin-tecnico, admin-desarrollo, admin |
 | GET | `/servicios/:id` | tecnico, admin-tecnico, admin-desarrollo, admin |
 | PATCH | `/servicios/:id` | tecnico |
+| PATCH | `/servicios/:id/documento` | tecnico, admin-tecnico, admin-desarrollo, admin |
 
 ### Payload ejemplo POST /servicios
 
 ```json
 {
+  "idempotencyKey": "2f7b4d37-2f7f-4b0f-b2f0-1f9d9d1a7a1f",
+  "fechaHoraServicio": "2026-03-26T14:22:10-03:00",
+  "timezoneIana": "America/Argentina/Buenos_Aires",
+  "utcOffsetMinutos": -180,
   "canal": "campo",
   "clienteId": "{{clienteId}}",
   "lugarProvinciaId": "{{zonaId}}",
@@ -45,12 +50,161 @@ Authorization: Bearer <token>
   "km": 120,
   "sintoma": "No inicia",
   "diagnosticoDetalle": "Fuente sin salida",
-  "diagnosticoCatId": "{{diagnosticoId}}",
-  "resolucionId": "{{resolucionId}}",
+  "diagnosticoCatId": ["{{diagnosticoId}}"],
+  "resolucionId": ["{{resolucionId}}"],
   "observaciones": "Cliente solicita seguimiento",
-  "productoIds": ["{{productoId}}"]
+  "productosFalla": [
+    { "parteFallo": "celda", "productoFallaId": "{{productoId}}" },
+    { "parteFallo": "app_movil", "productoFallaId": "{{productoId}}" }
+  ],
+  "facturacion": {
+    "cotizacionDolarSnapshot": 1120.5,
+    "valorKmUsdSnapshot": 0.75,
+    "kmCantidad": 120,
+    "subtotalKmUsd": 90,
+    "subtotalKmArs": 100845,
+    "subtotalGeneralUsd": 331.5,
+    "subtotalGeneralArs": 371557.75,
+    "ivaPorcentaje": 21,
+    "totalConIvaArs": 449584.88,
+    "descuentoPorcentaje": 10,
+    "totalFinalArs": 404626.39,
+    "version": 1
+  },
+  "facturacionItems": [
+    {
+      "tipoItem": "viatico",
+      "referenciaId": null,
+      "descripcion": "Viatico por km",
+      "cantidad": 120,
+      "precioUnitarioUsd": 0.75,
+      "precioUnitarioArs": 840.375,
+      "subtotalUsd": 90,
+      "subtotalArs": 100845
+    },
+    {
+      "tipoItem": "repuesto",
+      "referenciaId": "{{repuestoId}}",
+      "descripcion": "Celda CZAP 20000",
+      "cantidad": 2,
+      "precioUnitarioUsd": 120.75,
+      "precioUnitarioArs": 135356.375,
+      "subtotalUsd": 241.5,
+      "subtotalArs": 270712.75
+    }
+  ],
+  "documento": {
+    "pdfHashSha256": null,
+    "pdfUrl": null,
+    "firmaClienteNombre": null,
+    "firmaClienteDocumento": null,
+    "firmaFechaHora": null
+  }
 }
 ```
+
+### Respuesta ejemplo POST /servicios (orden completa)
+
+```json
+{
+  "replayed": false,
+  "servicioId": "2f4d8b22-d4df-4939-8f89-0d38e2c93c37",
+  "idempotencyKey": "2f7b4d37-2f7f-4b0f-b2f0-1f9d9d1a7a1f",
+  "estadoOrden": "cerrada",
+  "version": 1,
+  "fechaHoraServicio": "2026-03-26T14:22:10-03:00",
+  "timezoneIana": "America/Argentina/Buenos_Aires",
+  "utcOffsetMinutos": -180,
+  "servicio": {
+    "canal": "campo",
+    "clienteId": "{{clienteId}}",
+    "lugarProvinciaId": "{{zonaId}}",
+    "lugarDetalle": "Cestari 14",
+    "equipoNroSerie": "SN-001",
+    "equipoModelo": "ST455",
+    "equipoUbicacion": "Tolva principal",
+    "equipoAnio": 2021,
+    "partesFallaron": ["celda", "app_movil"],
+    "km": 120,
+    "sintoma": "No inicia",
+    "diagnosticoDetalle": "Fuente sin salida",
+    "diagnosticoCatId": ["{{diagnosticoId}}"],
+    "resolucionId": ["{{resolucionId}}"],
+    "observaciones": "Cliente solicita seguimiento",
+    "productosFalla": [
+      { "parteFallo": "celda", "productoFallaId": "{{productoId}}" },
+      { "parteFallo": "app_movil", "productoFallaId": "{{productoId}}" }
+    ]
+  },
+  "facturacion": {
+    "cotizacionDolarSnapshot": 1120.5,
+    "valorKmUsdSnapshot": 0.75,
+    "kmCantidad": 120,
+    "subtotalKmUsd": 90,
+    "subtotalKmArs": 100845,
+    "subtotalGeneralUsd": 331.5,
+    "subtotalGeneralArs": 371557.75,
+    "ivaPorcentaje": 21,
+    "totalConIvaArs": 449584.88,
+    "descuentoPorcentaje": 10,
+    "totalFinalArs": 404626.39
+  },
+  "facturacionItems": [
+    {
+      "tipoItem": "viatico",
+      "referenciaId": null,
+      "descripcion": "Viatico por km",
+      "cantidad": 120,
+      "precioUnitarioUsd": 0.75,
+      "precioUnitarioArs": 840.375,
+      "subtotalUsd": 90,
+      "subtotalArs": 100845
+    },
+    {
+      "tipoItem": "repuesto",
+      "referenciaId": "{{repuestoId}}",
+      "descripcion": "Celda CZAP 20000",
+      "cantidad": 2,
+      "precioUnitarioUsd": 120.75,
+      "precioUnitarioArs": 135356.375,
+      "subtotalUsd": 241.5,
+      "subtotalArs": 270712.75
+    }
+  ],
+  "documento": {
+    "pdfHashSha256": null,
+    "pdfUrl": null,
+    "firmaClienteNombre": null,
+    "firmaClienteDocumento": null,
+    "firmaFechaHora": null
+  }
+}
+```
+
+Notas:
+
+- La app puede generar el PDF inmediatamente con esta respuesta, sin una segunda llamada.
+- `idempotencyKey` viaja en el body de `POST /servicios`.
+- Si un tecnico reintenta con el mismo `idempotencyKey`, el backend devuelve la misma orden creada previamente.
+- `replayed = true` indica que la respuesta es un replay idempotente (no una nueva insercion).
+- Si ocurre una carrera de concurrencia con la misma clave, la deduplicacion se resuelve en base de datos (sin duplicar ordenes).
+- La liquidacion de tecnico sigue siendo un flujo separado.
+
+### Payload PATCH /servicios/:id/documento
+
+```json
+{
+  "pdfHashSha256": "f4f4b4f8518fcb9d06b6a88c0ec5f23f1f9d1a7a1f9f7b4d372f7f4b0fb2f0a1",
+  "pdfUrl": "https://storage.example.com/ordenes/2f4d8b22.pdf",
+  "firmaClienteNombre": "Juan Perez",
+  "firmaClienteDocumento": "30111222",
+  "firmaFechaHora": "2026-03-26T16:10:00-03:00"
+}
+```
+
+### Respuesta PATCH /servicios/:id/documento
+
+Devuelve el mismo shape de `POST /servicios`, con `replayed = false` y `estadoOrden` actualizado (`firmada` cuando haya datos de firma).
 
 ## Clientes
 
