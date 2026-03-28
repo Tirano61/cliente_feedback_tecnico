@@ -4,8 +4,10 @@ import 'package:cliente_feedback_tecnico/features/auth/application/login_use_cas
 import 'package:cliente_feedback_tecnico/features/auth/domain/repositories/i_auth_repository.dart';
 import 'package:cliente_feedback_tecnico/features/auth/infrastructure/repositories/auth_repository_impl.dart';
 import 'package:cliente_feedback_tecnico/features/servicios/application/buscar_clientes_use_case.dart';
+import 'package:cliente_feedback_tecnico/features/servicios/application/buscar_repuestos_use_case.dart';
 import 'package:cliente_feedback_tecnico/features/servicios/application/cargar_servicio_use_case.dart';
 import 'package:cliente_feedback_tecnico/features/servicios/application/crear_cliente_rapido_use_case.dart';
+import 'package:cliente_feedback_tecnico/features/servicios/application/obtener_cotizacion_actual_use_case.dart';
 import 'package:cliente_feedback_tecnico/features/servicios/application/obtener_mis_servicios_use_case.dart';
 import 'package:cliente_feedback_tecnico/features/servicios/domain/repositories/i_servicio_repository.dart';
 import 'package:cliente_feedback_tecnico/features/servicios/infrastructure/repositories/servicio_repository_impl.dart';
@@ -28,6 +30,8 @@ class AppDependencies {
 	final ObtenerMisServiciosUseCase obtenerMisServiciosUseCase;
 	final BuscarClientesUseCase buscarClientesUseCase;
 	final CrearClienteRapidoUseCase crearClienteRapidoUseCase;
+	final ObtenerCotizacionActualUseCase obtenerCotizacionActualUseCase;
+	final BuscarRepuestosUseCase buscarRepuestosUseCase;
 
 	AppDependencies._({
 		required this.secureStorage,
@@ -41,6 +45,8 @@ class AppDependencies {
 		required this.obtenerMisServiciosUseCase,
 		required this.buscarClientesUseCase,
 		required this.crearClienteRapidoUseCase,
+		required this.obtenerCotizacionActualUseCase,
+		required this.buscarRepuestosUseCase,
 	});
 
 	factory AppDependencies.create() {
@@ -65,6 +71,9 @@ class AppDependencies {
 			buscarClientesUseCase: BuscarClientesUseCase(servicioRepository),
 			crearClienteRapidoUseCase:
 					CrearClienteRapidoUseCase(servicioRepository),
+			obtenerCotizacionActualUseCase:
+					ObtenerCotizacionActualUseCase(servicioRepository),
+			buscarRepuestosUseCase: BuscarRepuestosUseCase(servicioRepository),
 		);
 	}
 }

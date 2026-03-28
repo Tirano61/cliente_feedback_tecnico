@@ -4,9 +4,15 @@ import 'package:cliente_feedback_tecnico/core/api/api_client.dart';
 import 'package:cliente_feedback_tecnico/core/api/api_constants.dart';
 import 'package:cliente_feedback_tecnico/core/error/failures.dart';
 import 'package:cliente_feedback_tecnico/features/servicios/domain/entities/cliente.dart';
+import 'package:cliente_feedback_tecnico/features/servicios/domain/entities/cotizacion_actual.dart';
+import 'package:cliente_feedback_tecnico/features/servicios/domain/entities/orden_servicio_respuesta.dart';
+import 'package:cliente_feedback_tecnico/features/servicios/domain/entities/repuesto.dart';
 import 'package:cliente_feedback_tecnico/features/servicios/domain/entities/servicio.dart';
 import 'package:cliente_feedback_tecnico/features/servicios/domain/repositories/i_servicio_repository.dart';
 import 'package:cliente_feedback_tecnico/features/servicios/infrastructure/dtos/cliente_dto.dart';
+import 'package:cliente_feedback_tecnico/features/servicios/infrastructure/dtos/cotizacion_actual_dto.dart';
+import 'package:cliente_feedback_tecnico/features/servicios/infrastructure/dtos/orden_servicio_respuesta_dto.dart';
+import 'package:cliente_feedback_tecnico/features/servicios/infrastructure/dtos/repuesto_dto.dart';
 import 'package:cliente_feedback_tecnico/features/servicios/infrastructure/dtos/servicio_dto.dart';
 
 class ServicioRepositoryImpl implements IServicioRepository {
@@ -15,8 +21,9 @@ class ServicioRepositoryImpl implements IServicioRepository {
 	ServicioRepositoryImpl(this.apiClient);
 
 	@override
-	Future<void> cargarServicio(Servicio servicio) async {
+	Future<OrdenServicioRespuesta> cargarServicio(Servicio servicio) async {
 		final body = ServicioDto.desdeEntidad(servicio).toJson();
+		_logPayloadAltaServicio(body);
 		final response = await apiClient.post(
 			ApiConstants.servicios,
 			body,
@@ -29,6 +36,13 @@ class ServicioRepositoryImpl implements IServicioRepository {
 				statusCode: response.statusCode,
 			);
 		}
+
+		final payload = _extraerMapa(_decodeJsonSeguro(response.body));
+		if (payload == null) {
+			throw const ServerException('Respuesta invalida al guardar la orden de servicio.');
+		}
+
+		return OrdenServicioRespuestaDto.fromJson(payload).aEntidad();
 	}
 
 	@override
@@ -71,6 +85,48 @@ class ServicioRepositoryImpl implements IServicioRepository {
 		return lista
 				.whereType<Map<String, dynamic>>()
 				.map((item) => ClienteDto.fromJson(item))
+				.toList();
+	}
+
+	@override
+	Future<CotizacionActual> obtenerCotizacionActual() async {
+		final response = await apiClient.get(ApiConstants.cotizacion);
+
+		if (response.statusCode != 200) {
+			final mensajeBackend = _extraerMensajeError(response.body);
+			throw ServerException(
+				mensajeBackend ?? 'No se pudo obtener la cotizacion actual.',
+				statusCode: response.statusCode,
+			);
+		}
+
+		final payload = _extraerMapa(_decodeJsonSeguro(response.body));
+		if (payload == null) {
+			throw const ServerException('Respuesta invalida de cotizacion.');
+		}
+
+		return CotizacionActualDto.fromJson(payload).aEntidad();
+	}
+
+	@override
+	Future<List<Repuesto>> buscarRepuestos(String query) async {
+		final termino = Uri.encodeQueryComponent(query);
+		final response = await apiClient.get('${ApiConstants.repuestos}?q=$termino');
+
+		if (response.statusCode != 200) {
+			final mensajeBackend = _extraerMensajeError(response.body);
+			throw ServerException(
+				mensajeBackend ?? 'No se pudieron obtener repuestos.',
+				statusCode: response.statusCode,
+			);
+		}
+
+		final dynamic json = _decodeJsonSeguro(response.body);
+		final lista = _extraerLista(json);
+
+		return lista
+				.whereType<Map<String, dynamic>>()
+				.map((item) => RepuestoDto.fromJson(item).aEntidad())
 				.toList();
 	}
 
@@ -129,6 +185,33 @@ class ServicioRepositoryImpl implements IServicioRepository {
 			}
 		} catch (_) {
 			return null;
+		}
+		return null;
+	}
+
+	void _logPayloadAltaServicio(Map<String, dynamic> body) {
+		if (const bool.fromEnvironment('dart.vm.product')) {
+			return;
+		}
+
+		final payloadPretty = const JsonEncoder.withIndent('  ').convert(body);
+		print('[POST /servicios] body final:\n$payloadPretty');
+	}
+
+	dynamic _decodeJsonSeguro(String body) {
+		try {
+			return jsonDecode(body);
+		} catch (_) {
+			return null;
+		}
+	}
+
+	Map<String, dynamic>? _extraerMapa(dynamic json) {
+		if (json is Map<String, dynamic>) {
+			if (json['data'] is Map<String, dynamic>) {
+				return json['data'] as Map<String, dynamic>;
+			}
+			return json;
 		}
 		return null;
 	}
