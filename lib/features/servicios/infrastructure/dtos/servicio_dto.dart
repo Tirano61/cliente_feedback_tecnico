@@ -219,7 +219,6 @@ class ServicioDto {
 		}
 		if (facturacion != null) {
 			body['facturacion'] = {
-				'cotizacionDolarSnapshot': facturacion!.cotizacionDolarSnapshot,
 				'valorKmUsdSnapshot': facturacion!.valorKmUsdSnapshot,
 				'kmCantidad': facturacion!.kmCantidad,
 				'subtotalKmUsd': facturacion!.subtotalKmUsd,

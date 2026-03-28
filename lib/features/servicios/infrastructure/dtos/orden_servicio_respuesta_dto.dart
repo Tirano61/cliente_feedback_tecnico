@@ -93,7 +93,6 @@ class OrdenServicioRespuestaDto {
 			'facturacion': facturacion == null
 					? null
 					: {
-						'cotizacionDolarSnapshot': facturacion!.cotizacionDolarSnapshot,
 						'valorKmUsdSnapshot': facturacion!.valorKmUsdSnapshot,
 						'kmCantidad': facturacion!.kmCantidad,
 						'subtotalKmUsd': facturacion!.subtotalKmUsd,

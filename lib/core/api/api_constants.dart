@@ -13,6 +13,7 @@ class ApiConstants {
 	static const String clientes = '/clientes';
 	static const String repuestos = '/repuestos';
 	static const String cotizacion = '/cotizacion';
+	static const String tarifaKm = '/tarifa-km';
 
 	static const String servicios = '/servicios';
 	static const String serviciosMios = '/servicios/mios';
