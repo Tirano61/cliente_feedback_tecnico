@@ -28,7 +28,6 @@ class Servicio extends Equatable {
 	final List<String> diagnosticoCatIds;
 	final String resolucionId;
 	final String? observaciones;
-	final List<String> productoIds;
 	final List<ProductoFalla> productosFalla;
 	final Facturacion? facturacion;
 	final List<FacturacionItem> facturacionItems;
@@ -60,7 +59,6 @@ class Servicio extends Equatable {
 		required this.diagnosticoCatIds,
 		required this.resolucionId,
 		this.observaciones,
-		required this.productoIds,
 		this.productosFalla = const [],
 		this.facturacion,
 		this.facturacionItems = const [],
@@ -93,7 +91,6 @@ class Servicio extends Equatable {
 				diagnosticoCatIds,
 				resolucionId,
 				observaciones,
-				productoIds,
 				productosFalla,
 				facturacion,
 				facturacionItems,

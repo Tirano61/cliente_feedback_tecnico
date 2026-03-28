@@ -1,4 +1,6 @@
 import 'package:cliente_feedback_tecnico/features/servicios/domain/entities/cliente.dart';
+import 'package:cliente_feedback_tecnico/features/servicios/domain/entities/producto_falla.dart';
+import 'package:cliente_feedback_tecnico/features/servicios/domain/entities/repuesto.dart';
 import 'package:cliente_feedback_tecnico/features/servicios/domain/entities/servicio.dart';
 import 'package:equatable/equatable.dart';
 
@@ -12,7 +14,7 @@ abstract class ServicioEvent extends Equatable {
 class ServicioFormularioCambiado extends ServicioEvent {
 	final Canal? canal;
 	final String? zonaId;
-	final List<String>? productoIdsSeleccionados;
+	final List<ProductoFalla>? productosFallaSeleccionados;
 	final String? clienteId;
 	final String? lugarDetalle;
 	final String? equipoNroSerie;
@@ -30,7 +32,7 @@ class ServicioFormularioCambiado extends ServicioEvent {
 	const ServicioFormularioCambiado({
 		this.canal,
 		this.zonaId,
-		this.productoIdsSeleccionados,
+		this.productosFallaSeleccionados,
 		this.clienteId,
 		this.lugarDetalle,
 		this.equipoNroSerie,
@@ -50,7 +52,7 @@ class ServicioFormularioCambiado extends ServicioEvent {
 	List<Object?> get props => [
 				canal,
 				zonaId,
-				productoIdsSeleccionados,
+				productosFallaSeleccionados,
 				clienteId,
 				lugarDetalle,
 				equipoNroSerie,
@@ -104,6 +106,63 @@ class MisServiciosSolicitados extends ServicioEvent {
 
 class ServicioFormularioReiniciado extends ServicioEvent {
 	const ServicioFormularioReiniciado();
+}
+
+class ServicioFacturacionInicializada extends ServicioEvent {
+	const ServicioFacturacionInicializada();
+}
+
+class ServicioBuscarRepuestosSolicitado extends ServicioEvent {
+	final String query;
+
+	const ServicioBuscarRepuestosSolicitado({required this.query});
+
+	@override
+	List<Object?> get props => [query];
+}
+
+class ServicioRepuestoAgregado extends ServicioEvent {
+	final Repuesto repuesto;
+
+	const ServicioRepuestoAgregado({required this.repuesto});
+
+	@override
+	List<Object?> get props => [repuesto];
+}
+
+class ServicioRepuestoCantidadCambiada extends ServicioEvent {
+	final String repuestoId;
+	final String cantidad;
+
+	const ServicioRepuestoCantidadCambiada({
+		required this.repuestoId,
+		required this.cantidad,
+	});
+
+	@override
+	List<Object?> get props => [repuestoId, cantidad];
+}
+
+class ServicioRepuestoEliminado extends ServicioEvent {
+	final String repuestoId;
+
+	const ServicioRepuestoEliminado({required this.repuestoId});
+
+	@override
+	List<Object?> get props => [repuestoId];
+}
+
+class ServicioFacturacionParametrosCambiados extends ServicioEvent {
+	final String? ivaPorcentaje;
+	final String? descuentoPorcentaje;
+
+	const ServicioFacturacionParametrosCambiados({
+		this.ivaPorcentaje,
+		this.descuentoPorcentaje,
+	});
+
+	@override
+	List<Object?> get props => [ivaPorcentaje, descuentoPorcentaje];
 }
 
 

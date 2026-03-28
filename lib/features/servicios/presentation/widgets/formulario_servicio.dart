@@ -4,6 +4,7 @@ import 'package:cliente_feedback_tecnico/features/catalogos/presentation/bloc/ca
 import 'package:cliente_feedback_tecnico/features/catalogos/presentation/bloc/catalogo_event.dart';
 import 'package:cliente_feedback_tecnico/features/catalogos/presentation/bloc/catalogo_state.dart';
 import 'package:cliente_feedback_tecnico/features/catalogos/domain/entities/producto.dart';
+import 'package:cliente_feedback_tecnico/features/servicios/domain/entities/producto_falla.dart';
 import 'package:cliente_feedback_tecnico/features/servicios/domain/entities/servicio.dart';
 import 'package:cliente_feedback_tecnico/features/servicios/presentation/bloc/servicio_bloc.dart';
 import 'package:cliente_feedback_tecnico/features/servicios/presentation/bloc/servicio_event.dart';
@@ -25,6 +26,9 @@ class _FormularioServicioState extends State<FormularioServicio> {
 	final TextEditingController _equipoUbicacionController = TextEditingController();
 	final TextEditingController _equipoAnioController = TextEditingController();
 	final TextEditingController _kmController = TextEditingController();
+	final TextEditingController _buscarRepuestoController = TextEditingController();
+	final TextEditingController _ivaController = TextEditingController(text: '21');
+	final TextEditingController _descuentoController = TextEditingController();
 	final TextEditingController _sintomaController = TextEditingController();
 	final TextEditingController _diagnosticoDetalleController = TextEditingController();
 	final TextEditingController _observacionesController = TextEditingController();
@@ -32,7 +36,8 @@ class _FormularioServicioState extends State<FormularioServicio> {
 	String? _modeloIndicadorSeleccionadoId;
 
 	final Set<String> _categoriasFallaSeleccionadasIds = <String>{};
-	final Map<String, String> _productosFallaSeleccionados = <String, String>{};
+	final Map<String, _ProductoFallaSeleccionado> _productosFallaSeleccionados =
+			<String, _ProductoFallaSeleccionado>{};
 
 	@override
 	void initState() {
@@ -41,10 +46,7 @@ class _FormularioServicioState extends State<FormularioServicio> {
 		if (catalogoState is! CatalogoLoaded) {
 			context.read<CatalogoBloc>().add(const CargarCatalogos());
 		}
-
-		if (context.read<ServicioBloc>().state is! ServicioFormularioState) {
-			context.read<ServicioBloc>().add(const ServicioFormularioReiniciado());
-		}
+		context.read<ServicioBloc>().add(const ServicioFormularioReiniciado());
 	}
 
 	@override
@@ -55,6 +57,9 @@ class _FormularioServicioState extends State<FormularioServicio> {
 		_equipoUbicacionController.dispose();
 		_equipoAnioController.dispose();
 		_kmController.dispose();
+		_buscarRepuestoController.dispose();
+		_ivaController.dispose();
+		_descuentoController.dispose();
 		_sintomaController.dispose();
 		_diagnosticoDetalleController.dispose();
 		_observacionesController.dispose();
@@ -71,16 +76,13 @@ class _FormularioServicioState extends State<FormularioServicio> {
 		_categoriasFallaSeleccionadasIds.clear();
 		_productosFallaSeleccionados.clear();
 		_kmController.clear();
+		_buscarRepuestoController.clear();
+		_ivaController.text = '21';
+		_descuentoController.clear();
 		_sintomaController.clear();
 		_diagnosticoDetalleController.clear();
 		_observacionesController.clear();
-		context.read<ServicioBloc>().add(
-			const ServicioFormularioCambiado(
-				partesFallaronTexto: '',
-				diagnosticoCatIdsSeleccionados: <String>[],
-				equipoModelo: '',
-			),
-		);
+		context.read<ServicioBloc>().add(const ServicioFormularioReiniciado());
 	}
 
 	Future<void> _mostrarDialogoAltaRapidaCliente(BuildContext context) async {
@@ -164,6 +166,19 @@ class _FormularioServicioState extends State<FormularioServicio> {
 				final estadoFormulario = servicioState is ServicioFormularioState
 						? servicioState
 						: const ServicioFormularioState();
+
+				if (_ivaController.text != estadoFormulario.ivaPorcentaje) {
+					_ivaController.text = estadoFormulario.ivaPorcentaje;
+					_ivaController.selection = TextSelection.fromPosition(
+						TextPosition(offset: _ivaController.text.length),
+					);
+				}
+				if (_descuentoController.text != estadoFormulario.descuentoPorcentaje) {
+					_descuentoController.text = estadoFormulario.descuentoPorcentaje;
+					_descuentoController.selection = TextSelection.fromPosition(
+						TextPosition(offset: _descuentoController.text.length),
+					);
+				}
 
 				return BlocBuilder<CatalogoBloc, CatalogoState>(
 					builder: (context, catalogoState) {
@@ -273,6 +288,8 @@ class _FormularioServicioState extends State<FormularioServicio> {
 														subtitulo: 'Registro tecnico con validacion y trazabilidad.',
 													),
 													const SizedBox(height: 8),
+																												_buildFechaHoraOrden(context, estadoFormulario),
+																												const SizedBox(height: 12),
 											SingleChildScrollView(
 												scrollDirection: Axis.horizontal,
 												child: Row(
@@ -514,7 +531,7 @@ class _FormularioServicioState extends State<FormularioServicio> {
 																		padding: const EdgeInsets.only(right: 8),
 																		child: InputChip(
 																			label: Text(
-																				entry.value,
+																										entry.value.nombre,
 																				style: _estiloTextoCompacto(context),
 																			),
 																			visualDensity: VisualDensity.compact,
@@ -745,6 +762,41 @@ class _FormularioServicioState extends State<FormularioServicio> {
 		);
 	}
 
+	Widget _buildFechaHoraOrden(
+		BuildContext context,
+		ServicioFormularioState estado,
+	) {
+		final fechaHora = estado.fechaHoraServicio;
+		final fechaHoraTexto = fechaHora == null
+				? 'Se completara al iniciar la carga de la orden'
+				: _formatearFechaHora(fechaHora);
+		final zonaTexto = estado.timezoneIana.trim().isEmpty
+				? 'Zona horaria pendiente'
+				: estado.timezoneIana.trim();
+
+		return Container(
+			width: double.infinity,
+			padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+			decoration: BoxDecoration(
+				color: Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: 0.25),
+				borderRadius: BorderRadius.circular(10),
+				border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
+			),
+			child: Row(
+				children: [
+					const Icon(Icons.schedule, size: 16),
+					const SizedBox(width: 8),
+					Expanded(
+						child: Text(
+							'Fecha y hora de orden: $fechaHoraTexto ($zonaTexto)',
+							style: _estiloTextoCompacto(context),
+						),
+					),
+				],
+			),
+		);
+	}
+
 	void _limpiaFormularioDespuesDeExito(ServicioFormularioState estado) {
 		if (estado.exitoMensaje == null || estado.exitoMensaje!.isEmpty) {
 			return;
@@ -753,13 +805,23 @@ class _FormularioServicioState extends State<FormularioServicio> {
 	}
 
 	void _actualizarPartesFallaronEnBloc() {
-		final valor = _productosFallaSeleccionados.values.join(', ');
-		final productoIds = _productosFallaSeleccionados.keys.toList();
+		final productosFalla = _productosFallaSeleccionados.values
+				.map(
+					(item) => ProductoFalla(
+						parteFallo: item.parteFallo,
+						productoFallaId: item.productoId,
+					),
+				)
+				.toList();
+		final partesFallaron = productosFalla
+				.map((item) => item.parteFallo)
+				.toSet()
+				.toList();
 
 		context.read<ServicioBloc>().add(
 			ServicioFormularioCambiado(
-				partesFallaronTexto: valor,
-				productoIdsSeleccionados: productoIds,
+				partesFallaronTexto: partesFallaron.join(', '),
+				productosFallaSeleccionados: productosFalla,
 			),
 		);
 	}
@@ -769,7 +831,8 @@ class _FormularioServicioState extends State<FormularioServicio> {
 		required List<Producto> productosDisponibles,
 		required Map<String, String> nombresCategorias,
 	}) async {
-		final seleccionTemporal = Map<String, String>.from(_productosFallaSeleccionados);
+		final seleccionTemporal =
+				Map<String, _ProductoFallaSeleccionado>.from(_productosFallaSeleccionados);
 		final productosPorCategoria = <String, List<Producto>>{};
 
 		for (final producto in productosDisponibles) {
@@ -812,7 +875,11 @@ class _FormularioServicioState extends State<FormularioServicio> {
 													onChanged: (valor) {
 														setDialogState(() {
 															if (valor == true) {
-																seleccionTemporal[producto.id] = producto.nombre;
+																				seleccionTemporal[producto.id] = _ProductoFallaSeleccionado(
+																					productoId: producto.id,
+																					nombre: producto.nombre,
+																					parteFallo: _normalizarParteFalladaBackend(nombreCategoria),
+																				);
 															} else {
 																seleccionTemporal.remove(producto.id);
 															}
@@ -1041,4 +1108,54 @@ class _FormularioServicioState extends State<FormularioServicio> {
 				return 'Resolucion';
 		}
 	}
+
+	String _formatearFechaHora(DateTime fechaHora) {
+		final dia = fechaHora.day.toString().padLeft(2, '0');
+		final mes = fechaHora.month.toString().padLeft(2, '0');
+		final anio = fechaHora.year.toString();
+		final hora = fechaHora.hour.toString().padLeft(2, '0');
+		final minuto = fechaHora.minute.toString().padLeft(2, '0');
+		return '$dia/$mes/$anio $hora:$minuto';
+	}
+
+	String _normalizarParteFalladaBackend(String valorCrudo) {
+		final valor = valorCrudo.toLowerCase().trim();
+		if (valor.isEmpty) {
+			return 'otro';
+		}
+		if (valor.contains('indicador')) {
+			return 'indicador';
+		}
+		if (valor.contains('celda')) {
+			return 'celda';
+		}
+		if (valor.contains('app') && (valor.contains('movil') || valor.contains('mobile'))) {
+			return 'app_movil';
+		}
+		if (valor.contains('movil') || valor.contains('mobile') || valor.contains('celular')) {
+			return 'app_movil';
+		}
+		if (valor.contains('app') && valor.contains('pc')) {
+			return 'app_pc';
+		}
+		if (valor.contains('pc') || valor.contains('web') || valor.contains('escritorio')) {
+			return 'app_pc';
+		}
+		if (valor.contains('tablet')) {
+			return 'tablet';
+		}
+		return 'otro';
+	}
+}
+
+class _ProductoFallaSeleccionado {
+	final String productoId;
+	final String nombre;
+	final String parteFallo;
+
+	const _ProductoFallaSeleccionado({
+		required this.productoId,
+		required this.nombre,
+		required this.parteFallo,
+	});
 }

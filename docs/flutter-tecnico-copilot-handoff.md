@@ -222,3 +222,28 @@ Nota importante de modelado:
 1. crear modelos tipados para OrdenServicioRequest y OrdenServicioResponse
 2. crear modelos tipados para ProductosFalla, Facturacion, FacturacionItem y Documento
 3. adaptar ServicioDto para construir payload objetivo y parsear replayed/estado
+
+## 11. Fase 2 - Avance implementado (2026-03-27)
+
+### 11.1 Implementado en codigo
+
+1. Se elimino `productoIds` del flujo de alta tecnico (entidad, estado, evento, bloc y dto).
+2. El request de `POST /servicios` ahora envia `productosFalla` como unica fuente para partes/productos.
+3. Se agrego parseo tipado de respuesta completa de alta (`OrdenServicioRespuestaDto`).
+4. `IServicioRepository.cargarServicio` y `CargarServicioUseCase.ejecutar` ahora retornan `OrdenServicioRespuesta`.
+5. El `ServicioBloc` usa la respuesta para informar si fue alta nueva o replay idempotente.
+6. Se genera y conserva `idempotencyKey` en estado del formulario durante reintentos del mismo intento de guardado.
+7. Se agrego log temporal de body final previo al `POST /servicios` solo en no-productivo.
+
+### 11.2 Estado contra contrato objetivo
+
+Cumplido:
+1. `productosFalla` end-to-end.
+2. `replayed`, `servicioId`, `estadoOrden`, `version` tipados en respuesta de alta.
+3. `idempotencyKey` enviado desde cliente en alta.
+
+Pendiente:
+1. completar `fechaHoraServicio`, `timezoneIana`, `utcOffsetMinutos` desde cliente.
+2. UI y mapeo final de `facturacion` y `facturacionItems`.
+3. flujo `PATCH /servicios/:id/documento` con firma/adjunto posterior.
+4. persistencia local de borrador con clave idempotente estable offline.

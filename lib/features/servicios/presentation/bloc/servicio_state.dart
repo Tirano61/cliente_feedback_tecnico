@@ -1,4 +1,6 @@
 import 'package:cliente_feedback_tecnico/features/servicios/domain/entities/cliente.dart';
+import 'package:cliente_feedback_tecnico/features/servicios/domain/entities/producto_falla.dart';
+import 'package:cliente_feedback_tecnico/features/servicios/domain/entities/repuesto.dart';
 import 'package:cliente_feedback_tecnico/features/servicios/domain/entities/servicio.dart';
 import 'package:equatable/equatable.dart';
 
@@ -14,6 +16,10 @@ class ServicioInitial extends ServicioState {
 }
 
 class ServicioFormularioState extends ServicioState {
+	final String idempotencyKey;
+	final DateTime? fechaHoraServicio;
+	final String timezoneIana;
+	final int? utcOffsetMinutos;
 	final Canal? canal;
 	final String clienteId;
 	final String lugarProvinciaId;
@@ -29,7 +35,23 @@ class ServicioFormularioState extends ServicioState {
 	final String diagnosticoDetalle;
 	final String resolucionId;
 	final String observaciones;
-	final List<String> productoIdsSeleccionados;
+	final List<ProductoFalla> productosFallaSeleccionados;
+	final bool cargandoFacturacion;
+	final bool buscandoRepuestos;
+	final double cotizacionDolarSnapshot;
+	final double valorKmUsdSnapshot;
+	final String ivaPorcentaje;
+	final String descuentoPorcentaje;
+	final List<Repuesto> repuestosDisponibles;
+	final List<RepuestoSeleccionado> repuestosSeleccionados;
+	final double subtotalKmUsd;
+	final double subtotalKmArs;
+	final double subtotalRepuestosUsd;
+	final double subtotalRepuestosArs;
+	final double subtotalGeneralUsd;
+	final double subtotalGeneralArs;
+	final double totalConIvaArs;
+	final double totalFinalArs;
 	final bool guardando;
 	final bool buscandoClientes;
 	final bool creandoCliente;
@@ -39,6 +61,10 @@ class ServicioFormularioState extends ServicioState {
 	final String? exitoMensaje;
 
 	const ServicioFormularioState({
+		this.idempotencyKey = '',
+		this.fechaHoraServicio,
+		this.timezoneIana = '',
+		this.utcOffsetMinutos,
 		this.canal,
 		this.clienteId = '',
 		this.lugarProvinciaId = '',
@@ -54,7 +80,23 @@ class ServicioFormularioState extends ServicioState {
 		this.diagnosticoDetalle = '',
 		this.resolucionId = '',
 		this.observaciones = '',
-		this.productoIdsSeleccionados = const [],
+		this.productosFallaSeleccionados = const [],
+		this.cargandoFacturacion = false,
+		this.buscandoRepuestos = false,
+		this.cotizacionDolarSnapshot = 0,
+		this.valorKmUsdSnapshot = 0,
+		this.ivaPorcentaje = '21',
+		this.descuentoPorcentaje = '',
+		this.repuestosDisponibles = const [],
+		this.repuestosSeleccionados = const [],
+		this.subtotalKmUsd = 0,
+		this.subtotalKmArs = 0,
+		this.subtotalRepuestosUsd = 0,
+		this.subtotalRepuestosArs = 0,
+		this.subtotalGeneralUsd = 0,
+		this.subtotalGeneralArs = 0,
+		this.totalConIvaArs = 0,
+		this.totalFinalArs = 0,
 		this.guardando = false,
 		this.buscandoClientes = false,
 		this.creandoCliente = false,
@@ -65,6 +107,12 @@ class ServicioFormularioState extends ServicioState {
 	});
 
 	ServicioFormularioState copyWith({
+		String? idempotencyKey,
+		DateTime? fechaHoraServicio,
+		String? timezoneIana,
+		int? utcOffsetMinutos,
+		bool limpiarFechaHoraServicio = false,
+		bool limpiarUtcOffsetMinutos = false,
 		Canal? canal,
 		String? clienteId,
 		String? lugarProvinciaId,
@@ -80,7 +128,23 @@ class ServicioFormularioState extends ServicioState {
 		String? diagnosticoDetalle,
 		String? resolucionId,
 		String? observaciones,
-		List<String>? productoIdsSeleccionados,
+		List<ProductoFalla>? productosFallaSeleccionados,
+		bool? cargandoFacturacion,
+		bool? buscandoRepuestos,
+		double? cotizacionDolarSnapshot,
+		double? valorKmUsdSnapshot,
+		String? ivaPorcentaje,
+		String? descuentoPorcentaje,
+		List<Repuesto>? repuestosDisponibles,
+		List<RepuestoSeleccionado>? repuestosSeleccionados,
+		double? subtotalKmUsd,
+		double? subtotalKmArs,
+		double? subtotalRepuestosUsd,
+		double? subtotalRepuestosArs,
+		double? subtotalGeneralUsd,
+		double? subtotalGeneralArs,
+		double? totalConIvaArs,
+		double? totalFinalArs,
 		bool? guardando,
 		bool? buscandoClientes,
 		bool? creandoCliente,
@@ -92,6 +156,14 @@ class ServicioFormularioState extends ServicioState {
 		bool limpiarClienteSeleccionado = false,
 	}) {
 		return ServicioFormularioState(
+			idempotencyKey: idempotencyKey ?? this.idempotencyKey,
+			fechaHoraServicio: limpiarFechaHoraServicio
+					? null
+					: (fechaHoraServicio ?? this.fechaHoraServicio),
+			timezoneIana: timezoneIana ?? this.timezoneIana,
+			utcOffsetMinutos: limpiarUtcOffsetMinutos
+					? null
+					: (utcOffsetMinutos ?? this.utcOffsetMinutos),
 			canal: canal ?? this.canal,
 			clienteId: clienteId ?? this.clienteId,
 			lugarProvinciaId: lugarProvinciaId ?? this.lugarProvinciaId,
@@ -108,8 +180,28 @@ class ServicioFormularioState extends ServicioState {
 			diagnosticoDetalle: diagnosticoDetalle ?? this.diagnosticoDetalle,
 			resolucionId: resolucionId ?? this.resolucionId,
 			observaciones: observaciones ?? this.observaciones,
-			productoIdsSeleccionados:
-					productoIdsSeleccionados ?? this.productoIdsSeleccionados,
+			productosFallaSeleccionados:
+					productosFallaSeleccionados ?? this.productosFallaSeleccionados,
+			cargandoFacturacion: cargandoFacturacion ?? this.cargandoFacturacion,
+			buscandoRepuestos: buscandoRepuestos ?? this.buscandoRepuestos,
+			cotizacionDolarSnapshot:
+					cotizacionDolarSnapshot ?? this.cotizacionDolarSnapshot,
+			valorKmUsdSnapshot: valorKmUsdSnapshot ?? this.valorKmUsdSnapshot,
+			ivaPorcentaje: ivaPorcentaje ?? this.ivaPorcentaje,
+			descuentoPorcentaje: descuentoPorcentaje ?? this.descuentoPorcentaje,
+			repuestosDisponibles: repuestosDisponibles ?? this.repuestosDisponibles,
+			repuestosSeleccionados:
+					repuestosSeleccionados ?? this.repuestosSeleccionados,
+			subtotalKmUsd: subtotalKmUsd ?? this.subtotalKmUsd,
+			subtotalKmArs: subtotalKmArs ?? this.subtotalKmArs,
+			subtotalRepuestosUsd:
+					subtotalRepuestosUsd ?? this.subtotalRepuestosUsd,
+			subtotalRepuestosArs:
+					subtotalRepuestosArs ?? this.subtotalRepuestosArs,
+			subtotalGeneralUsd: subtotalGeneralUsd ?? this.subtotalGeneralUsd,
+			subtotalGeneralArs: subtotalGeneralArs ?? this.subtotalGeneralArs,
+			totalConIvaArs: totalConIvaArs ?? this.totalConIvaArs,
+			totalFinalArs: totalFinalArs ?? this.totalFinalArs,
 			guardando: guardando ?? this.guardando,
 			buscandoClientes: buscandoClientes ?? this.buscandoClientes,
 			creandoCliente: creandoCliente ?? this.creandoCliente,
@@ -124,6 +216,10 @@ class ServicioFormularioState extends ServicioState {
 
 	@override
 	List<Object?> get props => [
+				idempotencyKey,
+				fechaHoraServicio,
+				timezoneIana,
+				utcOffsetMinutos,
 				canal,
 				clienteId,
 				lugarProvinciaId,
@@ -139,7 +235,23 @@ class ServicioFormularioState extends ServicioState {
 				diagnosticoDetalle,
 				resolucionId,
 				observaciones,
-				productoIdsSeleccionados,
+				productosFallaSeleccionados,
+				cargandoFacturacion,
+				buscandoRepuestos,
+				cotizacionDolarSnapshot,
+				valorKmUsdSnapshot,
+				ivaPorcentaje,
+				descuentoPorcentaje,
+				repuestosDisponibles,
+				repuestosSeleccionados,
+				subtotalKmUsd,
+				subtotalKmArs,
+				subtotalRepuestosUsd,
+				subtotalRepuestosArs,
+				subtotalGeneralUsd,
+				subtotalGeneralArs,
+				totalConIvaArs,
+				totalFinalArs,
 				guardando,
 				buscandoClientes,
 				creandoCliente,
@@ -178,6 +290,29 @@ class MisServiciosLoaded extends ServicioState {
 
 	@override
 	List<Object> get props => [servicios];
+}
+
+class RepuestoSeleccionado extends Equatable {
+	final Repuesto repuesto;
+	final double cantidad;
+
+	const RepuestoSeleccionado({
+		required this.repuesto,
+		required this.cantidad,
+	});
+
+	RepuestoSeleccionado copyWith({
+		Repuesto? repuesto,
+		double? cantidad,
+	}) {
+		return RepuestoSeleccionado(
+			repuesto: repuesto ?? this.repuesto,
+			cantidad: cantidad ?? this.cantidad,
+		);
+	}
+
+	@override
+	List<Object> get props => [repuesto, cantidad];
 }
 
 

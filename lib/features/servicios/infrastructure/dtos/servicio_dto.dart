@@ -25,7 +25,6 @@ class ServicioDto {
 	final List<String> diagnosticoCatIds;
 	final String resolucionId;
 	final String? observaciones;
-	final List<String> productoIds;
 	final List<ProductoFalla> productosFalla;
 	final Facturacion? facturacion;
 	final List<FacturacionItem> facturacionItems;
@@ -57,7 +56,6 @@ class ServicioDto {
 		required this.diagnosticoCatIds,
 		required this.resolucionId,
 		this.observaciones,
-		required this.productoIds,
 		this.productosFalla = const [],
 		this.facturacion,
 		this.facturacionItems = const [],
@@ -74,12 +72,6 @@ class ServicioDto {
 		final documentoJson = _mapaDesdeDynamic(json['documento']);
 		final productosFallaJson = _listaMapasDesdeDynamic(servicioJson['productosFalla']);
 		final facturacionItemsJson = _listaMapasDesdeDynamic(json['facturacionItems']);
-
-		final productoIds = _listaString(
-			servicioJson['productoIds'] ??
-					servicioJson['producto_ids'] ??
-					servicioJson['producto_id'],
-		);
 
 		return ServicioDto(
 			id: json['id']?.toString() ?? json['servicioId']?.toString() ?? '',
@@ -129,7 +121,6 @@ class ServicioDto {
 				servicioJson['resolucionId'] ?? servicioJson['resolucion_id'],
 			),
 			observaciones: servicioJson['observaciones']?.toString(),
-			productoIds: productoIds,
 			productosFalla: productosFallaJson
 					.map(
 						(item) => ProductoFalla(
@@ -212,7 +203,6 @@ class ServicioDto {
 			'diagnosticoCatId': diagnosticoCatIds,
 			'resolucionId': resolucionId.trim().isEmpty ? const <String>[] : [resolucionId],
 			'productosFalla': _productosFallaJsonParaEnvio(),
-			'productoIds': productoIds,
 		};
 
 		if (idempotencyKey != null && idempotencyKey!.trim().isNotEmpty) {
@@ -299,7 +289,6 @@ class ServicioDto {
 			diagnosticoCatIds: diagnosticoCatIds,
 			resolucionId: resolucionId,
 			observaciones: observaciones,
-			productoIds: productoIds,
 			productosFalla: productosFalla,
 			facturacion: facturacion,
 			facturacionItems: facturacionItems,
@@ -333,7 +322,6 @@ class ServicioDto {
 			diagnosticoCatIds: servicio.diagnosticoCatIds,
 			resolucionId: servicio.resolucionId,
 			observaciones: servicio.observaciones,
-			productoIds: servicio.productoIds,
 			productosFalla: servicio.productosFalla,
 			facturacion: servicio.facturacion,
 			facturacionItems: servicio.facturacionItems,
@@ -410,28 +398,17 @@ class ServicioDto {
 	}
 
 	List<Map<String, dynamic>> _productosFallaJsonParaEnvio() {
-		if (productosFalla.isNotEmpty) {
-			return productosFalla
-					.map(
-						(item) => {
-							'parteFallo': item.parteFallo,
-							'productoFallaId': item.productoFallaId,
-						},
-					)
-					.toList();
-		}
-
-		if (productoIds.isEmpty) {
-			return const [];
-		}
-
-		final parteDefault = partesFallaron.isNotEmpty ? partesFallaron.first : 'otro';
-		return productoIds
+		return productosFalla
 				.map(
-					(productoId) => {
-						'parteFallo': parteDefault,
-						'productoFallaId': productoId,
+					(item) => {
+						'parteFallo': item.parteFallo,
+						'productoFallaId': item.productoFallaId,
 					},
+				)
+				.where(
+					(item) =>
+						(item['parteFallo']?.toString().trim().isNotEmpty ?? false) &&
+						(item['productoFallaId']?.toString().trim().isNotEmpty ?? false),
 				)
 				.toList();
 	}
