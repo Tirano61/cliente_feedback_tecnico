@@ -58,8 +58,6 @@ Authorization: Bearer <token>
     { "parteFallo": "app_movil", "productoFallaId": "{{productoId}}" }
   ],
   "facturacion": {
-    "cotizacionDolarSnapshot": 1120.5,
-    "valorKmUsdSnapshot": 0.75,
     "kmCantidad": 120,
     "subtotalKmUsd": 90,
     "subtotalKmArs": 100845,
@@ -184,6 +182,8 @@ Authorization: Bearer <token>
 Notas:
 
 - La app puede generar el PDF inmediatamente con esta respuesta, sin una segunda llamada.
+- `facturacion.cotizacionDolarSnapshot` se define en backend con la ultima cotizacion disponible (no es necesario enviarla en el request).
+- `facturacion.valorKmUsdSnapshot` se define en backend con la ultima tarifa de km activa (no es necesario enviarla en el request).
 - `idempotencyKey` viaja en el body de `POST /servicios`.
 - Si un tecnico reintenta con el mismo `idempotencyKey`, el backend devuelve la misma orden creada previamente.
 - `replayed = true` indica que la respuesta es un replay idempotente (no una nueva insercion).
@@ -269,6 +269,34 @@ Acepta ambos formatos:
 | GET | `/cotizacion` | tecnico, admin-tecnico, admin |
 | GET | `/cotizacion/historial` | tecnico, admin-tecnico, admin |
 | POST | `/cotizacion` | admin-tecnico |
+
+Notas:
+
+- El backend sincroniza cotizacion automaticamente desde proveedor externo cada 30 minutos.
+- `GET /cotizacion` devuelve la ultima cotizacion registrada.
+- Cada sincronizacion se persiste en tabla `cotizacion_dolar` y queda disponible en historial.
+
+## Tarifa Km
+
+| Metodo | Endpoint | Rol |
+|---|---|---|
+| GET | `/tarifa-km` | tecnico, admin-tecnico, admin |
+| GET | `/tarifa-km/historial` | tecnico, admin-tecnico, admin |
+| POST | `/tarifa-km` | admin-tecnico |
+
+### Payload POST /tarifa-km
+
+```json
+{
+  "valorKmUsd": 0.75,
+  "fecha": "2026-03-28"
+}
+```
+
+Notas:
+
+- `GET /tarifa-km` devuelve la ultima tarifa de km registrada.
+- El backend usa esta tarifa para completar `facturacion.valorKmUsdSnapshot` al crear ordenes de servicio.
 
 ## Liquidacion
 

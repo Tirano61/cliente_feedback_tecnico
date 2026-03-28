@@ -90,22 +90,42 @@ class ServicioRepositoryImpl implements IServicioRepository {
 
 	@override
 	Future<CotizacionActual> obtenerCotizacionActual() async {
-		final response = await apiClient.get(ApiConstants.cotizacion);
+		final responseCotizacion = await apiClient.get(ApiConstants.cotizacion);
+		final responseTarifaKm = await apiClient.get(ApiConstants.tarifaKm);
 
-		if (response.statusCode != 200) {
-			final mensajeBackend = _extraerMensajeError(response.body);
+		if (responseCotizacion.statusCode != 200) {
+			final mensajeBackend = _extraerMensajeError(responseCotizacion.body);
 			throw ServerException(
 				mensajeBackend ?? 'No se pudo obtener la cotizacion actual.',
-				statusCode: response.statusCode,
+				statusCode: responseCotizacion.statusCode,
 			);
 		}
 
-		final payload = _extraerMapa(_decodeJsonSeguro(response.body));
-		if (payload == null) {
+		if (responseTarifaKm.statusCode != 200) {
+			final mensajeBackend = _extraerMensajeError(responseTarifaKm.body);
+			throw ServerException(
+				mensajeBackend ?? 'No se pudo obtener la tarifa de km actual.',
+				statusCode: responseTarifaKm.statusCode,
+			);
+		}
+
+		final payloadCotizacion = _extraerMapa(_decodeJsonSeguro(responseCotizacion.body));
+		if (payloadCotizacion == null) {
 			throw const ServerException('Respuesta invalida de cotizacion.');
 		}
 
-		return CotizacionActualDto.fromJson(payload).aEntidad();
+		final payloadTarifaKm = _extraerMapa(_decodeJsonSeguro(responseTarifaKm.body));
+		if (payloadTarifaKm == null) {
+			throw const ServerException('Respuesta invalida de tarifa km.');
+		}
+
+		final payloadCombinado = <String, dynamic>{...payloadCotizacion, ...payloadTarifaKm};
+		final valorKmUsd = _extraerValorKmUsd(payloadTarifaKm);
+		if (valorKmUsd != null) {
+			payloadCombinado['valorKmUsd'] = valorKmUsd;
+		}
+
+		return CotizacionActualDto.fromJson(payloadCombinado).aEntidad();
 	}
 
 	@override
@@ -212,6 +232,23 @@ class ServicioRepositoryImpl implements IServicioRepository {
 				return json['data'] as Map<String, dynamic>;
 			}
 			return json;
+		}
+		return null;
+	}
+
+	double? _extraerValorKmUsd(Map<String, dynamic> payload) {
+		final valor = payload['valorKmUsd'] ??
+				payload['valor_km_usd'] ??
+				payload['precioKmUsd'] ??
+				payload['precio_km_usd'] ??
+				payload['valorKm'] ??
+				payload['tarifa'];
+
+		if (valor is num) {
+			return valor.toDouble();
+		}
+		if (valor is String) {
+			return double.tryParse(valor.replaceAll(',', '.'));
 		}
 		return null;
 	}
