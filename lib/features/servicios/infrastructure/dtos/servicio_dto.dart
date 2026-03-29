@@ -12,7 +12,13 @@ class ServicioDto {
 	final int? utcOffsetMinutos;
 	final Canal canal;
 	final String clienteId;
+	final String? clienteNombre;
+	final String? clienteCuit;
+	final String? clienteTelefono;
+	final String? clienteLocalidad;
+	final String? clienteContacto;
 	final String lugarProvinciaId;
+	final String? lugarProvinciaNombre;
 	final String lugarDetalle;
 	final String equipoNroSerie;
 	final String equipoModelo;
@@ -43,7 +49,13 @@ class ServicioDto {
 		this.utcOffsetMinutos,
 		required this.canal,
 		required this.clienteId,
+		this.clienteNombre,
+		this.clienteCuit,
+		this.clienteTelefono,
+		this.clienteLocalidad,
+		this.clienteContacto,
 		required this.lugarProvinciaId,
+		this.lugarProvinciaNombre,
 		required this.lugarDetalle,
 		required this.equipoNroSerie,
 		required this.equipoModelo,
@@ -68,6 +80,7 @@ class ServicioDto {
 
 	factory ServicioDto.fromJson(Map<String, dynamic> json) {
 		final servicioJson = _mapaDesdeDynamic(json['servicio']) ?? json;
+		final clienteJson = _mapaDesdeDynamic(servicioJson['cliente']);
 		final facturacionJson = _mapaDesdeDynamic(json['facturacion']);
 		final documentoJson = _mapaDesdeDynamic(json['documento']);
 		final productosFallaJson = _listaMapasDesdeDynamic(servicioJson['productosFalla']);
@@ -84,11 +97,30 @@ class ServicioDto {
 					servicioJson['clienteId']?.toString() ??
 					servicioJson['cliente_id']?.toString() ??
 					'',
+			clienteNombre:
+					clienteJson?['nombre']?.toString() ??
+					servicioJson['clienteNombre']?.toString(),
+			clienteCuit:
+					clienteJson?['cuit']?.toString() ??
+					servicioJson['clienteCuit']?.toString(),
+			clienteTelefono:
+					clienteJson?['telefono']?.toString() ??
+					servicioJson['clienteTelefono']?.toString(),
+			clienteLocalidad:
+					clienteJson?['localidad']?.toString() ??
+					servicioJson['clienteLocalidad']?.toString(),
+			clienteContacto:
+					clienteJson?['contacto']?.toString() ??
+					servicioJson['clienteContacto']?.toString(),
 			lugarProvinciaId:
 					servicioJson['lugarProvinciaId']?.toString() ??
 					servicioJson['lugar_provincia_id']?.toString() ??
 					servicioJson['zona_id']?.toString() ??
 					'',
+			lugarProvinciaNombre:
+					servicioJson['lugarProvinciaNombre']?.toString() ??
+					servicioJson['lugar_provincia_nombre']?.toString() ??
+					servicioJson['zonaNombre']?.toString(),
 			lugarDetalle:
 					servicioJson['lugarDetalle']?.toString() ??
 					servicioJson['lugar_detalle']?.toString() ??
@@ -275,7 +307,13 @@ class ServicioDto {
 			utcOffsetMinutos: utcOffsetMinutos,
 			canal: canal,
 			clienteId: clienteId,
+			clienteNombre: clienteNombre,
+			clienteCuit: clienteCuit,
+			clienteTelefono: clienteTelefono,
+			clienteLocalidad: clienteLocalidad,
+			clienteContacto: clienteContacto,
 			lugarProvinciaId: lugarProvinciaId,
+			lugarProvinciaNombre: lugarProvinciaNombre,
 			lugarDetalle: lugarDetalle,
 			equipoNroSerie: equipoNroSerie,
 			equipoModelo: equipoModelo,
@@ -308,7 +346,13 @@ class ServicioDto {
 			utcOffsetMinutos: servicio.utcOffsetMinutos,
 			canal: servicio.canal,
 			clienteId: servicio.clienteId,
+			clienteNombre: servicio.clienteNombre,
+			clienteCuit: servicio.clienteCuit,
+			clienteTelefono: servicio.clienteTelefono,
+			clienteLocalidad: servicio.clienteLocalidad,
+			clienteContacto: servicio.clienteContacto,
 			lugarProvinciaId: servicio.lugarProvinciaId,
+			lugarProvinciaNombre: servicio.lugarProvinciaNombre,
 			lugarDetalle: servicio.lugarDetalle,
 			equipoNroSerie: servicio.equipoNroSerie,
 			equipoModelo: servicio.equipoModelo,

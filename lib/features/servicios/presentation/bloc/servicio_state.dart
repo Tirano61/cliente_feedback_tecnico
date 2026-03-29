@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:cliente_feedback_tecnico/features/servicios/domain/entities/cliente.dart';
 import 'package:cliente_feedback_tecnico/features/servicios/domain/entities/producto_falla.dart';
 import 'package:cliente_feedback_tecnico/features/servicios/domain/entities/repuesto.dart';
@@ -57,6 +59,8 @@ class ServicioFormularioState extends ServicioState {
 	final bool creandoCliente;
 	final List<Cliente> clientesEncontrados;
 	final Cliente? clienteSeleccionado;
+	final Uint8List? pdfOrdenBytes;
+	final String? pdfOrdenNombre;
 	final String? errorMensaje;
 	final String? exitoMensaje;
 
@@ -102,6 +106,8 @@ class ServicioFormularioState extends ServicioState {
 		this.creandoCliente = false,
 		this.clientesEncontrados = const [],
 		this.clienteSeleccionado,
+		this.pdfOrdenBytes,
+		this.pdfOrdenNombre,
 		this.errorMensaje,
 		this.exitoMensaje,
 	});
@@ -150,10 +156,13 @@ class ServicioFormularioState extends ServicioState {
 		bool? creandoCliente,
 		List<Cliente>? clientesEncontrados,
 		Cliente? clienteSeleccionado,
+		Uint8List? pdfOrdenBytes,
+		String? pdfOrdenNombre,
 		String? errorMensaje,
 		String? exitoMensaje,
 		bool limpiarMensajes = false,
 		bool limpiarClienteSeleccionado = false,
+		bool limpiarPdfOrden = false,
 	}) {
 		return ServicioFormularioState(
 			idempotencyKey: idempotencyKey ?? this.idempotencyKey,
@@ -209,6 +218,8 @@ class ServicioFormularioState extends ServicioState {
 			clienteSeleccionado: limpiarClienteSeleccionado
 					? null
 					: (clienteSeleccionado ?? this.clienteSeleccionado),
+			pdfOrdenBytes: limpiarPdfOrden ? null : (pdfOrdenBytes ?? this.pdfOrdenBytes),
+			pdfOrdenNombre: limpiarPdfOrden ? null : (pdfOrdenNombre ?? this.pdfOrdenNombre),
 			errorMensaje: limpiarMensajes ? null : errorMensaje,
 			exitoMensaje: limpiarMensajes ? null : exitoMensaje,
 		);
@@ -257,6 +268,8 @@ class ServicioFormularioState extends ServicioState {
 				creandoCliente,
 				clientesEncontrados,
 				clienteSeleccionado,
+				pdfOrdenBytes,
+				pdfOrdenNombre,
 				errorMensaje,
 				exitoMensaje,
 			];

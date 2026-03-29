@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:typed_data';
 
 import 'package:cliente_feedback_tecnico/features/catalogos/presentation/bloc/catalogo_bloc.dart';
 import 'package:cliente_feedback_tecnico/features/catalogos/presentation/bloc/catalogo_event.dart';
@@ -11,6 +12,7 @@ import 'package:cliente_feedback_tecnico/features/servicios/presentation/bloc/se
 import 'package:cliente_feedback_tecnico/features/servicios/presentation/bloc/servicio_state.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:printing/printing.dart';
 
 class FormularioServicio extends StatefulWidget {
 	const FormularioServicio({super.key});
@@ -140,6 +142,71 @@ class _FormularioServicioState extends State<FormularioServicio> {
 		);
 	}
 
+	Future<void> _mostrarOpcionesPdfGenerado({
+		required BuildContext context,
+		required Uint8List pdfBytes,
+		required String nombreArchivo,
+	}) async {
+		if (!mounted) {
+			return;
+		}
+
+		await showModalBottomSheet<void>(
+			context: context,
+			showDragHandle: true,
+			builder: (sheetContext) {
+				return SafeArea(
+					child: Padding(
+						padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+						child: Column(
+							mainAxisSize: MainAxisSize.min,
+							crossAxisAlignment: CrossAxisAlignment.start,
+							children: [
+								Text(
+									'Orden generada - PDF listo',
+									style: Theme.of(context).textTheme.titleMedium,
+								),
+								const SizedBox(height: 12),
+								SizedBox(
+									width: double.infinity,
+									child: ElevatedButton.icon(
+										onPressed: () async {
+											Navigator.of(sheetContext).pop();
+											await Printing.layoutPdf(
+												name: nombreArchivo,
+												onLayout: (_) async => pdfBytes,
+											);
+										},
+										icon: const Icon(Icons.picture_as_pdf),
+										label: const Text('Ver / Guardar PDF'),
+									),
+								),
+								const SizedBox(height: 8),
+								SizedBox(
+									width: double.infinity,
+									child: OutlinedButton.icon(
+										onPressed: () async {
+											final navigator = Navigator.of(sheetContext);
+											await Printing.sharePdf(
+												bytes: pdfBytes,
+												filename: nombreArchivo,
+											);
+											if (sheetContext.mounted) {
+												navigator.pop();
+											}
+										},
+										icon: const Icon(Icons.share),
+										label: const Text('Compartir PDF'),
+									),
+								),
+							],
+						),
+					),
+				);
+			},
+		);
+	}
+
 	@override
 	Widget build(BuildContext context) {
 		return BlocConsumer<ServicioBloc, ServicioState>(
@@ -156,10 +223,19 @@ class _FormularioServicioState extends State<FormularioServicio> {
 				}
 
 				if (state.exitoMensaje != null && state.exitoMensaje!.isNotEmpty) {
+					final pdfBytes = state.pdfOrdenBytes;
+					final pdfNombre = state.pdfOrdenNombre ?? 'orden_servicio.pdf';
 					ScaffoldMessenger.of(context).showSnackBar(
 						SnackBar(content: Text(state.exitoMensaje!)),
 					);
 					_limpiaFormularioDespuesDeExito(state);
+					if (pdfBytes != null && pdfBytes.isNotEmpty) {
+						_mostrarOpcionesPdfGenerado(
+							context: context,
+							pdfBytes: pdfBytes,
+							nombreArchivo: pdfNombre,
+						);
+					}
 				}
 			},
 			builder: (context, servicioState) {
@@ -288,391 +364,32 @@ class _FormularioServicioState extends State<FormularioServicio> {
 														subtitulo: 'Registro tecnico con validacion y trazabilidad.',
 													),
 													const SizedBox(height: 8),
-																												_buildFechaHoraOrden(context, estadoFormulario),
-																												const SizedBox(height: 12),
-											SingleChildScrollView(
-												scrollDirection: Axis.horizontal,
-												child: Row(
-													children: Canal.values.map((canal) {
-														return Padding(
-															padding: const EdgeInsets.only(right: 8),
-															child: ChoiceChip(
-																label: Text(canal.name),
-																selected: estadoFormulario.canal == canal,
-																onSelected: (_) {
-																	context.read<ServicioBloc>().add(
-																			ServicioFormularioCambiado(canal: canal),
-																	);
-																},
-															),
-														);
-													}).toList(),
-												),
-											),
-											const SizedBox(height: 16),
-											Row(
-												crossAxisAlignment: CrossAxisAlignment.start,
-												children: [
-													Expanded(
-														child: TextField(
-															controller: _buscarClienteController,
-															decoration: _decoracionCampoCompacta(
-																context,
-																labelText: 'Cliente (buscar por nombre o CUIT)',
-																suffixIcon: estadoFormulario.buscandoClientes
-																		? const Padding(
-																			padding: EdgeInsets.all(10),
-																			child: SizedBox(
-																				height: 14,
-																				width: 14,
-																				child: CircularProgressIndicator(strokeWidth: 2),
-																			),
-																		)
-																		: IconButton(
-																			onPressed: () {
-																				context.read<ServicioBloc>().add(
-																						ServicioBuscarClienteSolicitado(
-																							query: _buscarClienteController.text,
-																						),
-																				);
-																			},
-																			icon: const Icon(Icons.search),
-																		),
-															),
-															onSubmitted: (valor) {
-																context.read<ServicioBloc>().add(
-																		ServicioBuscarClienteSolicitado(query: valor),
-																);
-															},
-														),
-													),
-													const SizedBox(width: 8),
-													OutlinedButton.icon(
-														onPressed: estadoFormulario.creandoCliente
-															? null
-															: () => _mostrarDialogoAltaRapidaCliente(context),
-														style: OutlinedButton.styleFrom(
-															padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
-															visualDensity: VisualDensity.compact,
-															tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-														),
-														icon: estadoFormulario.creandoCliente
-																? const SizedBox(
-																	height: 14,
-																	width: 14,
-																	child: CircularProgressIndicator(strokeWidth: 2),
-																)
-																: const Icon(Icons.person_add_alt_1),
-														label: Text(
-															'Alta rapida cliente',
-															style: _estiloTextoCompacto(context),
-														),
-													),
-												],
-											),
-											//const SizedBox(height: 8),
-											SingleChildScrollView(
-												scrollDirection: Axis.horizontal,
-												child: Row(
-													children: estadoFormulario.clientesEncontrados.map((cliente) {
-														return Padding(
-															padding: const EdgeInsets.only(right: 8),
-															child: ChoiceChip(
-																label: Text(
-																	cliente.cuit == null || cliente.cuit!.isEmpty
-																			? cliente.nombre
-																			: '${cliente.nombre} (${cliente.cuit})',
-																),
-																selected: estadoFormulario.clienteSeleccionado?.id == cliente.id,
-																onSelected: (_) {
-																	context.read<ServicioBloc>().add(
-																			ServicioClienteSeleccionado(cliente: cliente),
-																	);
-																},
-															),
-														);
-													}).toList(),
-												),
-											),
-											const SizedBox(height: 16),
-											_filaDosCampos(
-												izquierda: _dropdownZonas(context, catalogos, estadoFormulario),
-												derecha: TextField(
-													controller: _lugarDetalleController,
-													decoration: _decoracionCampoCompacta(
-														context,
-														labelText: _labelLugarDetalle(estadoFormulario.canal),
-													),
-													onChanged: (valor) {
-														context.read<ServicioBloc>().add(
-																ServicioFormularioCambiado(lugarDetalle: valor),
-														);
-													},
-												),
-											),
-											const SizedBox(height: 12),
-											Row(
-												children: [
-													Text(
-														'Equipo modelo y numero de serie',
-														style: Theme.of(context).textTheme.titleSmall,
-													),
-												],
-											),
-											
-											const SizedBox(height: 8),
-											_builderSeleccionEquipoDesdeIndicadores(
-												context,
-												indicadoresActivos,
-											),
-											const SizedBox(height: 12),
-											_filaDosCampos(
-												izquierda: TextField(
-													controller: _equipoUbicacionController,
-													decoration: _decoracionCampoCompacta(
-														context,
-														labelText: 'Equipo ubicacion',
-													),
-													onChanged: (valor) {
-														context.read<ServicioBloc>().add(
-																ServicioFormularioCambiado(equipoUbicacion: valor),
-														);
-													},
-												),
-												derecha: TextField(
-													controller: _equipoAnioController,
-													keyboardType: TextInputType.number,
-													decoration: _decoracionCampoCompacta(
-														context,
-														labelText: 'Equipo anio',
-													),
-													onChanged: (valor) {
-														context.read<ServicioBloc>().add(
-																ServicioFormularioCambiado(equipoAnio: valor),
-														);
-													},
-												),
-											),
-											const SizedBox(height: 12),
-											Text(
-												'Partes que mostraban falla',
-												style: Theme.of(context).textTheme.titleSmall?.copyWith(
-													fontSize: 13,
-												),
-											),
-											const SizedBox(height: 8),
-											SingleChildScrollView(
-												scrollDirection: Axis.horizontal,
-												child: Row(
-													children: catalogos.categorias
-															.where((categoria) => categoria.activo)
-															.map((categoria) {
-																final seleccionada = _categoriasFallaSeleccionadasIds.contains(
-																	categoria.id,
-																);
-																return Padding(
-																	padding: const EdgeInsets.only(right: 8),
-																	child: FilterChip(
-																		label: Text(
-																			categoria.nombre,
-																			style: _estiloTextoCompacto(context),
-																		),
-																		visualDensity: VisualDensity.compact,
-																		materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-																		selected: seleccionada,
-																		onSelected: (seleccionar) {
-																			setState(() {
-																				if (seleccionar) {
-																					_categoriasFallaSeleccionadasIds.add(categoria.id);
-																				} else {
-																					_categoriasFallaSeleccionadasIds.remove(categoria.id);
-																				}
-																			});
-																		},
-																	),
-																);
-															})
-															.toList(),
-												),
-											),
-											if (_categoriasFallaSeleccionadasIds.isEmpty) ...[
-												const SizedBox(height: 8),
-												Text(
-													'Selecciona una o mas categorias para elegir partes con falla.',
-																			style: _estiloTextoCompacto(context),
-												),
-											],
-											if (productosCategoriaFalla.isNotEmpty) ...[
-												const SizedBox(height: 8),
-												OutlinedButton.icon(
-													onPressed: () {
-														_mostrarDialogoSeleccionPartes(
+													_buildZonaVisual(
+														context: context,
+														titulo: '1. Datos de la orden y equipo',
+														icono: Icons.assignment_ind_outlined,
+														child: _buildZonaDatosOrdenEquipo(
 															context: context,
-															productosDisponibles: productosCategoriaFalla,
-															nombresCategorias: {
-																for (final categoria in catalogos.categorias) categoria.id: categoria.nombre,
-															},
-														);
-													},
-													icon: const Icon(Icons.checklist_rtl),
-													label: Text(
-														'Seleccionar partes (${_productosFallaSeleccionados.length})',
-														style: _estiloTextoCompacto(context),
+															estadoFormulario: estadoFormulario,
+															catalogos: catalogos,
+															indicadoresActivos: indicadoresActivos,
+														),
 													),
-												),
-											],
-											if (_productosFallaSeleccionados.isNotEmpty) ...[
-												const SizedBox(height: 8),
-														SingleChildScrollView(
-															scrollDirection: Axis.horizontal,
-															child: Row(
-																children: _productosFallaSeleccionados.entries.map((entry) {
-																	return Padding(
-																		padding: const EdgeInsets.only(right: 8),
-																		child: InputChip(
-																			label: Text(
-																										entry.value.nombre,
-																				style: _estiloTextoCompacto(context),
-																			),
-																			visualDensity: VisualDensity.compact,
-																			materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-															onDeleted: () {
-																setState(() {
-																	_productosFallaSeleccionados.remove(entry.key);
-																});
-																_actualizarPartesFallaronEnBloc();
-															},
-																				),
-																			);
-																		}).toList(),
-																	),
-																),
-											],
-											const SizedBox(height: 12),
-											TextField(
-												controller: _kmController,
-												keyboardType: TextInputType.number,
-												style: _estiloTextoCompacto(context),
-												decoration: _decoracionCampoCompacta(
-													context,
-													labelText: 'Kilometros (km)',
-												),
-												onChanged: (valor) {
-													context.read<ServicioBloc>().add(
-															ServicioFormularioCambiado(km: valor),
-													);
-												},
-											),
-											const SizedBox(height: 12),
-											TextField(
-												controller: _sintomaController,
-												minLines: 2,
-												maxLines: 2,
-												style: _estiloTextoCompacto(context),
-												decoration: _decoracionCampoCompacta(
-													context,
-													labelText: 'Sintoma',
-												),
-												onChanged: (valor) {
-													context.read<ServicioBloc>().add(
-															ServicioFormularioCambiado(sintoma: valor),
-													);
-												},
-											),
-											const SizedBox(height: 12),
-											SingleChildScrollView(
-												scrollDirection: Axis.horizontal,
-												child: Row(
-													children: catalogos.diagnosticos
-														.where((diagnostico) => diagnostico.activo)
-														.map((diagnostico) {
-															final seleccionado = estadoFormulario
-																	.diagnosticoCatIdsSeleccionados
-																	.contains(
-																diagnostico.id,
-																	);
-															return Padding(
-																padding: const EdgeInsets.only(right: 8),
-																child: ChoiceChip(
-																				label: Text(
-																					diagnostico.nombre,
-																					style: _estiloTextoCompacto(context),
-																				),
-																				visualDensity: VisualDensity.compact,
-																				materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-																selected: seleccionado,
-																onSelected: (seleccionar) {
-																	final seleccionados = estadoFormulario
-																			.diagnosticoCatIdsSeleccionados
-																			.toSet();
-																	if (seleccionar) {
-																		seleccionados.add(diagnostico.id);
-																	} else {
-																		seleccionados.remove(diagnostico.id);
-																	}
-																	context.read<ServicioBloc>().add(
-																			ServicioFormularioCambiado(
-																				diagnosticoCatIdsSeleccionados:
-																						seleccionados.toList(),
-																			),
-																	);
-																},
-																),
-															);
-														}).toList(),
-												),
-											),
-											const SizedBox(height: 12),
-											TextField(
-												controller: _diagnosticoDetalleController,
-												maxLines: 3,
-												style: _estiloTextoCompacto(context),
-												decoration: _decoracionCampoCompacta(
-													context,
-													labelText: 'Diagnostico detalle',
-												),
-												onChanged: (valor) {
-													context.read<ServicioBloc>().add(
-															ServicioFormularioCambiado(diagnosticoDetalle: valor),
-													);
-												},
-											),
-											const SizedBox(height: 12),
-											Text(
-												resolucionLabel,
-												style: Theme.of(context).textTheme.titleSmall?.copyWith(
-													fontSize: 11,
-												),
-											),
-											const SizedBox(height: 8),
-											SingleChildScrollView(
-												scrollDirection: Axis.horizontal,
-												child: Row(
-													children: catalogos.resoluciones
-														.where((resolucion) => resolucion.activo)
-														.map((resolucion) {
-															return Padding(
-																padding: const EdgeInsets.only(right: 8),
-																child: ChoiceChip(
-																				label: Text(
-																					resolucion.nombre,
-																					style: _estiloTextoCompacto(context),
-																				),
-																				visualDensity: VisualDensity.compact,
-																				materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-																selected: estadoFormulario.resolucionId == resolucion.id,
-																onSelected: (_) {
-																	context.read<ServicioBloc>().add(
-																			ServicioFormularioCambiado(resolucionId: resolucion.id),
-																	);
-																},
-																),
-															);
-														}).toList(),
-												),
-											),
-											const SizedBox(height: 12),
-																															_buildSeccionFacturacion(context, estadoFormulario),
+													const SizedBox(height: 12),
+													_buildZonaVisual(
+														context: context,
+														titulo: '2. Falla, diagnostico y resolucion',
+														icono: Icons.build_circle_outlined,
+														child: _buildZonaFallaDiagnosticoResolucion(
+															context: context,
+															estadoFormulario: estadoFormulario,
+															catalogos: catalogos,
+															productosCategoriaFalla: productosCategoriaFalla,
+															resolucionLabel: resolucionLabel,
+														),
+													),
+													const SizedBox(height: 12),
+													_buildSeccionFacturacion(context, estadoFormulario),
 																															const SizedBox(height: 12),
 											TextField(
 												controller: _observacionesController,
@@ -796,6 +513,434 @@ class _FormularioServicioState extends State<FormularioServicio> {
 					),
 				],
 			),
+		);
+	}
+
+	Widget _buildZonaVisual({
+		required BuildContext context,
+		required String titulo,
+		required IconData icono,
+		required Widget child,
+	}) {
+		final colorScheme = Theme.of(context).colorScheme;
+		return Container(
+			width: double.infinity,
+			padding: const EdgeInsets.all(12),
+			decoration: BoxDecoration(
+				color: colorScheme.surfaceContainerHighest.withValues(alpha: 0.16),
+				borderRadius: BorderRadius.circular(12),
+				border: Border.all(color: colorScheme.outlineVariant),
+			),
+			child: Column(
+				crossAxisAlignment: CrossAxisAlignment.start,
+				children: [
+					Row(
+						children: [
+							Icon(icono, size: 16),
+							const SizedBox(width: 8),
+							Text(
+								titulo,
+								style: Theme.of(context).textTheme.titleSmall?.copyWith(
+									fontWeight: FontWeight.w700,
+								),
+							),
+						],
+					),
+					const SizedBox(height: 10),
+					child,
+				],
+			),
+		);
+	}
+
+	Widget _buildZonaDatosOrdenEquipo({
+		required BuildContext context,
+		required ServicioFormularioState estadoFormulario,
+		required CatalogoLoaded catalogos,
+		required List<Producto> indicadoresActivos,
+	}) {
+		return Column(
+			crossAxisAlignment: CrossAxisAlignment.start,
+			children: [
+				_buildFechaHoraOrden(context, estadoFormulario),
+				const SizedBox(height: 12),
+				SingleChildScrollView(
+					scrollDirection: Axis.horizontal,
+					child: Row(
+						children: Canal.values.map((canal) {
+							return Padding(
+								padding: const EdgeInsets.only(right: 8),
+								child: ChoiceChip(
+									label: Text(canal.name),
+									selected: estadoFormulario.canal == canal,
+									onSelected: (_) {
+										context.read<ServicioBloc>().add(
+												ServicioFormularioCambiado(canal: canal),
+										);
+									},
+								),
+							);
+						}).toList(),
+					),
+				),
+				const SizedBox(height: 16),
+				Row(
+					crossAxisAlignment: CrossAxisAlignment.start,
+					children: [
+						Expanded(
+							child: TextField(
+								controller: _buscarClienteController,
+								decoration: _decoracionCampoCompacta(
+									context,
+									labelText: 'Cliente (buscar por nombre o CUIT)',
+									suffixIcon: estadoFormulario.buscandoClientes
+											? const Padding(
+												padding: EdgeInsets.all(10),
+												child: SizedBox(
+													height: 14,
+													width: 14,
+													child: CircularProgressIndicator(strokeWidth: 2),
+												),
+											)
+											: IconButton(
+												onPressed: () {
+													context.read<ServicioBloc>().add(
+															ServicioBuscarClienteSolicitado(
+																query: _buscarClienteController.text,
+															),
+													);
+												},
+												icon: const Icon(Icons.search),
+											),
+								),
+								onSubmitted: (valor) {
+									context.read<ServicioBloc>().add(
+											ServicioBuscarClienteSolicitado(query: valor),
+									);
+								},
+							),
+						),
+						const SizedBox(width: 8),
+						OutlinedButton.icon(
+							onPressed: estadoFormulario.creandoCliente
+									? null
+									: () => _mostrarDialogoAltaRapidaCliente(context),
+							style: OutlinedButton.styleFrom(
+								padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+								visualDensity: VisualDensity.compact,
+								tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+							),
+							icon: estadoFormulario.creandoCliente
+										? const SizedBox(
+											height: 14,
+											width: 14,
+											child: CircularProgressIndicator(strokeWidth: 2),
+										)
+										: const Icon(Icons.person_add_alt_1),
+							label: Text(
+								'Alta rapida cliente',
+								style: _estiloTextoCompacto(context),
+							),
+						),
+					],
+				),
+				SingleChildScrollView(
+					scrollDirection: Axis.horizontal,
+					child: Row(
+						children: estadoFormulario.clientesEncontrados.map((cliente) {
+							return Padding(
+								padding: const EdgeInsets.only(right: 8),
+								child: ChoiceChip(
+									label: Text(
+										cliente.cuit == null || cliente.cuit!.isEmpty
+												? cliente.nombre
+												: '${cliente.nombre} (${cliente.cuit})',
+									),
+									selected: estadoFormulario.clienteSeleccionado?.id == cliente.id,
+									onSelected: (_) {
+										context.read<ServicioBloc>().add(
+												ServicioClienteSeleccionado(cliente: cliente),
+										);
+									},
+								),
+							);
+						}).toList(),
+					),
+				),
+				const SizedBox(height: 16),
+				_filaDosCampos(
+					izquierda: _dropdownZonas(context, catalogos, estadoFormulario),
+					derecha: TextField(
+						controller: _lugarDetalleController,
+						decoration: _decoracionCampoCompacta(
+							context,
+							labelText: _labelLugarDetalle(estadoFormulario.canal),
+						),
+						onChanged: (valor) {
+							context.read<ServicioBloc>().add(
+									ServicioFormularioCambiado(lugarDetalle: valor),
+							);
+						},
+					),
+				),
+				const SizedBox(height: 12),
+				Text(
+					'Equipo modelo y numero de serie',
+					style: Theme.of(context).textTheme.titleSmall,
+				),
+				const SizedBox(height: 8),
+				_builderSeleccionEquipoDesdeIndicadores(
+					context,
+					indicadoresActivos,
+				),
+				const SizedBox(height: 12),
+				_filaDosCampos(
+					izquierda: TextField(
+						controller: _equipoUbicacionController,
+						decoration: _decoracionCampoCompacta(
+							context,
+							labelText: 'Equipo ubicacion',
+						),
+						onChanged: (valor) {
+							context.read<ServicioBloc>().add(
+									ServicioFormularioCambiado(equipoUbicacion: valor),
+							);
+						},
+					),
+					derecha: TextField(
+						controller: _equipoAnioController,
+						keyboardType: TextInputType.number,
+						decoration: _decoracionCampoCompacta(
+							context,
+							labelText: 'Equipo anio',
+						),
+						onChanged: (valor) {
+							context.read<ServicioBloc>().add(
+									ServicioFormularioCambiado(equipoAnio: valor),
+							);
+						},
+					),
+				),
+			],
+		);
+	}
+
+	Widget _buildZonaFallaDiagnosticoResolucion({
+		required BuildContext context,
+		required ServicioFormularioState estadoFormulario,
+		required CatalogoLoaded catalogos,
+		required List<Producto> productosCategoriaFalla,
+		required String resolucionLabel,
+	}) {
+		return Column(
+			crossAxisAlignment: CrossAxisAlignment.start,
+			children: [
+				Text(
+					'Partes que mostraban falla',
+					style: Theme.of(context).textTheme.titleSmall?.copyWith(fontSize: 13),
+				),
+				const SizedBox(height: 8),
+				SingleChildScrollView(
+					scrollDirection: Axis.horizontal,
+					child: Row(
+						children: catalogos.categorias
+								.where((categoria) => categoria.activo)
+								.map((categoria) {
+									final seleccionada = _categoriasFallaSeleccionadasIds.contains(categoria.id);
+									return Padding(
+										padding: const EdgeInsets.only(right: 8),
+										child: FilterChip(
+											label: Text(
+												categoria.nombre,
+												style: _estiloTextoCompacto(context),
+											),
+											visualDensity: VisualDensity.compact,
+											materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+											selected: seleccionada,
+											onSelected: (seleccionar) {
+												setState(() {
+													if (seleccionar) {
+														_categoriasFallaSeleccionadasIds.add(categoria.id);
+													} else {
+														_categoriasFallaSeleccionadasIds.remove(categoria.id);
+													}
+												});
+											},
+										),
+									);
+								}).toList(),
+					),
+				),
+				if (_categoriasFallaSeleccionadasIds.isEmpty) ...[
+					const SizedBox(height: 8),
+					Text(
+						'Selecciona una o mas categorias para elegir partes con falla.',
+						style: _estiloTextoCompacto(context),
+					),
+				],
+				if (productosCategoriaFalla.isNotEmpty) ...[
+					const SizedBox(height: 8),
+					OutlinedButton.icon(
+						onPressed: () {
+							_mostrarDialogoSeleccionPartes(
+								context: context,
+								productosDisponibles: productosCategoriaFalla,
+								nombresCategorias: {
+									for (final categoria in catalogos.categorias) categoria.id: categoria.nombre,
+								},
+							);
+						},
+						icon: const Icon(Icons.checklist_rtl),
+						label: Text(
+							'Seleccionar partes (${_productosFallaSeleccionados.length})',
+							style: _estiloTextoCompacto(context),
+						),
+					),
+				],
+				if (_productosFallaSeleccionados.isNotEmpty) ...[
+					const SizedBox(height: 8),
+					SingleChildScrollView(
+						scrollDirection: Axis.horizontal,
+						child: Row(
+							children: _productosFallaSeleccionados.entries.map((entry) {
+								return Padding(
+									padding: const EdgeInsets.only(right: 8),
+									child: InputChip(
+										label: Text(
+											entry.value.nombre,
+											style: _estiloTextoCompacto(context),
+										),
+										visualDensity: VisualDensity.compact,
+										materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+										onDeleted: () {
+											setState(() {
+												_productosFallaSeleccionados.remove(entry.key);
+											});
+											_actualizarPartesFallaronEnBloc();
+										},
+									),
+								);
+							}).toList(),
+						),
+					),
+				],
+				const SizedBox(height: 12),
+				TextField(
+					controller: _kmController,
+					keyboardType: TextInputType.number,
+					style: _estiloTextoCompacto(context),
+					decoration: _decoracionCampoCompacta(
+						context,
+						labelText: 'Kilometros (km)',
+					),
+					onChanged: (valor) {
+						context.read<ServicioBloc>().add(
+								ServicioFormularioCambiado(km: valor),
+						);
+					},
+				),
+				const SizedBox(height: 12),
+				TextField(
+					controller: _sintomaController,
+					minLines: 2,
+					maxLines: 2,
+					style: _estiloTextoCompacto(context),
+					decoration: _decoracionCampoCompacta(
+						context,
+						labelText: 'Sintoma',
+					),
+					onChanged: (valor) {
+						context.read<ServicioBloc>().add(
+								ServicioFormularioCambiado(sintoma: valor),
+						);
+					},
+				),
+				const SizedBox(height: 12),
+				SingleChildScrollView(
+					scrollDirection: Axis.horizontal,
+					child: Row(
+						children: catalogos.diagnosticos
+								.where((diagnostico) => diagnostico.activo)
+								.map((diagnostico) {
+									final seleccionado = estadoFormulario.diagnosticoCatIdsSeleccionados.contains(
+										diagnostico.id,
+									);
+									return Padding(
+										padding: const EdgeInsets.only(right: 8),
+										child: ChoiceChip(
+											label: Text(
+												diagnostico.nombre,
+												style: _estiloTextoCompacto(context),
+											),
+											visualDensity: VisualDensity.compact,
+											materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+											selected: seleccionado,
+											onSelected: (seleccionar) {
+												final seleccionados = estadoFormulario.diagnosticoCatIdsSeleccionados.toSet();
+												if (seleccionar) {
+													seleccionados.add(diagnostico.id);
+												} else {
+													seleccionados.remove(diagnostico.id);
+												}
+												context.read<ServicioBloc>().add(
+														ServicioFormularioCambiado(
+															diagnosticoCatIdsSeleccionados: seleccionados.toList(),
+														),
+												);
+											},
+										),
+									);
+								}).toList(),
+					),
+				),
+				const SizedBox(height: 12),
+				TextField(
+					controller: _diagnosticoDetalleController,
+					maxLines: 3,
+					style: _estiloTextoCompacto(context),
+					decoration: _decoracionCampoCompacta(
+						context,
+						labelText: 'Diagnostico detalle',
+					),
+					onChanged: (valor) {
+						context.read<ServicioBloc>().add(
+								ServicioFormularioCambiado(diagnosticoDetalle: valor),
+						);
+					},
+				),
+				const SizedBox(height: 12),
+				Text(
+					resolucionLabel,
+					style: Theme.of(context).textTheme.titleSmall?.copyWith(fontSize: 11),
+				),
+				const SizedBox(height: 8),
+				SingleChildScrollView(
+					scrollDirection: Axis.horizontal,
+					child: Row(
+						children: catalogos.resoluciones
+								.where((resolucion) => resolucion.activo)
+								.map((resolucion) {
+									return Padding(
+										padding: const EdgeInsets.only(right: 8),
+										child: ChoiceChip(
+											label: Text(
+												resolucion.nombre,
+												style: _estiloTextoCompacto(context),
+											),
+											visualDensity: VisualDensity.compact,
+											materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+											selected: estadoFormulario.resolucionId == resolucion.id,
+											onSelected: (_) {
+												context.read<ServicioBloc>().add(
+														ServicioFormularioCambiado(resolucionId: resolucion.id),
+												);
+											},
+										),
+									);
+								}).toList(),
+					),
+				),
+			],
 		);
 	}
 
