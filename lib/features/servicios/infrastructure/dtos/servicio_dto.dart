@@ -82,7 +82,21 @@ class ServicioDto {
 		final servicioJson = _mapaDesdeDynamic(json['servicio']) ?? json;
 		final clienteJson = _mapaDesdeDynamic(servicioJson['cliente']);
 		final facturacionJson = _mapaDesdeDynamic(json['facturacion']);
-		final documentoJson = _mapaDesdeDynamic(json['documento']);
+		final documentoJson =
+				_mapaDesdeDynamic(json['documento']) ?? _mapaDesdeDynamic(servicioJson['documento']);
+		final documentoPdfUrl = _extraerPdfUrl(documentoJson);
+		final firmaClienteNombre = _extraerTexto(
+			documentoJson,
+			const ['firmaClienteNombre', 'firma_cliente_nombre'],
+		);
+		final firmaClienteDocumento = _extraerTexto(
+			documentoJson,
+			const ['firmaClienteDocumento', 'firma_cliente_documento'],
+		);
+		final firmaFechaHoraRaw = _extraerTexto(
+			documentoJson,
+			const ['firmaFechaHora', 'firma_fecha_hora'],
+		);
 		final productosFallaJson = _listaMapasDesdeDynamic(servicioJson['productosFalla']);
 		final facturacionItemsJson = _listaMapasDesdeDynamic(json['facturacionItems']);
 
@@ -204,12 +218,13 @@ class ServicioDto {
 			documento: documentoJson == null
 					? null
 					: DocumentoOrden(
-							pdfHashSha256: documentoJson['pdfHashSha256']?.toString(),
-							pdfUrl: documentoJson['pdfUrl']?.toString(),
-							firmaClienteNombre: documentoJson['firmaClienteNombre']?.toString(),
-							firmaClienteDocumento: documentoJson['firmaClienteDocumento']?.toString(),
-							firmaFechaHora:
-								DateTime.tryParse(documentoJson['firmaFechaHora']?.toString() ?? ''),
+							pdfHashSha256:
+									documentoJson['pdfHashSha256']?.toString() ??
+									documentoJson['pdf_hash_sha256']?.toString(),
+							pdfUrl: documentoPdfUrl,
+							firmaClienteNombre: firmaClienteNombre,
+							firmaClienteDocumento: firmaClienteDocumento,
+							firmaFechaHora: DateTime.tryParse(firmaFechaHoraRaw ?? ''),
 						),
 			tecnicoId: json['tecnicoId']?.toString() ?? json['tecnico_id']?.toString() ?? '',
 			fecha: DateTime.tryParse(json['fecha']?.toString() ?? ''),
@@ -431,6 +446,57 @@ class ServicioDto {
 			return valor;
 		}
 		return null;
+	}
+
+	static String? _extraerTexto(
+		Map<String, dynamic>? origen,
+		List<String> claves,
+	) {
+		if (origen == null) {
+			return null;
+		}
+
+		for (final clave in claves) {
+			final valor = origen[clave];
+			if (valor == null) {
+				continue;
+			}
+			final texto = valor.toString().trim();
+			if (texto.isNotEmpty) {
+				return texto;
+			}
+		}
+
+		return null;
+	}
+
+	static String? _extraerPdfUrl(Map<String, dynamic>? documentoJson) {
+		if (documentoJson == null) {
+			return null;
+		}
+
+		final directa = _extraerTexto(
+			documentoJson,
+			const ['pdfUrl', 'pdf_url', 'pdfPublicUrl', 'pdf_public_url', 'url', 'secure_url'],
+		);
+		if ((directa ?? '').isNotEmpty) {
+			return directa;
+		}
+
+		final pdfObjeto = _mapaDesdeDynamic(documentoJson['pdf']);
+		final desdePdfObjeto = _extraerTexto(
+			pdfObjeto,
+			const ['url', 'secure_url', 'pdfUrl', 'pdf_url'],
+		);
+		if ((desdePdfObjeto ?? '').isNotEmpty) {
+			return desdePdfObjeto;
+		}
+
+		final archivoObjeto = _mapaDesdeDynamic(documentoJson['archivo']);
+		return _extraerTexto(
+			archivoObjeto,
+			const ['url', 'secure_url', 'pdfUrl', 'pdf_url'],
+		);
 	}
 
 	static List<Map<String, dynamic>> _listaMapasDesdeDynamic(dynamic valor) {

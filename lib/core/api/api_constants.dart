@@ -18,6 +18,14 @@ class ApiConstants {
 	static const String servicios = '/servicios';
 	static const String serviciosMios = '/servicios/mios';
 
+	static String servicioDocumento(String servicioId) {
+		return '/servicios/$servicioId/documento';
+	}
+
+	static String servicioDocumentoPdf(String servicioId) {
+		return '/servicios/$servicioId/documento/pdf';
+	}
+
 	static String servicioDocumentoFirmado(String servicioId) {
 		return '/servicios/$servicioId/documento/firmado';
 	}
