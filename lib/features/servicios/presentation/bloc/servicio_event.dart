@@ -171,6 +171,7 @@ class ServicioDocumentoSubidaSolicitada extends ServicioEvent {
 	final String servicioId;
 	final Canal canal;
 	final Uint8List pdfBytes;
+	final Uint8List? firmaClienteTrazoPng;
 	final String nombreArchivoPdf;
 	final String rutaPdfLocal;
 	final String? firmaClienteNombre;
@@ -181,6 +182,7 @@ class ServicioDocumentoSubidaSolicitada extends ServicioEvent {
 		required this.servicioId,
 		required this.canal,
 		required this.pdfBytes,
+		this.firmaClienteTrazoPng,
 		required this.nombreArchivoPdf,
 		required this.rutaPdfLocal,
 		this.firmaClienteNombre,
@@ -193,6 +195,7 @@ class ServicioDocumentoSubidaSolicitada extends ServicioEvent {
 				servicioId,
 				canal,
 				pdfBytes,
+				firmaClienteTrazoPng,
 				nombreArchivoPdf,
 				rutaPdfLocal,
 				firmaClienteNombre,
@@ -203,6 +206,15 @@ class ServicioDocumentoSubidaSolicitada extends ServicioEvent {
 
 class ServicioDocumentoPendientesReintentarSolicitado extends ServicioEvent {
 	const ServicioDocumentoPendientesReintentarSolicitado();
+}
+
+class ServicioDocumentoSubirAhoraSolicitado extends ServicioEvent {
+	final Servicio servicio;
+
+	const ServicioDocumentoSubirAhoraSolicitado({required this.servicio});
+
+	@override
+	List<Object?> get props => [servicio];
 }
 
 

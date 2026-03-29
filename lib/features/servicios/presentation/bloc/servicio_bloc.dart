@@ -15,6 +15,7 @@ import 'package:cliente_feedback_tecnico/features/servicios/application/quitar_d
 import 'package:cliente_feedback_tecnico/features/servicios/application/subir_documento_firmado_use_case.dart';
 import 'package:cliente_feedback_tecnico/features/servicios/domain/entities/facturacion.dart';
 import 'package:cliente_feedback_tecnico/features/servicios/domain/entities/facturacion_item.dart';
+import 'package:cliente_feedback_tecnico/features/servicios/domain/entities/orden_servicio_respuesta.dart';
 import 'package:cliente_feedback_tecnico/features/servicios/domain/entities/politica_firma_canal.dart';
 import 'package:cliente_feedback_tecnico/features/servicios/domain/entities/producto_falla.dart';
 import 'package:cliente_feedback_tecnico/features/servicios/domain/entities/servicio.dart';
@@ -79,6 +80,7 @@ class ServicioBloc extends Bloc<ServicioEvent, ServicioState> {
 		on<ServicioDocumentoPendientesReintentarSolicitado>(
 			_onServicioDocumentoPendientesReintentarSolicitado,
 		);
+		on<ServicioDocumentoSubirAhoraSolicitado>(_onServicioDocumentoSubirAhoraSolicitado);
 		on<MisServiciosSolicitados>(_onMisServiciosSolicitados);
 		on<ServicioFormularioReiniciado>(_onServicioFormularioReiniciado);
 	}
@@ -537,6 +539,7 @@ class ServicioBloc extends Bloc<ServicioEvent, ServicioState> {
 		final firmaNombre = event.firmaClienteNombre?.trim();
 		final firmaDocumento = event.firmaClienteDocumento?.trim();
 		final firmaFecha = event.firmaFechaHora;
+		final firmaTrazoPng = event.firmaClienteTrazoPng;
 		final intentoConFirma =
 				(firmaNombre ?? '').isNotEmpty ||
 				(firmaDocumento ?? '').isNotEmpty ||
@@ -563,12 +566,54 @@ class ServicioBloc extends Bloc<ServicioEvent, ServicioState> {
 				);
 				return;
 			}
+			if (firmaTrazoPng == null || firmaTrazoPng.isEmpty) {
+				emit(
+					actual.copyWith(
+						errorMensaje: 'Debes capturar la firma del cliente en pantalla.',
+						exitoMensaje: null,
+					),
+				);
+				return;
+			}
+		}
+
+		var pdfBytesDocumento = event.pdfBytes;
+		if (firmaPermitida && intentoConFirma) {
+			final orden = actual.ordenActual;
+			if (orden == null) {
+				emit(
+					actual.copyWith(
+						errorMensaje:
+							'No se encontro la orden para generar el PDF con firma. Reintenta guardando de nuevo.',
+						exitoMensaje: null,
+					),
+				);
+				return;
+			}
+
+			try {
+				pdfBytesDocumento = await _generarPdfOrdenServicioUseCase.ejecutar(
+					orden,
+					firmaClienteTrazoPng: firmaTrazoPng,
+					firmaClienteNombre: firmaNombre,
+					firmaClienteDocumento: firmaDocumento,
+					firmaFechaHora: firmaFecha,
+				);
+			} catch (_) {
+				emit(
+					actual.copyWith(
+						errorMensaje: 'No se pudo generar el PDF con la firma del cliente.',
+						exitoMensaje: null,
+					),
+				);
+				return;
+			}
 		}
 
 		final solicitud = SolicitudDocumentoFirmado(
 			servicioId: event.servicioId,
 			canal: event.canal,
-			pdfBytes: event.pdfBytes,
+			pdfBytes: pdfBytesDocumento,
 			nombreArchivoPdf: event.nombreArchivoPdf,
 			rutaPdfLocal: event.rutaPdfLocal,
 			firmaClienteNombre: firmaPermitida ? firmaNombre : null,
@@ -622,11 +667,14 @@ class ServicioBloc extends Bloc<ServicioEvent, ServicioState> {
 				return;
 			}
 
+			await _encolarDocumentoPendiente(solicitud);
 			emit(
 				actual.copyWith(
 					subiendoDocumento: false,
-					errorMensaje: e.mensaje,
+					errorMensaje:
+						'No se pudo subir el documento: ${e.mensaje} Se guardo pendiente para reintento.',
 					exitoMensaje: null,
+					documentosPendientes: _documentosPendientes.length,
 				),
 			);
 		} catch (_) {
@@ -647,8 +695,52 @@ class ServicioBloc extends Bloc<ServicioEvent, ServicioState> {
 		ServicioDocumentoPendientesReintentarSolicitado event,
 		Emitter<ServicioState> emit,
 	) async {
-		final actual = _estadoFormularioActual();
 		await _cargarPendientesDesdeStorage();
+
+		if (state is MisServiciosLoaded) {
+			final actual = state as MisServiciosLoaded;
+			if (_documentosPendientes.isEmpty) {
+				emit(
+					actual.copyWith(
+						reintentandoPendientes: false,
+						documentosPendientes: 0,
+						mensajePendientes: 'No hay documentos pendientes para reenviar.',
+					),
+				);
+				return;
+			}
+
+			emit(
+				actual.copyWith(
+					reintentandoPendientes: true,
+					documentosPendientes: _documentosPendientes.length,
+					limpiarMensajePendientes: true,
+				),
+			);
+
+			final pendientes = List<SolicitudDocumentoFirmado>.from(_documentosPendientes);
+			for (final solicitud in pendientes) {
+				try {
+					await _subirDocumentoFirmadoUseCase.ejecutar(solicitud);
+					await _quitarDocumentoPendiente(solicitud.servicioId);
+				} catch (_) {
+					break;
+				}
+			}
+
+			emit(
+				actual.copyWith(
+					reintentandoPendientes: false,
+					documentosPendientes: _documentosPendientes.length,
+					mensajePendientes: _documentosPendientes.isEmpty
+							? 'Documentos pendientes reenviados correctamente.'
+							: 'Quedaron ${_documentosPendientes.length} documento(s) pendientes.',
+				),
+			);
+			return;
+		}
+
+		final actual = _estadoFormularioActual();
 		if (_documentosPendientes.isEmpty) {
 			emit(
 				actual.copyWith(
@@ -698,12 +790,123 @@ class ServicioBloc extends Bloc<ServicioEvent, ServicioState> {
 	) async {
 		emit(const MisServiciosLoading());
 		try {
+			await _cargarPendientesDesdeStorage();
 			final servicios = await _obtenerMisServiciosUseCase.ejecutar();
-			emit(MisServiciosLoaded(servicios: servicios));
+			emit(
+				MisServiciosLoaded(
+					servicios: servicios,
+					documentosPendientes: _documentosPendientes.length,
+				),
+			);
 		} on ServerException catch (e) {
 			emit(ServicioError(mensaje: e.mensaje));
 		} catch (_) {
 			emit(const ServicioError(mensaje: 'No se pudieron cargar los servicios.'));
+		}
+	}
+
+	Future<void> _onServicioDocumentoSubirAhoraSolicitado(
+		ServicioDocumentoSubirAhoraSolicitado event,
+		Emitter<ServicioState> emit,
+	) async {
+		if (state is! MisServiciosLoaded) {
+			return;
+		}
+
+		final actual = state as MisServiciosLoaded;
+		final servicio = event.servicio;
+		final servicioId = servicio.id.trim();
+		if (servicioId.isEmpty) {
+			emit(
+				actual.copyWith(
+					mensajePendientes:
+						'No se puede subir PDF porque la orden no tiene identificador.',
+				),
+			);
+			return;
+		}
+
+		emit(
+			actual.copyWith(
+				servicioIdSubiendoPdf: servicioId,
+				limpiarMensajePendientes: true,
+			),
+		);
+
+		final fechaServicio = servicio.fechaHoraServicio ?? servicio.fecha;
+		final ordenGenerada = OrdenServicioRespuesta(
+			replayed: false,
+			servicioId: servicioId,
+			idempotencyKey:
+					(servicio.idempotencyKey ?? '').trim().isEmpty
+							? _generarIdempotencyKey()
+							: servicio.idempotencyKey!.trim(),
+			estadoOrden: 'cerrada',
+			version: 1,
+			fechaHoraServicio: fechaServicio,
+			timezoneIana: servicio.timezoneIana,
+			utcOffsetMinutos: servicio.utcOffsetMinutos,
+			servicio: servicio,
+			facturacion: servicio.facturacion,
+			facturacionItems: servicio.facturacionItems,
+			documento: servicio.documento,
+		);
+
+		Uint8List pdfBytes;
+		try {
+			pdfBytes = await _generarPdfOrdenServicioUseCase.ejecutar(ordenGenerada);
+		} catch (_) {
+			emit(
+				actual.copyWith(
+					limpiarServicioIdSubiendoPdf: true,
+					mensajePendientes:
+						'No se pudo generar el PDF de la orden $servicioId.',
+				),
+			);
+			return;
+		}
+
+		final solicitud = SolicitudDocumentoFirmado(
+			servicioId: servicioId,
+			canal: servicio.canal,
+			pdfBytes: pdfBytes,
+			nombreArchivoPdf: 'orden_servicio_$servicioId.pdf',
+			rutaPdfLocal: 'memoria://ordenes/orden_servicio_$servicioId.pdf',
+		);
+
+		try {
+			await _subirDocumentoFirmadoUseCase.ejecutar(solicitud);
+			await _cargarPendientesDesdeStorage();
+			final serviciosActualizados = await _obtenerMisServiciosUseCase.ejecutar();
+			emit(
+				actual.copyWith(
+					servicios: serviciosActualizados,
+					documentosPendientes: _documentosPendientes.length,
+					limpiarServicioIdSubiendoPdf: true,
+					mensajePendientes:
+						'PDF de la orden $servicioId subido correctamente.',
+				),
+			);
+		} on ServerException catch (e) {
+			await _encolarDocumentoPendiente(solicitud);
+			emit(
+				actual.copyWith(
+					documentosPendientes: _documentosPendientes.length,
+					limpiarServicioIdSubiendoPdf: true,
+					mensajePendientes:
+						'No se pudo subir el PDF de la orden $servicioId: ${e.mensaje}. Quedo pendiente para reintento.',
+				),
+			);
+		} catch (_) {
+			await _encolarDocumentoPendiente(solicitud);
+			emit(
+				actual.copyWith(
+					documentosPendientes: _documentosPendientes.length,
+					limpiarServicioIdSubiendoPdf: true,
+					mensajePendientes:
+						'Sin conexion. El PDF de la orden $servicioId quedo pendiente para reintento.',
+				),
+			);
 		}
 	}
 

@@ -314,12 +314,55 @@ class MisServiciosLoading extends ServicioState {
 }
 
 class MisServiciosLoaded extends ServicioState {
-	final List<Servicio> servicios;
+	static const Object _sinCambioMensajePendientes = Object();
 
-	const MisServiciosLoaded({required this.servicios});
+	final List<Servicio> servicios;
+	final int documentosPendientes;
+	final bool reintentandoPendientes;
+	final String? servicioIdSubiendoPdf;
+	final String? mensajePendientes;
+
+	const MisServiciosLoaded({
+		required this.servicios,
+		this.documentosPendientes = 0,
+		this.reintentandoPendientes = false,
+		this.servicioIdSubiendoPdf,
+		this.mensajePendientes,
+	});
+
+	MisServiciosLoaded copyWith({
+		List<Servicio>? servicios,
+		int? documentosPendientes,
+		bool? reintentandoPendientes,
+		String? servicioIdSubiendoPdf,
+		bool limpiarServicioIdSubiendoPdf = false,
+		Object? mensajePendientes = _sinCambioMensajePendientes,
+		bool limpiarMensajePendientes = false,
+	}) {
+		return MisServiciosLoaded(
+			servicios: servicios ?? this.servicios,
+			documentosPendientes: documentosPendientes ?? this.documentosPendientes,
+			reintentandoPendientes:
+					reintentandoPendientes ?? this.reintentandoPendientes,
+			servicioIdSubiendoPdf: limpiarServicioIdSubiendoPdf
+					? null
+					: (servicioIdSubiendoPdf ?? this.servicioIdSubiendoPdf),
+			mensajePendientes: limpiarMensajePendientes
+					? null
+					: (mensajePendientes == _sinCambioMensajePendientes
+							? this.mensajePendientes
+							: mensajePendientes as String?),
+		);
+	}
 
 	@override
-	List<Object> get props => [servicios];
+	List<Object?> get props => [
+				servicios,
+				documentosPendientes,
+				reintentandoPendientes,
+				servicioIdSubiendoPdf,
+				mensajePendientes,
+			];
 }
 
 class RepuestoSeleccionado extends Equatable {
