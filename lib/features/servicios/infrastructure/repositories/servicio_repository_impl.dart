@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:developer' as developer;
 
 import 'package:cliente_feedback_tecnico/core/api/api_client.dart';
 import 'package:cliente_feedback_tecnico/core/api/api_constants.dart';
@@ -109,23 +110,30 @@ class ServicioRepositoryImpl implements IServicioRepository {
 			);
 		}
 
-		final payloadCotizacion = _extraerMapa(_decodeJsonSeguro(responseCotizacion.body));
+		final payloadCotizacion = _extraerMapaFlexible(_decodeJsonSeguro(responseCotizacion.body));
 		if (payloadCotizacion == null) {
 			throw const ServerException('Respuesta invalida de cotizacion.');
 		}
 
-		final payloadTarifaKm = _extraerMapa(_decodeJsonSeguro(responseTarifaKm.body));
+		final payloadTarifaKm = _extraerMapaFlexible(_decodeJsonSeguro(responseTarifaKm.body));
 		if (payloadTarifaKm == null) {
 			throw const ServerException('Respuesta invalida de tarifa km.');
 		}
 
-		final payloadCombinado = <String, dynamic>{...payloadCotizacion, ...payloadTarifaKm};
-		final valorKmUsd = _extraerValorKmUsd(payloadTarifaKm);
-		if (valorKmUsd != null) {
-			payloadCombinado['valorKmUsd'] = valorKmUsd;
-		}
+		final cotizacionDolar = _extraerCotizacionDolar(payloadCotizacion) ??
+				CotizacionActualDto.fromJson(payloadCotizacion).cotizacionDolar;
+		final valorKmUsd = _extraerValorKmUsd(payloadTarifaKm) ??
+				CotizacionActualDto.fromJson(payloadTarifaKm).valorKmUsd;
 
-		return CotizacionActualDto.fromJson(payloadCombinado).aEntidad();
+		_logFacturacionInicializada(
+			cotizacionDolar: cotizacionDolar,
+			valorKmUsd: valorKmUsd,
+		);
+
+		return CotizacionActual(
+			cotizacionDolar: cotizacionDolar,
+			valorKmUsd: valorKmUsd,
+		);
 	}
 
 	@override
@@ -215,7 +223,7 @@ class ServicioRepositoryImpl implements IServicioRepository {
 		}
 
 		final payloadPretty = const JsonEncoder.withIndent('  ').convert(body);
-		print('[POST /servicios] body final:\n$payloadPretty');
+		developer.log('[POST /servicios] body final:\n$payloadPretty');
 	}
 
 	dynamic _decodeJsonSeguro(String body) {
@@ -236,13 +244,87 @@ class ServicioRepositoryImpl implements IServicioRepository {
 		return null;
 	}
 
+	Map<String, dynamic>? _extraerMapaFlexible(dynamic json) {
+		if (json is Map<String, dynamic>) {
+			final data = json['data'];
+			if (data is Map<String, dynamic>) {
+				return data;
+			}
+			if (data is List && data.isNotEmpty && data.first is Map<String, dynamic>) {
+				return data.first as Map<String, dynamic>;
+			}
+
+			final items = json['items'];
+			if (items is Map<String, dynamic>) {
+				return items;
+			}
+			if (items is List && items.isNotEmpty && items.first is Map<String, dynamic>) {
+				return items.first as Map<String, dynamic>;
+			}
+
+			return json;
+		}
+
+		if (json is List && json.isNotEmpty && json.first is Map<String, dynamic>) {
+			return json.first as Map<String, dynamic>;
+		}
+
+		return null;
+	}
+
+	double? _extraerCotizacionDolar(Map<String, dynamic> payload) {
+		final valor = _buscarValorPorClaves(payload, const [
+			'cotizacionDolar',
+			'cotizacion_dolar',
+			'valorDolar',
+			'dolar',
+			'valor',
+		]);
+		return _doubleDesdeDynamic(valor);
+	}
+
 	double? _extraerValorKmUsd(Map<String, dynamic> payload) {
-		final valor = payload['valorKmUsd'] ??
-				payload['valor_km_usd'] ??
-				payload['precioKmUsd'] ??
-				payload['precio_km_usd'] ??
-				payload['valorKm'] ??
-				payload['tarifa'];
+		final valor = _buscarValorPorClaves(payload, const [
+			'valorKmUsd',
+			'valor_km_usd',
+			'precioKmUsd',
+			'precio_km_usd',
+			'valorKm',
+			'tarifa',
+			'valor',
+		]);
+
+		return _doubleDesdeDynamic(valor);
+	}
+
+	dynamic _buscarValorPorClaves(dynamic origen, List<String> claves) {
+		if (origen is Map<String, dynamic>) {
+			for (final clave in claves) {
+				if (origen.containsKey(clave) && origen[clave] != null) {
+					return origen[clave];
+				}
+			}
+			for (final valor in origen.values) {
+				final encontrado = _buscarValorPorClaves(valor, claves);
+				if (encontrado != null) {
+					return encontrado;
+				}
+			}
+		}
+
+		if (origen is List) {
+			for (final item in origen) {
+				final encontrado = _buscarValorPorClaves(item, claves);
+				if (encontrado != null) {
+					return encontrado;
+				}
+			}
+		}
+
+		return null;
+	}
+
+	double? _doubleDesdeDynamic(dynamic valor) {
 
 		if (valor is num) {
 			return valor.toDouble();
@@ -251,6 +333,19 @@ class ServicioRepositoryImpl implements IServicioRepository {
 			return double.tryParse(valor.replaceAll(',', '.'));
 		}
 		return null;
+	}
+
+	void _logFacturacionInicializada({
+		required double cotizacionDolar,
+		required double valorKmUsd,
+	}) {
+		if (const bool.fromEnvironment('dart.vm.product')) {
+			return;
+		}
+
+		developer.log(
+			'[FACTURACION] cotizacionDolar=$cotizacionDolar, valorKmUsd=$valorKmUsd',
+		);
 	}
 }
 

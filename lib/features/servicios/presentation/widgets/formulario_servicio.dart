@@ -803,17 +803,21 @@ class _FormularioServicioState extends State<FormularioServicio> {
 		BuildContext context,
 		ServicioFormularioState estado,
 	) {
+		final anchoPantalla = MediaQuery.sizeOf(context).width;
+		final mostrarTablaDetalle = anchoPantalla >= 860;
+		final anchosTabla = _resolverAnchosDetalleFacturado(anchoPantalla);
 		final kmCantidad = _doubleDesdeTextoLocal(estado.km);
 		final hayViatico = kmCantidad > 0;
 		final subtotalKmUsdCalculado = kmCantidad * estado.valorKmUsdSnapshot;
 		final subtotalKmArsCalculado = subtotalKmUsdCalculado * estado.cotizacionDolarSnapshot;
+		final terminoBusquedaRepuesto = _buscarRepuestoController.text.trim();
 		final repuestosMostrados = estado.repuestosDisponibles.take(20).toList();
 
 		return Container(
 			width: double.infinity,
 			padding: const EdgeInsets.all(12),
 			decoration: BoxDecoration(
-				color: Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: 0.2),
+				color: Theme.of(context).colorScheme.onPrimaryFixed.withValues(alpha: 0.2),
 				borderRadius: BorderRadius.circular(12),
 				border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
 			),
@@ -849,6 +853,7 @@ class _FormularioServicioState extends State<FormularioServicio> {
 					const SizedBox(height: 10),
 					TextField(
 						controller: _buscarRepuestoController,
+						onChanged: (_) => setState(() {}),
 						decoration: _decoracionCampoCompacta(
 							context,
 							labelText: 'Buscar repuesto (codigo o nombre)',
@@ -874,11 +879,11 @@ class _FormularioServicioState extends State<FormularioServicio> {
 						),
 						onSubmitted: (valor) {
 							context.read<ServicioBloc>().add(
-									ServicioBuscarRepuestosSolicitado(query: valor),
+									ServicioBuscarRepuestosSolicitado(query: valor.trim()),
 							);
 						},
 					),
-					if (repuestosMostrados.isNotEmpty) ...[
+					if (terminoBusquedaRepuesto.isNotEmpty && repuestosMostrados.isNotEmpty) ...[
 						const SizedBox(height: 8),
 						SingleChildScrollView(
 							scrollDirection: Axis.horizontal,
@@ -907,66 +912,38 @@ class _FormularioServicioState extends State<FormularioServicio> {
 							),
 						),
 					],
+					if (terminoBusquedaRepuesto.isNotEmpty &&
+							!estado.buscandoRepuestos &&
+							repuestosMostrados.isEmpty) ...[
+						const SizedBox(height: 8),
+						Text(
+							'No hay coincidencias para "$terminoBusquedaRepuesto".',
+							style: _estiloTextoCompacto(context),
+						),
+					],
 					const SizedBox(height: 10),
 					Text(
 						'Detalle facturado',
 						style: Theme.of(context).textTheme.titleSmall,
 					),
 					const SizedBox(height: 6),
-					SingleChildScrollView(
-						scrollDirection: Axis.horizontal,
-						child: ConstrainedBox(
-							constraints: const BoxConstraints(minWidth: 760),
-							child: Column(
-								children: [
-									_buildFilaCabeceraDetalleFacturado(context),
-									if (hayViatico)
-										_buildFilaDetalleFacturado(
-											context: context,
-											descripcion: 'Viatico por km',
-											cantidad: _formatearCantidad(kmCantidad),
-											precioUsd: _formatearMonto(estado.valorKmUsdSnapshot),
-											subtotalArs: _formatearMonto(subtotalKmArsCalculado),
-										),
-									...estado.repuestosSeleccionados.map((item) {
-										final subtotalArs =
-												item.cantidad * item.repuesto.precioUsd * estado.cotizacionDolarSnapshot;
-										return _buildFilaDetalleFacturado(
-											context: context,
-											descripcion: '${item.repuesto.codigo} - ${item.repuesto.nombre}',
-											cantidad: _formatearCantidad(item.cantidad),
-											precioUsd: _formatearMonto(item.repuesto.precioUsd),
-											subtotalArs: _formatearMonto(subtotalArs),
-											cantidadEditable: true,
-											repuestoId: item.repuesto.id,
-											cantidadInicial: _formatearCantidad(item.cantidad),
-											onEliminar: () {
-												context.read<ServicioBloc>().add(
-														ServicioRepuestoEliminado(repuestoId: item.repuesto.id),
-												);
-											},
-										);
-									}),
-									if (!hayViatico && estado.repuestosSeleccionados.isEmpty)
-										Container(
-																							width: 760,
-											padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-											decoration: BoxDecoration(
-												border: Border(
-													left: BorderSide(color: Theme.of(context).colorScheme.outlineVariant),
-													right: BorderSide(color: Theme.of(context).colorScheme.outlineVariant),
-													bottom: BorderSide(color: Theme.of(context).colorScheme.outlineVariant),
-												),
-											),
-											child: Text(
-												'Sin cargo: no hay km ni repuestos agregados.',
-												style: _estiloTextoCompacto(context),
-											),
-										),
-								],
-							),
+					if (mostrarTablaDetalle)
+						_buildDetalleFacturadoTabla(
+							context: context,
+							estado: estado,
+							hayViatico: hayViatico,
+							kmCantidad: kmCantidad,
+							subtotalKmArsCalculado: subtotalKmArsCalculado,
+							anchos: anchosTabla,
+						)
+					else
+						_buildDetalleFacturadoCompacto(
+							context: context,
+							estado: estado,
+							hayViatico: hayViatico,
+							kmCantidad: kmCantidad,
+							subtotalKmArsCalculado: subtotalKmArsCalculado,
 						),
-					),
 					const SizedBox(height: 10),
 					_filaDosCampos(
 						izquierda: TextField(
@@ -1017,6 +994,7 @@ class _FormularioServicioState extends State<FormularioServicio> {
 						label: 'Subtotal general ARS',
 						value: _formatearMonto(estado.subtotalGeneralArs),
 					),
+					const Divider(height: 14),
 					_buildFilaResumenFacturacion(
 						context,
 						label: 'Total con IVA ARS',
@@ -1033,26 +1011,268 @@ class _FormularioServicioState extends State<FormularioServicio> {
 		);
 	}
 
+	Widget _buildDetalleFacturadoTabla({
+		required BuildContext context,
+		required ServicioFormularioState estado,
+		required bool hayViatico,
+		required double kmCantidad,
+		required double subtotalKmArsCalculado,
+		required _DetalleFacturadoAnchos anchos,
+	}) {
+		return SingleChildScrollView(
+			scrollDirection: Axis.horizontal,
+			child: ConstrainedBox(
+				constraints: BoxConstraints(minWidth: anchos.anchoTotal),
+				child: Column(
+					children: [
+						_buildFilaCabeceraDetalleFacturado(context, anchos: anchos),
+						if (hayViatico)
+							_buildFilaDetalleFacturado(
+								context: context,
+								descripcion: 'Viatico por km',
+								cantidad: _formatearCantidad(kmCantidad),
+								precioUsd: _formatearMonto(estado.valorKmUsdSnapshot),
+								subtotalArs: _formatearMonto(subtotalKmArsCalculado),
+								anchos: anchos,
+							),
+						...estado.repuestosSeleccionados.map((item) {
+							final subtotalArs =
+									item.cantidad * item.repuesto.precioUsd * estado.cotizacionDolarSnapshot;
+							return _buildFilaDetalleFacturado(
+								context: context,
+								descripcion: '${item.repuesto.codigo} - ${item.repuesto.nombre}',
+								cantidad: _formatearCantidad(item.cantidad),
+								precioUsd: _formatearMonto(item.repuesto.precioUsd),
+								subtotalArs: _formatearMonto(subtotalArs),
+								cantidadEditable: true,
+								repuestoId: item.repuesto.id,
+								cantidadInicial: _formatearCantidad(item.cantidad),
+								onEliminar: () {
+									context.read<ServicioBloc>().add(
+											ServicioRepuestoEliminado(repuestoId: item.repuesto.id),
+									);
+								},
+								anchos: anchos,
+							);
+						}),
+						if (!hayViatico && estado.repuestosSeleccionados.isEmpty)
+							Container(
+								width: anchos.anchoTotal,
+								padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+								decoration: BoxDecoration(
+									border: Border(
+										left: BorderSide(color: Theme.of(context).colorScheme.outlineVariant),
+										right: BorderSide(color: Theme.of(context).colorScheme.outlineVariant),
+										bottom: BorderSide(color: Theme.of(context).colorScheme.outlineVariant),
+									),
+								),
+								child: Text(
+									'Sin cargo: no hay km ni repuestos agregados.',
+									style: _estiloTextoCompacto(context),
+								),
+							),
+					],
+				),
+			),
+		);
+	}
+
+	Widget _buildDetalleFacturadoCompacto({
+		required BuildContext context,
+		required ServicioFormularioState estado,
+		required bool hayViatico,
+		required double kmCantidad,
+		required double subtotalKmArsCalculado,
+	}) {
+		if (!hayViatico && estado.repuestosSeleccionados.isEmpty) {
+			return Container(
+				width: double.infinity,
+				padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+				decoration: BoxDecoration(
+					borderRadius: BorderRadius.circular(8),
+					border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
+				),
+				child: Text(
+					'Sin cargo: no hay km ni repuestos agregados.',
+					style: _estiloTextoCompacto(context),
+				),
+			);
+		}
+
+		return Column(
+			children: [
+				if (hayViatico)
+					_buildTarjetaDetalleFacturado(
+						context: context,
+						descripcion: 'Viatico por km',
+						cantidad: _formatearCantidad(kmCantidad),
+						precioUsd: _formatearMonto(estado.valorKmUsdSnapshot),
+						subtotalArs: _formatearMonto(subtotalKmArsCalculado),
+					),
+				...estado.repuestosSeleccionados.map((item) {
+					final subtotalArs =
+							item.cantidad * item.repuesto.precioUsd * estado.cotizacionDolarSnapshot;
+					return _buildTarjetaDetalleFacturado(
+						context: context,
+						descripcion: '${item.repuesto.codigo} - ${item.repuesto.nombre}',
+						cantidad: _formatearCantidad(item.cantidad),
+						precioUsd: _formatearMonto(item.repuesto.precioUsd),
+						subtotalArs: _formatearMonto(subtotalArs),
+						cantidadEditable: true,
+						repuestoId: item.repuesto.id,
+						cantidadInicial: _formatearCantidad(item.cantidad),
+						onEliminar: () {
+							context.read<ServicioBloc>().add(
+									ServicioRepuestoEliminado(repuestoId: item.repuesto.id),
+							);
+						},
+					);
+				}),
+			],
+		);
+	}
+
 	Widget _buildCampoSoloLectura(
 		BuildContext context, {
 		required String label,
 		required String value,
 	}) {
-		return TextFormField(
-			enabled: false,
-			readOnly: true,
-			initialValue: value,
-			style: _estiloTextoCompacto(context),
+		return InputDecorator(
 			decoration: _decoracionCampoCompacta(context, labelText: label),
+			child: Text(value, style: _estiloTextoCompacto(context)),
 		);
 	}
 
-	Widget _buildFilaCabeceraDetalleFacturado(BuildContext context) {
-		const anchoDetalle = 320.0;
-		const anchoCantidad = 120.0;
-		const anchoPrecioUsd = 120.0;
-		const anchoSubtotalArs = 120.0;
-		const anchoAcciones = 32.0;
+	Widget _buildTarjetaDetalleFacturado({
+		required BuildContext context,
+		required String descripcion,
+		required String cantidad,
+		required String precioUsd,
+		required String subtotalArs,
+		bool cantidadEditable = false,
+		String? repuestoId,
+		String? cantidadInicial,
+		VoidCallback? onEliminar,
+	}) {
+		return Container(
+			width: double.infinity,
+			margin: const EdgeInsets.only(bottom: 8),
+			padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+			decoration: BoxDecoration(
+				borderRadius: BorderRadius.circular(8),
+				border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
+			),
+			child: Column(
+				crossAxisAlignment: CrossAxisAlignment.start,
+				children: [
+					Row(
+						crossAxisAlignment: CrossAxisAlignment.start,
+						children: [
+							Expanded(
+								child: Text(
+									descripcion,
+									style: _estiloTextoCompacto(context),
+									maxLines: 2,
+									overflow: TextOverflow.ellipsis,
+								),
+							),
+							if (cantidadEditable)
+								IconButton(
+									padding: EdgeInsets.zero,
+									visualDensity: VisualDensity.compact,
+									onPressed: onEliminar,
+									icon: const Icon(Icons.delete_outline, size: 18),
+								),
+						],
+					),
+					const SizedBox(height: 8),
+					Wrap(
+						spacing: 8,
+						runSpacing: 8,
+						children: [
+							SizedBox(
+								width: 110,
+								child: cantidadEditable
+										? TextFormField(
+												key: ValueKey('cant-mobile-${repuestoId ?? ''}-${cantidadInicial ?? ''}'),
+												initialValue: cantidadInicial ?? cantidad,
+												keyboardType: const TextInputType.numberWithOptions(decimal: true),
+												style: _estiloTextoCompacto(context),
+												decoration: const InputDecoration(
+													labelText: 'Cantidad',
+													isDense: true,
+													contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+												),
+												onChanged: (valor) {
+													if (repuestoId == null) {
+														return;
+													}
+													context.read<ServicioBloc>().add(
+															ServicioRepuestoCantidadCambiada(
+																repuestoId: repuestoId,
+																cantidad: valor,
+															),
+													);
+												},
+										)
+										: _buildDatoCompactoFacturacion(
+												context,
+												label: 'Cantidad',
+												value: cantidad,
+										),
+							),
+							_buildDatoCompactoFacturacion(
+								context,
+								label: 'Precio USD',
+								value: precioUsd,
+							),
+							_buildDatoCompactoFacturacion(
+								context,
+								label: 'Subtotal ARS',
+								value: subtotalArs,
+							),
+						],
+					),
+				],
+			),
+		);
+	}
+
+	Widget _buildDatoCompactoFacturacion(
+		BuildContext context, {
+		required String label,
+		required String value,
+	}) {
+		return Container(
+			padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+			decoration: BoxDecoration(
+				color: Theme.of(context).colorScheme.surfaceContainer,
+				borderRadius: BorderRadius.circular(8),
+			),
+			child: Column(
+				crossAxisAlignment: CrossAxisAlignment.start,
+				children: [
+					Text(
+						label,
+						style: _estiloTextoCompacto(context).copyWith(
+							fontSize: 11.5,
+							color: Theme.of(context).colorScheme.onSurfaceVariant,
+						),
+					),
+					const SizedBox(height: 2),
+					Text(
+						value,
+						style: _estiloTextoCompacto(context).copyWith(fontWeight: FontWeight.w600),
+					),
+				],
+			),
+		);
+	}
+
+	Widget _buildFilaCabeceraDetalleFacturado(
+		BuildContext context, {
+		required _DetalleFacturadoAnchos anchos,
+	}) {
 		final textStyle = _estiloTextoCompacto(context).copyWith(fontWeight: FontWeight.w700);
 		return Container(
 			padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
@@ -1062,11 +1282,11 @@ class _FormularioServicioState extends State<FormularioServicio> {
 			),
 			child: Row(
 				children: [
-					SizedBox(width: anchoDetalle, child: Text('Detalle', style: textStyle)),
-					SizedBox(width: anchoCantidad, child: Text('Cantidad', style: textStyle)),
-					SizedBox(width: anchoPrecioUsd, child: Text('Precio USD', style: textStyle)),
-					SizedBox(width: anchoSubtotalArs, child: Text('Subtotal ARS', style: textStyle)),
-					const SizedBox(width: anchoAcciones),
+					SizedBox(width: anchos.anchoDetalle, child: Text('Detalle', style: textStyle)),
+					SizedBox(width: anchos.anchoCantidad, child: Text('Cantidad', style: textStyle)),
+					SizedBox(width: anchos.anchoPrecioUsd, child: Text('Precio USD', style: textStyle)),
+					SizedBox(width: anchos.anchoSubtotalArs, child: Text('Subtotal ARS', style: textStyle)),
+					SizedBox(width: anchos.anchoAcciones),
 				],
 			),
 		);
@@ -1078,16 +1298,12 @@ class _FormularioServicioState extends State<FormularioServicio> {
 		required String cantidad,
 		required String precioUsd,
 		required String subtotalArs,
+		required _DetalleFacturadoAnchos anchos,
 		bool cantidadEditable = false,
 		String? repuestoId,
 		String? cantidadInicial,
 		VoidCallback? onEliminar,
 	}) {
-		const anchoDetalle = 320.0;
-		const anchoCantidad = 120.0;
-		const anchoPrecioUsd = 120.0;
-		const anchoSubtotalArs = 120.0;
-		const anchoAcciones = 32.0;
 		return Container(
 			padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
 			decoration: BoxDecoration(
@@ -1100,7 +1316,7 @@ class _FormularioServicioState extends State<FormularioServicio> {
 			child: Row(
 				children: [
 					SizedBox(
-						width: anchoDetalle,
+						width: anchos.anchoDetalle,
 						child: Text(
 							descripcion,
 							style: _estiloTextoCompacto(context),
@@ -1109,7 +1325,7 @@ class _FormularioServicioState extends State<FormularioServicio> {
 						),
 					),
 					SizedBox(
-						width: anchoCantidad,
+						width: anchos.anchoCantidad,
 						child: cantidadEditable
 								? TextFormField(
 										key: ValueKey('cant-${repuestoId ?? ''}-${cantidadInicial ?? ''}'),
@@ -1135,15 +1351,15 @@ class _FormularioServicioState extends State<FormularioServicio> {
 								: Text(cantidad, style: _estiloTextoCompacto(context)),
 					),
 					SizedBox(
-						width: anchoPrecioUsd,
+						width: anchos.anchoPrecioUsd,
 						child: Text(precioUsd, style: _estiloTextoCompacto(context)),
 					),
 					SizedBox(
-						width: anchoSubtotalArs,
+						width: anchos.anchoSubtotalArs,
 						child: Text(subtotalArs, style: _estiloTextoCompacto(context)),
 					),
 					SizedBox(
-						width: anchoAcciones,
+						width: anchos.anchoAcciones,
 						child: cantidadEditable
 								? IconButton(
 										padding: EdgeInsets.zero,
@@ -1155,6 +1371,34 @@ class _FormularioServicioState extends State<FormularioServicio> {
 					),
 				],
 			),
+		);
+	}
+
+	_DetalleFacturadoAnchos _resolverAnchosDetalleFacturado(double anchoPantalla) {
+		if (anchoPantalla >= 1200) {
+			return const _DetalleFacturadoAnchos(
+				anchoDetalle: 360,
+				anchoCantidad: 120,
+				anchoPrecioUsd: 130,
+				anchoSubtotalArs: 130,
+				anchoAcciones: 36,
+			);
+		}
+		if (anchoPantalla >= 1000) {
+			return const _DetalleFacturadoAnchos(
+				anchoDetalle: 330,
+				anchoCantidad: 115,
+				anchoPrecioUsd: 120,
+				anchoSubtotalArs: 120,
+				anchoAcciones: 34,
+			);
+		}
+		return const _DetalleFacturadoAnchos(
+			anchoDetalle: 300,
+			anchoCantidad: 110,
+			anchoPrecioUsd: 115,
+			anchoSubtotalArs: 115,
+			anchoAcciones: 32,
 		);
 	}
 
@@ -1338,7 +1582,7 @@ class _FormularioServicioState extends State<FormularioServicio> {
 
 		return _filaDosCampos(
 			izquierda: DropdownButtonFormField<String>(
-				value: _modeloIndicadorSeleccionadoId,
+				initialValue: _modeloIndicadorSeleccionadoId,
 				isExpanded: true,
 				decoration: _decoracionCampoCompacta(
 					context,
@@ -1419,7 +1663,7 @@ class _FormularioServicioState extends State<FormularioServicio> {
 		ServicioFormularioState estado,
 	) {
 		return DropdownButtonFormField<String>(
-			value: estado.lugarProvinciaId.isEmpty ? null : estado.lugarProvinciaId,
+			initialValue: estado.lugarProvinciaId.isEmpty ? null : estado.lugarProvinciaId,
 			isExpanded: true,
 			decoration: _decoracionCampoCompacta(
 				context,
@@ -1558,4 +1802,23 @@ class _ProductoFallaSeleccionado {
 		required this.nombre,
 		required this.parteFallo,
 	});
+}
+
+class _DetalleFacturadoAnchos {
+	final double anchoDetalle;
+	final double anchoCantidad;
+	final double anchoPrecioUsd;
+	final double anchoSubtotalArs;
+	final double anchoAcciones;
+
+	const _DetalleFacturadoAnchos({
+		required this.anchoDetalle,
+		required this.anchoCantidad,
+		required this.anchoPrecioUsd,
+		required this.anchoSubtotalArs,
+		required this.anchoAcciones,
+	});
+
+	double get anchoTotal =>
+			anchoDetalle + anchoCantidad + anchoPrecioUsd + anchoSubtotalArs + anchoAcciones;
 }
