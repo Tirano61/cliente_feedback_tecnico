@@ -1,5 +1,8 @@
+import 'dart:convert';
 import 'dart:typed_data';
 
+import 'package:cliente_feedback_tecnico/core/api/api_constants.dart';
+import 'package:cliente_feedback_tecnico/core/auth/secure_storage.dart';
 import 'package:cliente_feedback_tecnico/features/servicios/domain/entities/servicio.dart';
 import 'package:cliente_feedback_tecnico/features/servicios/presentation/bloc/servicio_bloc.dart';
 import 'package:cliente_feedback_tecnico/features/servicios/presentation/bloc/servicio_event.dart';
@@ -222,22 +225,49 @@ class _MisServiciosPageState extends State<MisServiciosPage> {
 	}
 
 	Future<void> _verPdfServicio(Servicio servicio) async {
-		final pdfUrl = (servicio.documento?.pdfUrl ?? '').trim();
-		if (pdfUrl.isEmpty) {
+		final servicioId = servicio.id.trim();
+		if (servicioId.isEmpty) {
 			ScaffoldMessenger.of(context).showSnackBar(
-				const SnackBar(content: Text('Esta orden aun no tiene PDF disponible.')),
+				const SnackBar(content: Text('Servicio invalido para abrir PDF.')),
 			);
 			return;
 		}
 
 		try {
-			final response = await http.get(Uri.parse(pdfUrl));
+			final token = (await SecureStorage().obtenerToken() ?? '').trim();
+			if (token.isEmpty) {
+				if (!mounted) {
+					return;
+				}
+				ScaffoldMessenger.of(context).showSnackBar(
+					const SnackBar(content: Text('No hay sesion activa para descargar el PDF.')),
+				);
+				return;
+			}
+
+			final pdfEndpoint =
+					'${ApiConstants.baseUrl}${ApiConstants.servicioDocumentoPdf(servicioId)}';
+			final response = await http.get(
+				Uri.parse(pdfEndpoint),
+				headers: {'Authorization': 'Bearer $token'},
+			);
+
 			if (!mounted) {
+				return;
+			}
+			if (response.statusCode == 404 || response.statusCode == 400) {
+				ScaffoldMessenger.of(context).showSnackBar(
+					const SnackBar(content: Text('Esta orden aun no tiene PDF disponible.')),
+				);
 				return;
 			}
 			if (response.statusCode != 200 || response.bodyBytes.isEmpty) {
 				ScaffoldMessenger.of(context).showSnackBar(
-					const SnackBar(content: Text('No se pudo descargar el PDF de la orden.')),
+					SnackBar(
+						content: Text(
+							'No se pudo descargar el PDF de la orden (HTTP ${response.statusCode}).',
+						),
+					),
 				);
 				return;
 			}
@@ -260,21 +290,184 @@ class _MisServiciosPageState extends State<MisServiciosPage> {
 	}
 
 	Future<void> _copiarEnlacePdf(Servicio servicio) async {
-		final pdfUrl = (servicio.documento?.pdfUrl ?? '').trim();
-		if (pdfUrl.isEmpty) {
+		final servicioId = servicio.id.trim();
+		if (servicioId.isEmpty) {
 			ScaffoldMessenger.of(context).showSnackBar(
-				const SnackBar(content: Text('Esta orden aun no tiene enlace PDF.')),
+				const SnackBar(content: Text('Servicio invalido para obtener enlace PDF.')),
 			);
 			return;
 		}
 
-		await Clipboard.setData(ClipboardData(text: pdfUrl));
-		if (!mounted) {
+		final token = (await SecureStorage().obtenerToken() ?? '').trim();
+		if (token.isEmpty) {
+			if (!mounted) {
+				return;
+			}
+			ScaffoldMessenger.of(context).showSnackBar(
+				const SnackBar(content: Text('No hay sesion activa para obtener enlace PDF.')),
+			);
 			return;
 		}
-		ScaffoldMessenger.of(context).showSnackBar(
-			const SnackBar(content: Text('Enlace del PDF copiado. Ya podes compartirlo.')),
-		);
+
+		try {
+			final metadataEndpoint =
+					'${ApiConstants.baseUrl}${ApiConstants.servicioDocumento(servicioId)}';
+			final response = await http.get(
+				Uri.parse(metadataEndpoint),
+				headers: {'Authorization': 'Bearer $token'},
+			);
+
+			if (response.statusCode == 404 || response.statusCode == 400) {
+				if (!mounted) {
+					return;
+				}
+				ScaffoldMessenger.of(context).showSnackBar(
+					const SnackBar(content: Text('Esta orden aun no tiene enlace PDF.')),
+				);
+				return;
+			}
+
+			if (response.statusCode != 200) {
+				if (!mounted) {
+					return;
+				}
+				ScaffoldMessenger.of(context).showSnackBar(
+					SnackBar(
+						content: Text(
+							'No se pudo obtener el enlace PDF (HTTP ${response.statusCode}).',
+						),
+					),
+				);
+				return;
+			}
+
+			final dynamic payload = jsonDecode(response.body);
+			final documento = _extraerDocumentoDesdePayload(payload);
+			final bruto = _extraerPdfUrlDesdeDocumento(documento);
+			final pdfUrl = _normalizarUrlPdf(bruto);
+
+			if ((pdfUrl ?? '').trim().isEmpty) {
+				if (!mounted) {
+					return;
+				}
+				ScaffoldMessenger.of(context).showSnackBar(
+					const SnackBar(content: Text('Esta orden aun no tiene enlace PDF.')),
+				);
+				return;
+			}
+
+			await Clipboard.setData(ClipboardData(text: pdfUrl!));
+			if (!mounted) {
+				return;
+			}
+			ScaffoldMessenger.of(context).showSnackBar(
+				const SnackBar(content: Text('Enlace del PDF copiado. Ya podes compartirlo.')),
+			);
+		} catch (_) {
+			if (!mounted) {
+				return;
+			}
+			ScaffoldMessenger.of(context).showSnackBar(
+				const SnackBar(content: Text('Error al obtener enlace PDF. Intenta nuevamente.')),
+			);
+		}
+	}
+
+	Map<String, dynamic>? _extraerDocumentoDesdePayload(dynamic payload) {
+		if (payload is! Map<String, dynamic>) {
+			return null;
+		}
+
+		final documentoDirecto = payload['documento'];
+		if (documentoDirecto is Map<String, dynamic>) {
+			return documentoDirecto;
+		}
+
+		final data = payload['data'];
+		if (data is Map<String, dynamic>) {
+			final documentoData = data['documento'];
+			if (documentoData is Map<String, dynamic>) {
+				return documentoData;
+			}
+		}
+
+		final servicioPayload = payload['servicio'];
+		if (servicioPayload is Map<String, dynamic>) {
+			final documentoServicio = servicioPayload['documento'];
+			if (documentoServicio is Map<String, dynamic>) {
+				return documentoServicio;
+			}
+		}
+
+		return null;
+	}
+
+	String? _extraerPdfUrlDesdeDocumento(Map<String, dynamic>? documento) {
+		if (documento == null) {
+			return null;
+		}
+
+		for (final clave in const [
+			'pdfUrl',
+			'pdf_url',
+			'pdfPublicUrl',
+			'pdf_public_url',
+			'url',
+			'secure_url',
+		]) {
+			final valor = documento[clave];
+			if (valor == null) {
+				continue;
+			}
+			final texto = valor.toString().trim();
+			if (texto.isNotEmpty) {
+				return texto;
+			}
+		}
+
+		final pdf = documento['pdf'];
+		if (pdf is Map<String, dynamic>) {
+			for (final clave in const ['url', 'secure_url', 'pdfUrl', 'pdf_url']) {
+				final valor = pdf[clave];
+				if (valor == null) {
+					continue;
+				}
+				final texto = valor.toString().trim();
+				if (texto.isNotEmpty) {
+					return texto;
+				}
+			}
+		}
+
+		return null;
+	}
+
+	String? _normalizarUrlPdf(String? bruto) {
+		final valor = (bruto ?? '').trim();
+		if (valor.isEmpty) {
+			return null;
+		}
+
+		final uriBase = Uri.parse(ApiConstants.baseUrl);
+		final origen = '${uriBase.scheme}://${uriBase.authority}';
+		final prefijoApi = uriBase.path.endsWith('/')
+				? uriBase.path.substring(0, uriBase.path.length - 1)
+				: uriBase.path;
+
+		if (valor.startsWith('http://') || valor.startsWith('https://')) {
+			return valor;
+		}
+		if (valor.startsWith('//')) {
+			return '${uriBase.scheme}:$valor';
+		}
+		if (valor.startsWith('/api/')) {
+			return '$origen$valor';
+		}
+		if (valor.startsWith('/servicios/')) {
+			return '$origen$prefijoApi$valor';
+		}
+
+		return uriBase.resolve(valor).toString();
 	}
 
 	List<Servicio> _filtrarServicios(List<Servicio> servicios) {

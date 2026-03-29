@@ -20,6 +20,7 @@ import 'package:cliente_feedback_tecnico/features/servicios/infrastructure/dtos/
 import 'package:cliente_feedback_tecnico/features/servicios/infrastructure/dtos/repuesto_dto.dart';
 import 'package:cliente_feedback_tecnico/features/servicios/infrastructure/dtos/servicio_dto.dart';
 import 'package:http/http.dart' as http;
+import 'package:http_parser/http_parser.dart';
 
 class ServicioRepositoryImpl implements IServicioRepository {
 	final ApiClient apiClient;
@@ -215,7 +216,11 @@ class ServicioRepositoryImpl implements IServicioRepository {
 		final archivoPdf = http.MultipartFile.fromBytes(
 			'file',
 			solicitud.pdfBytes,
-			filename: solicitud.nombreArchivoPdf,
+			filename: _normalizarNombrePdf(
+				solicitud.nombreArchivoPdf,
+				solicitud.servicioId,
+			),
+			contentType: MediaType('application', 'pdf'),
 		);
 
 		final response = await apiClient.postMultipart(
@@ -507,6 +512,15 @@ class ServicioRepositoryImpl implements IServicioRepository {
 			(canal) => canal.name == valor,
 			orElse: () => Canal.campo,
 		);
+	}
+
+	String _normalizarNombrePdf(String nombreArchivo, String servicioId) {
+		final limpio = nombreArchivo.trim();
+		final base = limpio.isEmpty ? 'orden_servicio_$servicioId' : limpio;
+		if (base.toLowerCase().endsWith('.pdf')) {
+			return base;
+		}
+		return '$base.pdf';
 	}
 }
 

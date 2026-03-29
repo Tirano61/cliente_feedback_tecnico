@@ -28,6 +28,8 @@ Authorization: Bearer <token>
 | GET | `/servicios` | admin-tecnico, admin-desarrollo, admin |
 | GET | `/servicios/:id` | tecnico, admin-tecnico, admin-desarrollo, admin |
 | PATCH | `/servicios/:id` | tecnico |
+| GET | `/servicios/:id/documento` | tecnico, admin-tecnico, admin-desarrollo, admin |
+| GET | `/servicios/:id/documento/pdf` | tecnico, admin-tecnico, admin-desarrollo, admin |
 | PATCH | `/servicios/:id/documento` | tecnico, admin-tecnico, admin-desarrollo, admin |
 | POST | `/servicios/:id/documento/firmado` | tecnico, admin-tecnico, admin-desarrollo, admin |
 
@@ -217,6 +219,27 @@ Notas:
 ### Respuesta PATCH /servicios/:id/documento
 
 Devuelve el mismo shape de `POST /servicios`, con `replayed = false` y `estadoOrden` actualizado (`firmada` solo para ordenes de `canal = campo`).
+
+### Respuesta GET /servicios/:id/documento
+
+```json
+{
+  "servicioId": "2f4d8b22-d4df-4939-8f89-0d38e2c93c37",
+  "estadoOrden": "cerrada",
+  "documento": {
+    "pdfHashSha256": "f4f4b4f8518fcb9d06b6a88c0ec5f23f1f9d1a7a1f9f7b4d372f7f4b0fb2f0a1",
+    "pdfUrl": "https://res.cloudinary.com/.../orden-firmada-v1.pdf",
+    "firmaClienteNombre": null,
+    "firmaClienteDocumento": null,
+    "firmaFechaHora": null
+  }
+}
+```
+
+### GET /servicios/:id/documento/pdf
+
+- Devuelve el archivo PDF (`application/pdf`) para visualizacion/descarga autenticada.
+- Ideal para Flutter cuando no se quiere abrir la URL remota directamente.
 
 ### Payload POST /servicios/:id/documento/firmado
 

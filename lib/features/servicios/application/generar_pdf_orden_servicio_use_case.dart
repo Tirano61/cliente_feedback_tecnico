@@ -4,6 +4,7 @@ import 'package:cliente_feedback_tecnico/features/servicios/domain/entities/fact
 import 'package:cliente_feedback_tecnico/features/servicios/domain/entities/orden_servicio_respuesta.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
+import 'package:printing/printing.dart';
 
 class GenerarPdfOrdenServicioUseCase {
 	Future<Uint8List> ejecutar(
@@ -13,7 +14,14 @@ class GenerarPdfOrdenServicioUseCase {
 		String? firmaClienteDocumento,
 		DateTime? firmaFechaHora,
 	}) async {
-		final documento = pw.Document();
+		final fuenteBase = await PdfGoogleFonts.notoSansRegular();
+		final fuenteNegrita = await PdfGoogleFonts.notoSansBold();
+		final documento = pw.Document(
+			theme: pw.ThemeData.withFont(
+				base: fuenteBase,
+				bold: fuenteNegrita,
+			),
+		);
 		final servicio = orden.servicio;
 		final fechaOrden = orden.fechaHoraServicio ?? servicio.fechaHoraServicio ?? servicio.fecha;
 

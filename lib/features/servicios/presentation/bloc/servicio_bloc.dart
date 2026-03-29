@@ -875,9 +875,13 @@ class ServicioBloc extends Bloc<ServicioEvent, ServicioState> {
 		);
 
 		try {
-			await _subirDocumentoFirmadoUseCase.ejecutar(solicitud);
+			final ordenActualizada = await _subirDocumentoFirmadoUseCase.ejecutar(solicitud);
 			await _cargarPendientesDesdeStorage();
-			final serviciosActualizados = await _obtenerMisServiciosUseCase.ejecutar();
+			final serviciosActualizados = actual.servicios
+					.map(
+						(item) => item.id == servicioId ? ordenActualizada.servicio : item,
+					)
+					.toList();
 			emit(
 				actual.copyWith(
 					servicios: serviciosActualizados,
