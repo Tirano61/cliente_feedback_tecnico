@@ -15,6 +15,7 @@ import 'package:cliente_feedback_tecnico/features/servicios/presentation/bloc/se
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:printing/printing.dart';
+import 'package:signature/signature.dart';
 
 class FormularioServicio extends StatefulWidget {
 	const FormularioServicio({super.key});
@@ -160,8 +161,13 @@ class _FormularioServicioState extends State<FormularioServicio> {
 		final firmaHabilitada = PoliticaFirmaCanal.firmaHabilitada(canal);
 		var agregarFirma = false;
 		var firmaFechaHora = DateTime.now();
-		final nombreFirmanteController = TextEditingController();
-		final documentoFirmanteController = TextEditingController();
+		var nombreFirmante = '';
+		var documentoFirmante = '';
+		final firmaClienteController = SignatureController(
+			penStrokeWidth: 2.4,
+			penColor: Colors.black,
+			exportBackgroundColor: Colors.white,
+		);
 
 		await showModalBottomSheet<void>(
 			context: context,
@@ -232,6 +238,8 @@ class _FormularioServicioState extends State<FormularioServicio> {
 																	agregarFirma = valor;
 																	if (valor) {
 																		firmaFechaHora = DateTime.now();
+																	} else {
+																		firmaClienteController.clear();
 																	}
 																});
 															},
@@ -253,16 +261,48 @@ class _FormularioServicioState extends State<FormularioServicio> {
 														else ...[
 															const SizedBox(height: 8),
 															TextField(
-																controller: nombreFirmanteController,
 																decoration: const InputDecoration(
 																	labelText: 'Nombre del firmante',
 																),
+																onChanged: (valor) => nombreFirmante = valor,
 															),
 															const SizedBox(height: 8),
 															TextField(
-																controller: documentoFirmanteController,
 																decoration: const InputDecoration(
 																	labelText: 'Documento (opcional)',
+																),
+																onChanged: (valor) => documentoFirmante = valor,
+															),
+															const SizedBox(height: 10),
+															Text(
+																'Firma manuscrita del cliente',
+																style: Theme.of(context).textTheme.labelLarge,
+															),
+															const SizedBox(height: 6),
+															Container(
+																height: 160,
+																width: double.infinity,
+																decoration: BoxDecoration(
+																	border: Border.all(
+																		color: Theme.of(context).colorScheme.outlineVariant,
+																	),
+																	borderRadius: BorderRadius.circular(10),
+																	color: Colors.white,
+																),
+																child: Signature(
+																	controller: firmaClienteController,
+																	backgroundColor: Colors.white,
+																),
+															),
+															Align(
+																alignment: Alignment.centerRight,
+																child: TextButton.icon(
+																	onPressed: () {
+																		firmaClienteController.clear();
+																		setModalState(() {});
+																	},
+																	icon: const Icon(Icons.cleaning_services_outlined),
+																	label: const Text('Limpiar firma'),
 																),
 															),
 															const SizedBox(height: 8),
@@ -277,9 +317,9 @@ class _FormularioServicioState extends State<FormularioServicio> {
 														child: ElevatedButton.icon(
 															onPressed: estadoFormulario.subiendoDocumento
 																? null
-																: () {
+																		: () async {
 																	final nombreFirma = agregarFirma
-																			? nombreFirmanteController.text.trim()
+																						? nombreFirmante.trim()
 																			: null;
 																	if (agregarFirma && (nombreFirma ?? '').isEmpty) {
 																		ScaffoldMessenger.of(context).showSnackBar(
@@ -292,11 +332,33 @@ class _FormularioServicioState extends State<FormularioServicio> {
 																		return;
 																	}
 
+																			Uint8List? firmaTrazoPng;
+																			if (agregarFirma) {
+																				if (firmaClienteController.isEmpty) {
+																					ScaffoldMessenger.of(context).showSnackBar(
+																						const SnackBar(
+																							content: Text('Debes dibujar la firma del cliente.'),
+																						),
+																					);
+																					return;
+																				}
+																				firmaTrazoPng = await firmaClienteController.toPngBytes();
+																				if (firmaTrazoPng == null || firmaTrazoPng.isEmpty) {
+																					ScaffoldMessenger.of(context).showSnackBar(
+																						const SnackBar(
+																							content: Text('No se pudo capturar la firma. Intenta de nuevo.'),
+																						),
+																					);
+																					return;
+																				}
+																			}
+
 																	context.read<ServicioBloc>().add(
 																		ServicioDocumentoSubidaSolicitada(
 																			servicioId: orden.servicioId,
 																			canal: canal,
 																			pdfBytes: pdfBytes,
+																					firmaClienteTrazoPng: firmaTrazoPng,
 																			nombreArchivoPdf: nombreArchivo,
 																			rutaPdfLocal:
 																					'memoria://ordenes/$nombreArchivo',
@@ -304,7 +366,7 @@ class _FormularioServicioState extends State<FormularioServicio> {
 																					? nombreFirma
 																					: null,
 																			firmaClienteDocumento: agregarFirma
-																					? documentoFirmanteController.text.trim()
+																									? documentoFirmante.trim()
 																					: null,
 																			firmaFechaHora: agregarFirma ? firmaFechaHora : null,
 																		),
@@ -351,9 +413,6 @@ class _FormularioServicioState extends State<FormularioServicio> {
 				);
 			},
 		);
-
-		nombreFirmanteController.dispose();
-		documentoFirmanteController.dispose();
 	}
 
 	@override

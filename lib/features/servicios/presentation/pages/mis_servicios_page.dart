@@ -1,9 +1,14 @@
+import 'dart:typed_data';
+
 import 'package:cliente_feedback_tecnico/features/servicios/domain/entities/servicio.dart';
 import 'package:cliente_feedback_tecnico/features/servicios/presentation/bloc/servicio_bloc.dart';
 import 'package:cliente_feedback_tecnico/features/servicios/presentation/bloc/servicio_event.dart';
 import 'package:cliente_feedback_tecnico/features/servicios/presentation/bloc/servicio_state.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:flutter/services.dart';
+import 'package:http/http.dart' as http;
+import 'package:printing/printing.dart';
 
 class MisServiciosPage extends StatefulWidget {
 	const MisServiciosPage({super.key});
@@ -33,7 +38,32 @@ class _MisServiciosPageState extends State<MisServiciosPage> {
 	Widget build(BuildContext context) {
 		return Scaffold(
 			appBar: AppBar(title: const Text('Mis servicios')),
-			body: BlocBuilder<ServicioBloc, ServicioState>(
+			body: BlocConsumer<ServicioBloc, ServicioState>(
+				listenWhen: (previous, current) {
+					if (current is! MisServiciosLoaded) {
+						return false;
+					}
+					final mensajeActual = (current.mensajePendientes ?? '').trim();
+					if (mensajeActual.isEmpty) {
+						return false;
+					}
+					if (previous is! MisServiciosLoaded) {
+						return true;
+					}
+					return previous.mensajePendientes != current.mensajePendientes;
+				},
+				listener: (context, state) {
+					if (state is! MisServiciosLoaded) {
+						return;
+					}
+					final mensaje = (state.mensajePendientes ?? '').trim();
+					if (mensaje.isEmpty) {
+						return;
+					}
+					ScaffoldMessenger.of(context).showSnackBar(
+						SnackBar(content: Text(mensaje)),
+					);
+				},
 				builder: (context, state) {
 					if (state is MisServiciosLoading) {
 						return const Center(child: CircularProgressIndicator());
@@ -47,7 +77,22 @@ class _MisServiciosPageState extends State<MisServiciosPage> {
 						final serviciosFiltrados = _filtrarServicios(state.servicios);
 
 						if (state.servicios.isEmpty) {
-							return const Center(child: Text('No hay servicios cargados.'));
+							return Column(
+								children: [
+									_PanelPendientesDocumentos(
+										documentosPendientes: state.documentosPendientes,
+										reintentandoPendientes: state.reintentandoPendientes,
+										onReintentar: () {
+											context.read<ServicioBloc>().add(
+												const ServicioDocumentoPendientesReintentarSolicitado(),
+											);
+										},
+									),
+									const Expanded(
+										child: Center(child: Text('No hay servicios cargados.')),
+									),
+								],
+							);
 						}
 
 						if (serviciosFiltrados.isEmpty) {
@@ -74,6 +119,15 @@ class _MisServiciosPageState extends State<MisServiciosPage> {
 										filtroSeleccionado: _filtroSeleccionado,
 										onChanged: (filtro) {
 											setState(() => _filtroSeleccionado = filtro);
+										},
+									),
+									_PanelPendientesDocumentos(
+										documentosPendientes: state.documentosPendientes,
+										reintentandoPendientes: state.reintentandoPendientes,
+										onReintentar: () {
+											context.read<ServicioBloc>().add(
+												const ServicioDocumentoPendientesReintentarSolicitado(),
+											);
 										},
 									),
 									const Expanded(
@@ -110,6 +164,15 @@ class _MisServiciosPageState extends State<MisServiciosPage> {
 										setState(() => _filtroSeleccionado = filtro);
 									},
 								),
+								_PanelPendientesDocumentos(
+									documentosPendientes: state.documentosPendientes,
+									reintentandoPendientes: state.reintentandoPendientes,
+									onReintentar: () {
+										context.read<ServicioBloc>().add(
+											const ServicioDocumentoPendientesReintentarSolicitado(),
+										);
+									},
+								),
 								Padding(
 									padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
 									child: Align(
@@ -131,7 +194,19 @@ class _MisServiciosPageState extends State<MisServiciosPage> {
 											separatorBuilder: (_, _) => const SizedBox(height: 12),
 											itemBuilder: (context, index) {
 												final servicio = serviciosFiltrados[index];
-												return _TarjetaServicio(servicio: servicio);
+												final subiendoPdfAhora =
+														state.servicioIdSubiendoPdf == servicio.id;
+												return _TarjetaServicio(
+													servicio: servicio,
+													onVerPdf: () => _verPdfServicio(servicio),
+													onCopiarEnlacePdf: () => _copiarEnlacePdf(servicio),
+													onSubirPdfAhora: () {
+														context.read<ServicioBloc>().add(
+															ServicioDocumentoSubirAhoraSolicitado(servicio: servicio),
+														);
+													},
+													subiendoPdfAhora: subiendoPdfAhora,
+												);
 											},
 										),
 									),
@@ -143,6 +218,62 @@ class _MisServiciosPageState extends State<MisServiciosPage> {
 					return const SizedBox.shrink();
 				},
 			),
+		);
+	}
+
+	Future<void> _verPdfServicio(Servicio servicio) async {
+		final pdfUrl = (servicio.documento?.pdfUrl ?? '').trim();
+		if (pdfUrl.isEmpty) {
+			ScaffoldMessenger.of(context).showSnackBar(
+				const SnackBar(content: Text('Esta orden aun no tiene PDF disponible.')),
+			);
+			return;
+		}
+
+		try {
+			final response = await http.get(Uri.parse(pdfUrl));
+			if (!mounted) {
+				return;
+			}
+			if (response.statusCode != 200 || response.bodyBytes.isEmpty) {
+				ScaffoldMessenger.of(context).showSnackBar(
+					const SnackBar(content: Text('No se pudo descargar el PDF de la orden.')),
+				);
+				return;
+			}
+
+			final bytes = Uint8List.fromList(response.bodyBytes);
+			final nombreArchivo =
+					'orden_servicio_${servicio.id.trim().isEmpty ? 'sin_id' : servicio.id.trim()}.pdf';
+			await Printing.layoutPdf(
+				name: nombreArchivo,
+				onLayout: (_) async => bytes,
+			);
+		} catch (_) {
+			if (!mounted) {
+				return;
+			}
+			ScaffoldMessenger.of(context).showSnackBar(
+				const SnackBar(content: Text('Error al abrir el PDF. Intenta nuevamente.')),
+			);
+		}
+	}
+
+	Future<void> _copiarEnlacePdf(Servicio servicio) async {
+		final pdfUrl = (servicio.documento?.pdfUrl ?? '').trim();
+		if (pdfUrl.isEmpty) {
+			ScaffoldMessenger.of(context).showSnackBar(
+				const SnackBar(content: Text('Esta orden aun no tiene enlace PDF.')),
+			);
+			return;
+		}
+
+		await Clipboard.setData(ClipboardData(text: pdfUrl));
+		if (!mounted) {
+			return;
+		}
+		ScaffoldMessenger.of(context).showSnackBar(
+			const SnackBar(content: Text('Enlace del PDF copiado. Ya podes compartirlo.')),
 		);
 	}
 
@@ -232,14 +363,27 @@ class _FiltrosEstado extends StatelessWidget {
 
 class _TarjetaServicio extends StatelessWidget {
 	final Servicio servicio;
+	final VoidCallback onVerPdf;
+	final VoidCallback onCopiarEnlacePdf;
+	final VoidCallback onSubirPdfAhora;
+	final bool subiendoPdfAhora;
 
-	const _TarjetaServicio({required this.servicio});
+	const _TarjetaServicio({
+		required this.servicio,
+		required this.onVerPdf,
+		required this.onCopiarEnlacePdf,
+		required this.onSubirPdfAhora,
+		required this.subiendoPdfAhora,
+	});
 
 	@override
 	Widget build(BuildContext context) {
 		final estadoVisual = _resolverEstadoVisual(servicio);
 		final fechaOrden = servicio.fechaHoraServicio ?? servicio.fecha;
 		final fecha = fechaOrden == null ? 'Sin fecha informada' : _formatearFecha(fechaOrden);
+		final pdfUrl = (servicio.documento?.pdfUrl ?? '').trim();
+		final tienePdf = pdfUrl.isNotEmpty;
+		final nombreFirmante = (servicio.documento?.firmaClienteNombre ?? '').trim();
 
 		return Card(
 			shape: RoundedRectangleBorder(
@@ -313,6 +457,61 @@ class _TarjetaServicio extends StatelessWidget {
 								style: const TextStyle(fontWeight: FontWeight.w600),
 							),
 						],
+						const SizedBox(height: 8),
+						if (tienePdf)
+							Wrap(
+								spacing: 8,
+								runSpacing: 8,
+								children: [
+									OutlinedButton.icon(
+										onPressed: onVerPdf,
+										icon: const Icon(Icons.picture_as_pdf_outlined),
+										label: const Text('Ver / Guardar PDF'),
+									),
+									OutlinedButton.icon(
+										onPressed: onCopiarEnlacePdf,
+										icon: const Icon(Icons.link),
+										label: const Text('Copiar enlace'),
+									),
+								],
+							)
+						else
+							Column(
+								crossAxisAlignment: CrossAxisAlignment.start,
+								children: [
+									OutlinedButton.icon(
+										onPressed: subiendoPdfAhora ? null : onSubirPdfAhora,
+										icon: subiendoPdfAhora
+												? const SizedBox(
+													height: 14,
+													width: 14,
+													child: CircularProgressIndicator(strokeWidth: 2),
+												)
+												: const Icon(Icons.cloud_upload_outlined),
+										label: Text(
+											subiendoPdfAhora ? 'Subiendo PDF...' : 'Subir PDF ahora',
+										),
+									),
+									const SizedBox(height: 6),
+									Text(
+										'PDF pendiente de carga.',
+										style: TextStyle(
+											fontSize: 12,
+											color: Theme.of(context).colorScheme.onSurfaceVariant,
+										),
+									),
+								],
+							),
+						if (nombreFirmante.isNotEmpty) ...[
+							const SizedBox(height: 6),
+							Text(
+								'Firmado por: $nombreFirmante',
+								style: TextStyle(
+									fontSize: 12,
+									color: Theme.of(context).colorScheme.onSurfaceVariant,
+								),
+							),
+						],
 					],
 				),
 			),
@@ -362,6 +561,63 @@ class _EstadoServicioVisual {
 		required this.texto,
 		required this.icono,
 	});
+}
+
+class _PanelPendientesDocumentos extends StatelessWidget {
+	final int documentosPendientes;
+	final bool reintentandoPendientes;
+	final VoidCallback onReintentar;
+
+	const _PanelPendientesDocumentos({
+		required this.documentosPendientes,
+		required this.reintentandoPendientes,
+		required this.onReintentar,
+	});
+
+	@override
+	Widget build(BuildContext context) {
+		final hayPendientes = documentosPendientes > 0;
+
+		return Padding(
+			padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+			child: Container(
+				padding: const EdgeInsets.all(12),
+				decoration: BoxDecoration(
+					color: Theme.of(context).colorScheme.errorContainer.withValues(alpha: 0.45),
+					borderRadius: BorderRadius.circular(12),
+				),
+				child: Row(
+					children: [
+						const Icon(Icons.cloud_off_outlined),
+						const SizedBox(width: 10),
+						Expanded(
+							child: Text(
+								hayPendientes
+										? 'Documentos pendientes de subida: $documentosPendientes'
+										: 'No hay documentos pendientes de subida.',
+							),
+						),
+						const SizedBox(width: 10),
+						OutlinedButton.icon(
+							onPressed: (!hayPendientes || reintentandoPendientes)
+									? null
+									: onReintentar,
+							icon: reintentandoPendientes
+									? const SizedBox(
+											height: 14,
+											width: 14,
+											child: CircularProgressIndicator(strokeWidth: 2),
+										)
+									: const Icon(Icons.refresh),
+							label: Text(
+								reintentandoPendientes ? 'Reintentando...' : 'Reintentar',
+							),
+						),
+					],
+				),
+			),
+		);
+	}
 }
 
 

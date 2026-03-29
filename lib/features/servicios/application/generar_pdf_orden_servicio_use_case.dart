@@ -6,7 +6,13 @@ import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 
 class GenerarPdfOrdenServicioUseCase {
-	Future<Uint8List> ejecutar(OrdenServicioRespuesta orden) async {
+	Future<Uint8List> ejecutar(
+		OrdenServicioRespuesta orden, {
+		Uint8List? firmaClienteTrazoPng,
+		String? firmaClienteNombre,
+		String? firmaClienteDocumento,
+		DateTime? firmaFechaHora,
+	}) async {
 		final documento = pw.Document();
 		final servicio = orden.servicio;
 		final fechaOrden = orden.fechaHoraServicio ?? servicio.fechaHoraServicio ?? servicio.fecha;
@@ -15,6 +21,8 @@ class GenerarPdfOrdenServicioUseCase {
 			pw.MultiPage(
 				pageFormat: PdfPageFormat.a4,
 				build: (context) {
+					final nombreFirmante = _textoSeguroOpcional(firmaClienteNombre);
+					final documentoFirmante = (firmaClienteDocumento ?? '').trim();
 					final nombreCliente = _textoSeguroOpcional(servicio.clienteNombre);
 					final cuitCliente = _textoSeguroOpcional(servicio.clienteCuit);
 					final telefonoCliente = _textoSeguroOpcional(servicio.clienteTelefono);
@@ -86,6 +94,31 @@ class GenerarPdfOrdenServicioUseCase {
 						if (orden.facturacionItems.isNotEmpty) ...[
 							pw.SizedBox(height: 8),
 							_buildTablaItems(orden.facturacionItems),
+						],
+						if (firmaClienteTrazoPng != null && firmaClienteTrazoPng.isNotEmpty) ...[
+							pw.SizedBox(height: 12),
+							pw.Text(
+								'Firma del cliente',
+								style: pw.TextStyle(fontSize: 13, fontWeight: pw.FontWeight.bold),
+							),
+							pw.SizedBox(height: 6),
+							pw.Container(
+								height: 80,
+								width: 240,
+								padding: const pw.EdgeInsets.all(6),
+								decoration: pw.BoxDecoration(
+									border: pw.Border.all(color: PdfColors.grey500, width: 1),
+								),
+								child: pw.Image(
+									pw.MemoryImage(firmaClienteTrazoPng),
+									fit: pw.BoxFit.contain,
+								),
+							),
+							pw.SizedBox(height: 6),
+							pw.Text('Firmante: $nombreFirmante'),
+							if (documentoFirmante.isNotEmpty)
+								pw.Text('Documento: $documentoFirmante'),
+							pw.Text('Fecha/hora de firma: ${_formatearFechaHora(firmaFechaHora)}'),
 						],
 					];
 				},
