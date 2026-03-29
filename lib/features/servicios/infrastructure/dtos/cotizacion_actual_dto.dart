@@ -10,11 +10,16 @@ class CotizacionActualDto {
 	});
 
 	factory CotizacionActualDto.fromJson(Map<String, dynamic> json) {
+		final cotizacionMap = _mapaDesdeDynamic(json['cotizacion']);
 		return CotizacionActualDto(
 			cotizacionDolar: _doubleDesdeDynamic(
 				json['cotizacionDolar'] ??
 						json['cotizacion_dolar'] ??
 						json['dolar'] ??
+						json['valor'] ??
+						cotizacionMap?['valor'] ??
+						cotizacionMap?['cotizacionDolar'] ??
+						cotizacionMap?['dolar'] ??
 						json['cotizacion'] ??
 						json['valorDolar'],
 			),
@@ -32,6 +37,13 @@ class CotizacionActualDto {
 			cotizacionDolar: cotizacionDolar,
 			valorKmUsd: valorKmUsd,
 		);
+	}
+
+	static Map<String, dynamic>? _mapaDesdeDynamic(dynamic valor) {
+		if (valor is Map<String, dynamic>) {
+			return valor;
+		}
+		return null;
 	}
 
 	static double _doubleDesdeDynamic(dynamic valor) {

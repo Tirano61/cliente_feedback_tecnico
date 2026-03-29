@@ -189,6 +189,19 @@ class ServicioBloc extends Bloc<ServicioEvent, ServicioState> {
 		Emitter<ServicioState> emit,
 	) async {
 		final actual = _estadoFormularioActual();
+		final query = event.query.trim();
+
+		if (query.isEmpty) {
+			emit(
+				actual.copyWith(
+					buscandoRepuestos: false,
+					repuestosDisponibles: const [],
+					errorMensaje: null,
+				),
+			);
+			return;
+		}
+
 		emit(
 			actual.copyWith(
 				buscandoRepuestos: true,
@@ -197,7 +210,7 @@ class ServicioBloc extends Bloc<ServicioEvent, ServicioState> {
 		);
 
 		try {
-			final repuestos = await _buscarRepuestosUseCase.ejecutar(event.query.trim());
+			final repuestos = await _buscarRepuestosUseCase.ejecutar(query);
 			emit(
 				actual.copyWith(
 					buscandoRepuestos: false,
