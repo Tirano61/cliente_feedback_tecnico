@@ -18,4 +18,16 @@ class SecureStorage {
 	Future<void> borrarToken() {
 		return _storage.delete(key: _tokenKey);
 	}
+
+	Future<void> guardarValor({required String key, required String value}) {
+		return _storage.write(key: key, value: value);
+	}
+
+	Future<String?> obtenerValor(String key) {
+		return _storage.read(key: key);
+	}
+
+	Future<void> borrarValor(String key) {
+		return _storage.delete(key: key);
+	}
 }

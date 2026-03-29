@@ -216,7 +216,7 @@ Notas:
 
 ### Respuesta PATCH /servicios/:id/documento
 
-Devuelve el mismo shape de `POST /servicios`, con `replayed = false` y `estadoOrden` actualizado (`firmada` cuando haya datos de firma).
+Devuelve el mismo shape de `POST /servicios`, con `replayed = false` y `estadoOrden` actualizado (`firmada` solo para ordenes de `canal = campo`).
 
 ### Payload POST /servicios/:id/documento/firmado
 
@@ -224,10 +224,10 @@ Content-Type: `multipart/form-data`
 
 Campos:
 
-- `file`: archivo PDF firmado (requerido)
-- `firmaClienteNombre`: string (requerido)
+- `file`: archivo PDF (requerido)
+- `firmaClienteNombre`: string (opcional; requerido solo si se informa firma)
 - `firmaClienteDocumento`: string (opcional)
-- `firmaFechaHora`: datetime ISO-8601 (requerido)
+- `firmaFechaHora`: datetime ISO-8601 (opcional; requerido solo si se informa firma)
 
 Ejemplo cURL:
 
@@ -244,7 +244,10 @@ Notas:
 
 - El backend calcula `pdfHashSha256` automaticamente a partir del archivo recibido.
 - El backend sube el PDF a Cloudinary y persiste `pdfUrl` con la URL remota del archivo.
-- Si se recibe archivo PDF + datos de firma validos, el estado de la orden pasa a `firmada`.
+- En ordenes `campo`, se puede subir PDF sin firma (por ejemplo, cliente ausente); en ese caso la orden no pasa a `firmada`.
+- Cuando hay firma en `campo`, `firmaClienteNombre` puede ser del cliente o de un empleado/responsable presente.
+- En ordenes `remoto` y `fabrica`, se puede subir el PDF sin firma; si llega data de firma, el backend la rechaza.
+- Si se recibe archivo PDF + datos de firma validos en `canal = campo`, el estado de la orden pasa a `firmada`.
 - Flujo de estados de orden: `abierta` -> `cerrada` -> `firmada`.
 
 ## Clientes

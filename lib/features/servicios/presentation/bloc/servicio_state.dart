@@ -1,6 +1,7 @@
 import 'dart:typed_data';
 
 import 'package:cliente_feedback_tecnico/features/servicios/domain/entities/cliente.dart';
+import 'package:cliente_feedback_tecnico/features/servicios/domain/entities/orden_servicio_respuesta.dart';
 import 'package:cliente_feedback_tecnico/features/servicios/domain/entities/producto_falla.dart';
 import 'package:cliente_feedback_tecnico/features/servicios/domain/entities/repuesto.dart';
 import 'package:cliente_feedback_tecnico/features/servicios/domain/entities/servicio.dart';
@@ -59,8 +60,11 @@ class ServicioFormularioState extends ServicioState {
 	final bool creandoCliente;
 	final List<Cliente> clientesEncontrados;
 	final Cliente? clienteSeleccionado;
+	final OrdenServicioRespuesta? ordenActual;
 	final Uint8List? pdfOrdenBytes;
 	final String? pdfOrdenNombre;
+	final bool subiendoDocumento;
+	final int documentosPendientes;
 	final String? errorMensaje;
 	final String? exitoMensaje;
 
@@ -106,8 +110,11 @@ class ServicioFormularioState extends ServicioState {
 		this.creandoCliente = false,
 		this.clientesEncontrados = const [],
 		this.clienteSeleccionado,
+		this.ordenActual,
 		this.pdfOrdenBytes,
 		this.pdfOrdenNombre,
+		this.subiendoDocumento = false,
+		this.documentosPendientes = 0,
 		this.errorMensaje,
 		this.exitoMensaje,
 	});
@@ -156,8 +163,12 @@ class ServicioFormularioState extends ServicioState {
 		bool? creandoCliente,
 		List<Cliente>? clientesEncontrados,
 		Cliente? clienteSeleccionado,
+		OrdenServicioRespuesta? ordenActual,
+		bool limpiarOrdenActual = false,
 		Uint8List? pdfOrdenBytes,
 		String? pdfOrdenNombre,
+		bool? subiendoDocumento,
+		int? documentosPendientes,
 		String? errorMensaje,
 		String? exitoMensaje,
 		bool limpiarMensajes = false,
@@ -218,8 +229,11 @@ class ServicioFormularioState extends ServicioState {
 			clienteSeleccionado: limpiarClienteSeleccionado
 					? null
 					: (clienteSeleccionado ?? this.clienteSeleccionado),
+			ordenActual: limpiarOrdenActual ? null : (ordenActual ?? this.ordenActual),
 			pdfOrdenBytes: limpiarPdfOrden ? null : (pdfOrdenBytes ?? this.pdfOrdenBytes),
 			pdfOrdenNombre: limpiarPdfOrden ? null : (pdfOrdenNombre ?? this.pdfOrdenNombre),
+			subiendoDocumento: subiendoDocumento ?? this.subiendoDocumento,
+			documentosPendientes: documentosPendientes ?? this.documentosPendientes,
 			errorMensaje: limpiarMensajes ? null : errorMensaje,
 			exitoMensaje: limpiarMensajes ? null : exitoMensaje,
 		);
@@ -268,8 +282,11 @@ class ServicioFormularioState extends ServicioState {
 				creandoCliente,
 				clientesEncontrados,
 				clienteSeleccionado,
+				ordenActual,
 				pdfOrdenBytes,
 				pdfOrdenNombre,
+				subiendoDocumento,
+				documentosPendientes,
 				errorMensaje,
 				exitoMensaje,
 			];

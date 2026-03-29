@@ -36,9 +36,36 @@ class ApiClient {
 		);
 	}
 
+	Future<http.Response> postMultipart({
+		required String path,
+		required List<http.MultipartFile> archivos,
+		Map<String, String>? campos,
+	}) async {
+		final token = await _storage.obtenerToken();
+		final request = http.MultipartRequest(
+			'POST',
+			Uri.parse('${ApiConstants.baseUrl}$path'),
+		);
+
+		request.headers.addAll(_buildMultipartHeaders(token));
+		if (campos != null && campos.isNotEmpty) {
+			request.fields.addAll(campos);
+		}
+		request.files.addAll(archivos);
+
+		final streamed = await _client.send(request);
+		return http.Response.fromStream(streamed);
+	}
+
 	Map<String, String> _buildHeaders(String? token) {
 		return {
 			'Content-Type': 'application/json',
+			if (token != null) 'Authorization': 'Bearer $token',
+		};
+	}
+
+	Map<String, String> _buildMultipartHeaders(String? token) {
+		return {
 			if (token != null) 'Authorization': 'Bearer $token',
 		};
 	}

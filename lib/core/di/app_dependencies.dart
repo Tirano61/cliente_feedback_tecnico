@@ -7,9 +7,13 @@ import 'package:cliente_feedback_tecnico/features/servicios/application/buscar_c
 import 'package:cliente_feedback_tecnico/features/servicios/application/buscar_repuestos_use_case.dart';
 import 'package:cliente_feedback_tecnico/features/servicios/application/cargar_servicio_use_case.dart';
 import 'package:cliente_feedback_tecnico/features/servicios/application/crear_cliente_rapido_use_case.dart';
+import 'package:cliente_feedback_tecnico/features/servicios/application/encolar_documento_pendiente_use_case.dart';
 import 'package:cliente_feedback_tecnico/features/servicios/application/generar_pdf_orden_servicio_use_case.dart';
 import 'package:cliente_feedback_tecnico/features/servicios/application/obtener_cotizacion_actual_use_case.dart';
+import 'package:cliente_feedback_tecnico/features/servicios/application/obtener_documentos_pendientes_use_case.dart';
 import 'package:cliente_feedback_tecnico/features/servicios/application/obtener_mis_servicios_use_case.dart';
+import 'package:cliente_feedback_tecnico/features/servicios/application/quitar_documento_pendiente_use_case.dart';
+import 'package:cliente_feedback_tecnico/features/servicios/application/subir_documento_firmado_use_case.dart';
 import 'package:cliente_feedback_tecnico/features/servicios/domain/repositories/i_servicio_repository.dart';
 import 'package:cliente_feedback_tecnico/features/servicios/infrastructure/repositories/servicio_repository_impl.dart';
 import 'package:cliente_feedback_tecnico/features/catalogos/application/obtener_catalogos_use_case.dart';
@@ -34,6 +38,10 @@ class AppDependencies {
 	final ObtenerCotizacionActualUseCase obtenerCotizacionActualUseCase;
 	final BuscarRepuestosUseCase buscarRepuestosUseCase;
 	final GenerarPdfOrdenServicioUseCase generarPdfOrdenServicioUseCase;
+	final SubirDocumentoFirmadoUseCase subirDocumentoFirmadoUseCase;
+	final EncolarDocumentoPendienteUseCase encolarDocumentoPendienteUseCase;
+	final ObtenerDocumentosPendientesUseCase obtenerDocumentosPendientesUseCase;
+	final QuitarDocumentoPendienteUseCase quitarDocumentoPendienteUseCase;
 
 	AppDependencies._({
 		required this.secureStorage,
@@ -50,6 +58,10 @@ class AppDependencies {
 		required this.obtenerCotizacionActualUseCase,
 		required this.buscarRepuestosUseCase,
 		required this.generarPdfOrdenServicioUseCase,
+		required this.subirDocumentoFirmadoUseCase,
+		required this.encolarDocumentoPendienteUseCase,
+		required this.obtenerDocumentosPendientesUseCase,
+		required this.quitarDocumentoPendienteUseCase,
 	});
 
 	factory AppDependencies.create() {
@@ -58,7 +70,7 @@ class AppDependencies {
 
 		final authRepository = AuthRepositoryImpl(apiClient, secureStorage);
 		final catalogoRepository = CatalogoRepositoryImpl(apiClient);
-		final servicioRepository = ServicioRepositoryImpl(apiClient);
+		final servicioRepository = ServicioRepositoryImpl(apiClient, secureStorage);
 
 		return AppDependencies._(
 			secureStorage: secureStorage,
@@ -78,6 +90,14 @@ class AppDependencies {
 					ObtenerCotizacionActualUseCase(servicioRepository),
 			buscarRepuestosUseCase: BuscarRepuestosUseCase(servicioRepository),
 			generarPdfOrdenServicioUseCase: GenerarPdfOrdenServicioUseCase(),
+			subirDocumentoFirmadoUseCase:
+					SubirDocumentoFirmadoUseCase(servicioRepository),
+			encolarDocumentoPendienteUseCase:
+					EncolarDocumentoPendienteUseCase(servicioRepository),
+			obtenerDocumentosPendientesUseCase:
+					ObtenerDocumentosPendientesUseCase(servicioRepository),
+			quitarDocumentoPendienteUseCase:
+					QuitarDocumentoPendienteUseCase(servicioRepository),
 		);
 	}
 }

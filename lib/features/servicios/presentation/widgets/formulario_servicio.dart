@@ -5,6 +5,8 @@ import 'package:cliente_feedback_tecnico/features/catalogos/presentation/bloc/ca
 import 'package:cliente_feedback_tecnico/features/catalogos/presentation/bloc/catalogo_event.dart';
 import 'package:cliente_feedback_tecnico/features/catalogos/presentation/bloc/catalogo_state.dart';
 import 'package:cliente_feedback_tecnico/features/catalogos/domain/entities/producto.dart';
+import 'package:cliente_feedback_tecnico/features/servicios/domain/entities/orden_servicio_respuesta.dart';
+import 'package:cliente_feedback_tecnico/features/servicios/domain/entities/politica_firma_canal.dart';
 import 'package:cliente_feedback_tecnico/features/servicios/domain/entities/producto_falla.dart';
 import 'package:cliente_feedback_tecnico/features/servicios/domain/entities/servicio.dart';
 import 'package:cliente_feedback_tecnico/features/servicios/presentation/bloc/servicio_bloc.dart';
@@ -40,6 +42,7 @@ class _FormularioServicioState extends State<FormularioServicio> {
 	final Set<String> _categoriasFallaSeleccionadasIds = <String>{};
 	final Map<String, _ProductoFallaSeleccionado> _productosFallaSeleccionados =
 			<String, _ProductoFallaSeleccionado>{};
+	String? _ultimoServicioConFlujoDocumento;
 
 	@override
 	void initState() {
@@ -142,8 +145,10 @@ class _FormularioServicioState extends State<FormularioServicio> {
 		);
 	}
 
-	Future<void> _mostrarOpcionesPdfGenerado({
+
+	Future<void> _mostrarFlujoDocumentoCierre({
 		required BuildContext context,
+		required OrdenServicioRespuesta orden,
 		required Uint8List pdfBytes,
 		required String nombreArchivo,
 	}) async {
@@ -151,60 +156,204 @@ class _FormularioServicioState extends State<FormularioServicio> {
 			return;
 		}
 
+		final canal = orden.servicio.canal;
+		final firmaHabilitada = PoliticaFirmaCanal.firmaHabilitada(canal);
+		var agregarFirma = false;
+		var firmaFechaHora = DateTime.now();
+		final nombreFirmanteController = TextEditingController();
+		final documentoFirmanteController = TextEditingController();
+
 		await showModalBottomSheet<void>(
 			context: context,
+			isScrollControlled: true,
 			showDragHandle: true,
 			builder: (sheetContext) {
-				return SafeArea(
-					child: Padding(
-						padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-						child: Column(
-							mainAxisSize: MainAxisSize.min,
-							crossAxisAlignment: CrossAxisAlignment.start,
-							children: [
-								Text(
-									'Orden generada - PDF listo',
-									style: Theme.of(context).textTheme.titleMedium,
-								),
-								const SizedBox(height: 12),
-								SizedBox(
-									width: double.infinity,
-									child: ElevatedButton.icon(
-										onPressed: () async {
-											Navigator.of(sheetContext).pop();
-											await Printing.layoutPdf(
-												name: nombreArchivo,
-												onLayout: (_) async => pdfBytes,
-											);
-										},
-										icon: const Icon(Icons.picture_as_pdf),
-										label: const Text('Ver / Guardar PDF'),
+				return StatefulBuilder(
+					builder: (context, setModalState) {
+						return BlocBuilder<ServicioBloc, ServicioState>(
+							builder: (context, state) {
+								final estadoFormulario = state is ServicioFormularioState
+										? state
+										: const ServicioFormularioState();
+								return SafeArea(
+									child: Padding(
+										padding: EdgeInsets.only(
+											left: 16,
+											right: 16,
+											top: 8,
+											bottom: MediaQuery.of(sheetContext).viewInsets.bottom + 16,
+										),
+										child: SingleChildScrollView(
+											child: Column(
+												mainAxisSize: MainAxisSize.min,
+												crossAxisAlignment: CrossAxisAlignment.start,
+												children: [
+													Text(
+														'Cierre de orden y documento',
+														style: Theme.of(context).textTheme.titleMedium,
+													),
+													const SizedBox(height: 8),
+													Text('Servicio: ${orden.servicioId}'),
+													Text('Canal: ${canal.name}'),
+													const SizedBox(height: 8),
+													SizedBox(
+														width: double.infinity,
+														child: OutlinedButton.icon(
+															onPressed: () async {
+																await Printing.layoutPdf(
+																	name: nombreArchivo,
+																	onLayout: (_) async => pdfBytes,
+																);
+															},
+															icon: const Icon(Icons.picture_as_pdf_outlined),
+															label: const Text('Ver / Guardar PDF'),
+														),
+													),
+													const SizedBox(height: 10),
+													if (!firmaHabilitada)
+														Container(
+															width: double.infinity,
+															padding: const EdgeInsets.all(12),
+															decoration: BoxDecoration(
+																color: Theme.of(context)
+																		.colorScheme
+																		.surfaceContainerHighest,
+																borderRadius: BorderRadius.circular(10),
+															),
+															child: const Text('Para este canal no se solicita firma.'),
+														)
+													else ...[
+														SwitchListTile.adaptive(
+															contentPadding: EdgeInsets.zero,
+															title: const Text('Agregar firma ahora'),
+															value: agregarFirma,
+															onChanged: (valor) {
+																setModalState(() {
+																	agregarFirma = valor;
+																	if (valor) {
+																		firmaFechaHora = DateTime.now();
+																	}
+																});
+															},
+														),
+														if (!agregarFirma)
+															Container(
+																width: double.infinity,
+																padding: const EdgeInsets.all(12),
+																decoration: BoxDecoration(
+																	color: Theme.of(context)
+																			.colorScheme
+																			.surfaceContainerHighest,
+																	borderRadius: BorderRadius.circular(10),
+																),
+																child: const Text(
+																	'Se puede cerrar sin firma por cliente ausente.',
+																),
+															)
+														else ...[
+															const SizedBox(height: 8),
+															TextField(
+																controller: nombreFirmanteController,
+																decoration: const InputDecoration(
+																	labelText: 'Nombre del firmante',
+																),
+															),
+															const SizedBox(height: 8),
+															TextField(
+																controller: documentoFirmanteController,
+																decoration: const InputDecoration(
+																	labelText: 'Documento (opcional)',
+																),
+															),
+															const SizedBox(height: 8),
+															Text(
+																'Fecha/hora de firma: ${_formatearFechaHora(firmaFechaHora)}',
+															),
+														],
+													],
+													const SizedBox(height: 12),
+													SizedBox(
+														width: double.infinity,
+														child: ElevatedButton.icon(
+															onPressed: estadoFormulario.subiendoDocumento
+																? null
+																: () {
+																	final nombreFirma = agregarFirma
+																			? nombreFirmanteController.text.trim()
+																			: null;
+																	if (agregarFirma && (nombreFirma ?? '').isEmpty) {
+																		ScaffoldMessenger.of(context).showSnackBar(
+																			const SnackBar(
+																				content: Text(
+																					'Si firmas, el nombre del firmante es obligatorio.',
+																				),
+																			),
+																		);
+																		return;
+																	}
+
+																	context.read<ServicioBloc>().add(
+																		ServicioDocumentoSubidaSolicitada(
+																			servicioId: orden.servicioId,
+																			canal: canal,
+																			pdfBytes: pdfBytes,
+																			nombreArchivoPdf: nombreArchivo,
+																			rutaPdfLocal:
+																					'memoria://ordenes/$nombreArchivo',
+																			firmaClienteNombre: agregarFirma
+																					? nombreFirma
+																					: null,
+																			firmaClienteDocumento: agregarFirma
+																					? documentoFirmanteController.text.trim()
+																					: null,
+																			firmaFechaHora: agregarFirma ? firmaFechaHora : null,
+																		),
+																	);
+																	Navigator.of(sheetContext).pop();
+																},
+															icon: estadoFormulario.subiendoDocumento
+																	? const SizedBox(
+																		height: 16,
+																		width: 16,
+																		child: CircularProgressIndicator(strokeWidth: 2),
+																	)
+																	: const Icon(Icons.cloud_upload_outlined),
+															label: const Text('Subir PDF y cerrar orden'),
+														),
+													),
+													if (estadoFormulario.documentosPendientes > 0) ...[
+														const SizedBox(height: 8),
+														SizedBox(
+															width: double.infinity,
+															child: OutlinedButton.icon(
+																onPressed: estadoFormulario.subiendoDocumento
+																	? null
+																	: () {
+																		context.read<ServicioBloc>().add(
+																			const ServicioDocumentoPendientesReintentarSolicitado(),
+																		);
+																	},
+																icon: const Icon(Icons.refresh),
+																label: Text(
+																	'Reintentar pendientes (${estadoFormulario.documentosPendientes})',
+																),
+															),
+														),
+													],
+												],
+											),
+										),
 									),
-								),
-								const SizedBox(height: 8),
-								SizedBox(
-									width: double.infinity,
-									child: OutlinedButton.icon(
-										onPressed: () async {
-											final navigator = Navigator.of(sheetContext);
-											await Printing.sharePdf(
-												bytes: pdfBytes,
-												filename: nombreArchivo,
-											);
-											if (sheetContext.mounted) {
-												navigator.pop();
-											}
-										},
-										icon: const Icon(Icons.share),
-										label: const Text('Compartir PDF'),
-									),
-								),
-							],
-						),
-					),
+								);
+							},
+						);
+					},
 				);
 			},
 		);
+
+		nombreFirmanteController.dispose();
+		documentoFirmanteController.dispose();
 	}
 
 	@override
@@ -223,18 +372,25 @@ class _FormularioServicioState extends State<FormularioServicio> {
 				}
 
 				if (state.exitoMensaje != null && state.exitoMensaje!.isNotEmpty) {
-					final pdfBytes = state.pdfOrdenBytes;
-					final pdfNombre = state.pdfOrdenNombre ?? 'orden_servicio.pdf';
 					ScaffoldMessenger.of(context).showSnackBar(
 						SnackBar(content: Text(state.exitoMensaje!)),
 					);
-					_limpiaFormularioDespuesDeExito(state);
-					if (pdfBytes != null && pdfBytes.isNotEmpty) {
-						_mostrarOpcionesPdfGenerado(
-							context: context,
-							pdfBytes: pdfBytes,
-							nombreArchivo: pdfNombre,
-						);
+
+					final orden = state.ordenActual;
+					final pdfBytes = state.pdfOrdenBytes;
+					if (orden != null && pdfBytes != null && pdfBytes.isNotEmpty) {
+						if (_ultimoServicioConFlujoDocumento != orden.servicioId) {
+							_ultimoServicioConFlujoDocumento = orden.servicioId;
+							_limpiarFormularioVisual();
+							final pdfNombre =
+									state.pdfOrdenNombre ?? 'orden_servicio_${orden.servicioId}.pdf';
+							_mostrarFlujoDocumentoCierre(
+								context: context,
+								orden: orden,
+								pdfBytes: pdfBytes,
+								nombreArchivo: pdfNombre,
+							);
+						}
 					}
 				}
 			},
@@ -1584,13 +1740,6 @@ class _FormularioServicioState extends State<FormularioServicio> {
 			return valor.toStringAsFixed(0);
 		}
 		return valor.toStringAsFixed(2);
-	}
-
-	void _limpiaFormularioDespuesDeExito(ServicioFormularioState estado) {
-		if (estado.exitoMensaje == null || estado.exitoMensaje!.isEmpty) {
-			return;
-		}
-		_limpiarFormularioVisual();
 	}
 
 	void _actualizarPartesFallaronEnBloc() {
