@@ -1,25 +1,33 @@
 import 'dart:convert';
 import 'dart:developer' as developer;
+import 'dart:typed_data';
 
 import 'package:cliente_feedback_tecnico/core/api/api_client.dart';
 import 'package:cliente_feedback_tecnico/core/api/api_constants.dart';
+import 'package:cliente_feedback_tecnico/core/auth/secure_storage.dart';
 import 'package:cliente_feedback_tecnico/core/error/failures.dart';
 import 'package:cliente_feedback_tecnico/features/servicios/domain/entities/cliente.dart';
 import 'package:cliente_feedback_tecnico/features/servicios/domain/entities/cotizacion_actual.dart';
 import 'package:cliente_feedback_tecnico/features/servicios/domain/entities/orden_servicio_respuesta.dart';
+import 'package:cliente_feedback_tecnico/features/servicios/domain/entities/politica_firma_canal.dart';
 import 'package:cliente_feedback_tecnico/features/servicios/domain/entities/repuesto.dart';
 import 'package:cliente_feedback_tecnico/features/servicios/domain/entities/servicio.dart';
+import 'package:cliente_feedback_tecnico/features/servicios/domain/entities/solicitud_documento_firmado.dart';
 import 'package:cliente_feedback_tecnico/features/servicios/domain/repositories/i_servicio_repository.dart';
 import 'package:cliente_feedback_tecnico/features/servicios/infrastructure/dtos/cliente_dto.dart';
 import 'package:cliente_feedback_tecnico/features/servicios/infrastructure/dtos/cotizacion_actual_dto.dart';
 import 'package:cliente_feedback_tecnico/features/servicios/infrastructure/dtos/orden_servicio_respuesta_dto.dart';
 import 'package:cliente_feedback_tecnico/features/servicios/infrastructure/dtos/repuesto_dto.dart';
 import 'package:cliente_feedback_tecnico/features/servicios/infrastructure/dtos/servicio_dto.dart';
+import 'package:http/http.dart' as http;
 
 class ServicioRepositoryImpl implements IServicioRepository {
 	final ApiClient apiClient;
+	final SecureStorage secureStorage;
+	static const String _colaDocumentosPendientesStorageKey =
+			'servicios_documentos_pendientes_v1';
 
-	ServicioRepositoryImpl(this.apiClient);
+	ServicioRepositoryImpl(this.apiClient, this.secureStorage);
 
 	@override
 	Future<OrdenServicioRespuesta> cargarServicio(Servicio servicio) async {
@@ -184,6 +192,99 @@ class ServicioRepositoryImpl implements IServicioRepository {
 		throw const ServerException('Respuesta invalida al crear cliente.');
 	}
 
+	@override
+	Future<OrdenServicioRespuesta> subirDocumentoFirmado(
+		SolicitudDocumentoFirmado solicitud,
+	) async {
+		final path = ApiConstants.servicioDocumentoFirmado(solicitud.servicioId);
+		final puedeEnviarFirma = PoliticaFirmaCanal.puedeEnviarFirma(
+			canal: solicitud.canal,
+			firmaClienteNombre: solicitud.firmaClienteNombre,
+			firmaFechaHora: solicitud.firmaFechaHora,
+		);
+
+		final campos = <String, String>{};
+		if (puedeEnviarFirma) {
+			campos['firmaClienteNombre'] = solicitud.firmaClienteNombre!.trim();
+			if ((solicitud.firmaClienteDocumento ?? '').trim().isNotEmpty) {
+				campos['firmaClienteDocumento'] = solicitud.firmaClienteDocumento!.trim();
+			}
+			campos['firmaFechaHora'] = solicitud.firmaFechaHora!.toIso8601String();
+		}
+
+		final archivoPdf = http.MultipartFile.fromBytes(
+			'file',
+			solicitud.pdfBytes,
+			filename: solicitud.nombreArchivoPdf,
+		);
+
+		final response = await apiClient.postMultipart(
+			path: path,
+			archivos: [archivoPdf],
+			campos: campos,
+		);
+
+		if (response.statusCode != 200 && response.statusCode != 201) {
+			final mensajeBackend = _extraerMensajeError(response.body);
+			throw ServerException(
+				mensajeBackend ?? 'No se pudo subir el documento firmado.',
+				statusCode: response.statusCode,
+			);
+		}
+
+		final payload = _extraerMapa(_decodeJsonSeguro(response.body));
+		if (payload == null) {
+			throw const ServerException('Respuesta invalida al subir documento firmado.');
+		}
+
+		return OrdenServicioRespuestaDto.fromJson(payload).aEntidad();
+	}
+
+	@override
+	Future<void> encolarDocumentoPendiente(SolicitudDocumentoFirmado solicitud) async {
+		final pendientes = await obtenerDocumentosPendientes();
+		final actualizados = pendientes
+				.where((item) => item.servicioId != solicitud.servicioId)
+				.toList()
+			..add(solicitud);
+
+		await _guardarColaPendientes(actualizados);
+	}
+
+	@override
+	Future<List<SolicitudDocumentoFirmado>> obtenerDocumentosPendientes() async {
+		final jsonCrudo = await secureStorage.obtenerValor(
+			_colaDocumentosPendientesStorageKey,
+		);
+		if (jsonCrudo == null || jsonCrudo.trim().isEmpty) {
+			return const [];
+		}
+
+		try {
+			final dynamic payload = jsonDecode(jsonCrudo);
+			if (payload is! List) {
+				return const [];
+			}
+
+			return payload
+					.whereType<Map<String, dynamic>>()
+					.map(_solicitudDesdeJson)
+					.whereType<SolicitudDocumentoFirmado>()
+					.toList();
+		} catch (_) {
+			return const [];
+		}
+	}
+
+	@override
+	Future<void> quitarDocumentoPendiente(String servicioId) async {
+		final pendientes = await obtenerDocumentosPendientes();
+		final actualizados = pendientes
+				.where((item) => item.servicioId != servicioId)
+				.toList();
+		await _guardarColaPendientes(actualizados);
+	}
+
 	List<dynamic> _extraerLista(dynamic json) {
 		if (json is List<dynamic>) {
 			return json;
@@ -345,6 +446,66 @@ class ServicioRepositoryImpl implements IServicioRepository {
 
 		developer.log(
 			'[FACTURACION] cotizacionDolar=$cotizacionDolar, valorKmUsd=$valorKmUsd',
+		);
+	}
+
+	Future<void> _guardarColaPendientes(
+		List<SolicitudDocumentoFirmado> pendientes,
+	) async {
+		final serializado = pendientes.map(_solicitudAJson).toList();
+		await secureStorage.guardarValor(
+			key: _colaDocumentosPendientesStorageKey,
+			value: jsonEncode(serializado),
+		);
+	}
+
+	Map<String, dynamic> _solicitudAJson(SolicitudDocumentoFirmado solicitud) {
+		return {
+			'servicioId': solicitud.servicioId,
+			'canal': solicitud.canal.name,
+			'pdfBytesBase64': base64Encode(solicitud.pdfBytes),
+			'nombreArchivoPdf': solicitud.nombreArchivoPdf,
+			'rutaPdfLocal': solicitud.rutaPdfLocal,
+			'firmaClienteNombre': solicitud.firmaClienteNombre,
+			'firmaClienteDocumento': solicitud.firmaClienteDocumento,
+			'firmaFechaHora': solicitud.firmaFechaHora?.toIso8601String(),
+		};
+	}
+
+	SolicitudDocumentoFirmado? _solicitudDesdeJson(Map<String, dynamic> json) {
+		final servicioId = json['servicioId']?.toString() ?? '';
+		final nombreArchivoPdf = json['nombreArchivoPdf']?.toString() ?? '';
+		final rutaPdfLocal = json['rutaPdfLocal']?.toString() ?? '';
+		final pdfBase64 = json['pdfBytesBase64']?.toString() ?? '';
+		if (servicioId.trim().isEmpty || nombreArchivoPdf.trim().isEmpty || pdfBase64.isEmpty) {
+			return null;
+		}
+
+		Uint8List pdfBytes;
+		try {
+			pdfBytes = base64Decode(pdfBase64);
+		} catch (_) {
+			return null;
+		}
+
+		final canal = _canalDesdeString(json['canal']?.toString() ?? 'campo');
+
+		return SolicitudDocumentoFirmado(
+			servicioId: servicioId,
+			canal: canal,
+			pdfBytes: pdfBytes,
+			nombreArchivoPdf: nombreArchivoPdf,
+			rutaPdfLocal: rutaPdfLocal,
+			firmaClienteNombre: json['firmaClienteNombre']?.toString(),
+			firmaClienteDocumento: json['firmaClienteDocumento']?.toString(),
+			firmaFechaHora: DateTime.tryParse(json['firmaFechaHora']?.toString() ?? ''),
+		);
+	}
+
+	Canal _canalDesdeString(String valor) {
+		return Canal.values.firstWhere(
+			(canal) => canal.name == valor,
+			orElse: () => Canal.campo,
 		);
 	}
 }

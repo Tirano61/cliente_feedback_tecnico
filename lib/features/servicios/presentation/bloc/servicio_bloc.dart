@@ -6,13 +6,19 @@ import 'package:cliente_feedback_tecnico/features/servicios/application/buscar_c
 import 'package:cliente_feedback_tecnico/features/servicios/application/buscar_repuestos_use_case.dart';
 import 'package:cliente_feedback_tecnico/features/servicios/application/cargar_servicio_use_case.dart';
 import 'package:cliente_feedback_tecnico/features/servicios/application/crear_cliente_rapido_use_case.dart';
+import 'package:cliente_feedback_tecnico/features/servicios/application/encolar_documento_pendiente_use_case.dart';
 import 'package:cliente_feedback_tecnico/features/servicios/application/generar_pdf_orden_servicio_use_case.dart';
 import 'package:cliente_feedback_tecnico/features/servicios/application/obtener_cotizacion_actual_use_case.dart';
+import 'package:cliente_feedback_tecnico/features/servicios/application/obtener_documentos_pendientes_use_case.dart';
 import 'package:cliente_feedback_tecnico/features/servicios/application/obtener_mis_servicios_use_case.dart';
+import 'package:cliente_feedback_tecnico/features/servicios/application/quitar_documento_pendiente_use_case.dart';
+import 'package:cliente_feedback_tecnico/features/servicios/application/subir_documento_firmado_use_case.dart';
 import 'package:cliente_feedback_tecnico/features/servicios/domain/entities/facturacion.dart';
 import 'package:cliente_feedback_tecnico/features/servicios/domain/entities/facturacion_item.dart';
+import 'package:cliente_feedback_tecnico/features/servicios/domain/entities/politica_firma_canal.dart';
 import 'package:cliente_feedback_tecnico/features/servicios/domain/entities/producto_falla.dart';
 import 'package:cliente_feedback_tecnico/features/servicios/domain/entities/servicio.dart';
+import 'package:cliente_feedback_tecnico/features/servicios/domain/entities/solicitud_documento_firmado.dart';
 import 'package:cliente_feedback_tecnico/features/servicios/presentation/bloc/servicio_event.dart';
 import 'package:cliente_feedback_tecnico/features/servicios/presentation/bloc/servicio_state.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -39,6 +45,11 @@ class ServicioBloc extends Bloc<ServicioEvent, ServicioState> {
 	final ObtenerCotizacionActualUseCase _obtenerCotizacionActualUseCase;
 	final BuscarRepuestosUseCase _buscarRepuestosUseCase;
 	final GenerarPdfOrdenServicioUseCase _generarPdfOrdenServicioUseCase;
+	final SubirDocumentoFirmadoUseCase _subirDocumentoFirmadoUseCase;
+	final EncolarDocumentoPendienteUseCase _encolarDocumentoPendienteUseCase;
+	final ObtenerDocumentosPendientesUseCase _obtenerDocumentosPendientesUseCase;
+	final QuitarDocumentoPendienteUseCase _quitarDocumentoPendienteUseCase;
+	final List<SolicitudDocumentoFirmado> _documentosPendientes = <SolicitudDocumentoFirmado>[];
 
 	ServicioBloc(
 		this._cargarServicioUseCase,
@@ -48,6 +59,10 @@ class ServicioBloc extends Bloc<ServicioEvent, ServicioState> {
 		this._obtenerCotizacionActualUseCase,
 		this._buscarRepuestosUseCase,
 		this._generarPdfOrdenServicioUseCase,
+		this._subirDocumentoFirmadoUseCase,
+		this._encolarDocumentoPendienteUseCase,
+		this._obtenerDocumentosPendientesUseCase,
+		this._quitarDocumentoPendienteUseCase,
 	) : super(_crearEstadoFormularioInicial()) {
 		on<ServicioFormularioCambiado>(_onServicioFormularioCambiado);
 		on<ServicioBuscarClienteSolicitado>(_onServicioBuscarClienteSolicitado);
@@ -60,6 +75,10 @@ class ServicioBloc extends Bloc<ServicioEvent, ServicioState> {
 		on<ServicioRepuestoEliminado>(_onServicioRepuestoEliminado);
 		on<ServicioFacturacionParametrosCambiados>(_onServicioFacturacionParametrosCambiados);
 		on<ServicioGuardarPressed>(_onServicioGuardarPressed);
+		on<ServicioDocumentoSubidaSolicitada>(_onServicioDocumentoSubidaSolicitada);
+		on<ServicioDocumentoPendientesReintentarSolicitado>(
+			_onServicioDocumentoPendientesReintentarSolicitado,
+		);
 		on<MisServiciosSolicitados>(_onMisServiciosSolicitados);
 		on<ServicioFormularioReiniciado>(_onServicioFormularioReiniciado);
 	}
@@ -480,8 +499,11 @@ class ServicioBloc extends Bloc<ServicioEvent, ServicioState> {
 			emit(
 				_crearEstadoFormularioInicial().copyWith(
 					exitoMensaje: mensajeExito,
+					ordenActual: orden,
+					canal: orden.servicio.canal,
 					pdfOrdenBytes: pdfBytes,
 					pdfOrdenNombre: nombreArchivoPdf,
+					documentosPendientes: _documentosPendientes.length,
 				),
 			);
 		} on ServerException catch (e) {
@@ -494,6 +516,180 @@ class ServicioBloc extends Bloc<ServicioEvent, ServicioState> {
 				),
 			);
 		}
+	}
+
+	Future<void> _onServicioDocumentoSubidaSolicitada(
+		ServicioDocumentoSubidaSolicitada event,
+		Emitter<ServicioState> emit,
+	) async {
+		final actual = _estadoFormularioActual();
+		if (event.pdfBytes.isEmpty) {
+			emit(
+				actual.copyWith(
+					errorMensaje: 'El PDF es obligatorio para subir el documento.',
+					exitoMensaje: null,
+				),
+			);
+			return;
+		}
+
+		final firmaPermitida = PoliticaFirmaCanal.firmaHabilitada(event.canal);
+		final firmaNombre = event.firmaClienteNombre?.trim();
+		final firmaDocumento = event.firmaClienteDocumento?.trim();
+		final firmaFecha = event.firmaFechaHora;
+		final intentoConFirma =
+				(firmaNombre ?? '').isNotEmpty ||
+				(firmaDocumento ?? '').isNotEmpty ||
+				firmaFecha != null;
+
+		if (!firmaPermitida && intentoConFirma) {
+			emit(
+				actual.copyWith(
+					errorMensaje:
+						'Esta orden no admite firma. Se enviara solo el PDF.',
+					exitoMensaje: null,
+				),
+			);
+		}
+
+		if (firmaPermitida && intentoConFirma) {
+			if ((firmaNombre ?? '').isEmpty || firmaFecha == null) {
+				emit(
+					actual.copyWith(
+						errorMensaje:
+							'Si se informa firma, nombre del firmante y fecha son obligatorios.',
+						exitoMensaje: null,
+					),
+				);
+				return;
+			}
+		}
+
+		final solicitud = SolicitudDocumentoFirmado(
+			servicioId: event.servicioId,
+			canal: event.canal,
+			pdfBytes: event.pdfBytes,
+			nombreArchivoPdf: event.nombreArchivoPdf,
+			rutaPdfLocal: event.rutaPdfLocal,
+			firmaClienteNombre: firmaPermitida ? firmaNombre : null,
+			firmaClienteDocumento: firmaPermitida ? firmaDocumento : null,
+			firmaFechaHora: firmaPermitida ? firmaFecha : null,
+		);
+
+		emit(
+			actual.copyWith(
+				subiendoDocumento: true,
+				errorMensaje: null,
+				exitoMensaje: null,
+			),
+		);
+
+		try {
+			final orden = await _subirDocumentoFirmadoUseCase.ejecutar(solicitud);
+			final estadoOrden = orden.estadoOrden.trim().toLowerCase();
+			final mensaje = estadoOrden == 'firmada'
+					? 'Firma registrada y documento subido correctamente.'
+					: 'Documento subido correctamente sin firma.';
+
+			emit(
+				actual.copyWith(
+					subiendoDocumento: false,
+					ordenActual: orden,
+					exitoMensaje: mensaje,
+					errorMensaje: null,
+					documentosPendientes: _documentosPendientes.length,
+				),
+			);
+		} on ServerException catch (e) {
+			if (_esErrorFirmaNoPermitida(e.mensaje)) {
+				emit(
+					actual.copyWith(
+						subiendoDocumento: false,
+						errorMensaje:
+							'Esta orden no admite firma. Se enviara solo el PDF.',
+						exitoMensaje: null,
+					),
+				);
+				add(
+					ServicioDocumentoSubidaSolicitada(
+						servicioId: event.servicioId,
+						canal: event.canal,
+						pdfBytes: event.pdfBytes,
+						nombreArchivoPdf: event.nombreArchivoPdf,
+						rutaPdfLocal: event.rutaPdfLocal,
+					),
+				);
+				return;
+			}
+
+			emit(
+				actual.copyWith(
+					subiendoDocumento: false,
+					errorMensaje: e.mensaje,
+					exitoMensaje: null,
+				),
+			);
+		} catch (_) {
+			await _encolarDocumentoPendiente(solicitud);
+			emit(
+				actual.copyWith(
+					subiendoDocumento: false,
+					errorMensaje:
+						'Sin conexion. El envio quedo pendiente para reintento.',
+					exitoMensaje: null,
+					documentosPendientes: _documentosPendientes.length,
+				),
+			);
+		}
+	}
+
+	Future<void> _onServicioDocumentoPendientesReintentarSolicitado(
+		ServicioDocumentoPendientesReintentarSolicitado event,
+		Emitter<ServicioState> emit,
+	) async {
+		final actual = _estadoFormularioActual();
+		await _cargarPendientesDesdeStorage();
+		if (_documentosPendientes.isEmpty) {
+			emit(
+				actual.copyWith(
+					exitoMensaje: 'No hay documentos pendientes para reenviar.',
+					errorMensaje: null,
+					documentosPendientes: 0,
+				),
+			);
+			return;
+		}
+
+		emit(
+			actual.copyWith(
+				subiendoDocumento: true,
+				errorMensaje: null,
+				exitoMensaje: null,
+			),
+		);
+
+		final pendientes = List<SolicitudDocumentoFirmado>.from(_documentosPendientes);
+		for (final solicitud in pendientes) {
+			try {
+				await _subirDocumentoFirmadoUseCase.ejecutar(solicitud);
+				await _quitarDocumentoPendiente(solicitud.servicioId);
+			} catch (_) {
+				break;
+			}
+		}
+
+		emit(
+			actual.copyWith(
+				subiendoDocumento: false,
+				documentosPendientes: _documentosPendientes.length,
+				exitoMensaje: _documentosPendientes.isEmpty
+						? 'Documentos pendientes reenviados correctamente.'
+						: null,
+				errorMensaje: _documentosPendientes.isEmpty
+						? null
+						: 'Quedaron ${_documentosPendientes.length} documento(s) pendientes.',
+			),
+		);
 	}
 
 	Future<void> _onMisServiciosSolicitados(
@@ -511,12 +707,40 @@ class ServicioBloc extends Bloc<ServicioEvent, ServicioState> {
 		}
 	}
 
-	void _onServicioFormularioReiniciado(
+	Future<void> _onServicioFormularioReiniciado(
 		ServicioFormularioReiniciado event,
 		Emitter<ServicioState> emit,
-	) {
-		emit(_crearEstadoFormularioInicial());
+	) async {
+		await _cargarPendientesDesdeStorage();
+		emit(
+			_crearEstadoFormularioInicial().copyWith(
+				documentosPendientes: _documentosPendientes.length,
+			),
+		);
 		add(const ServicioFacturacionInicializada());
+	}
+
+	Future<void> _cargarPendientesDesdeStorage() async {
+		final pendientes = await _obtenerDocumentosPendientesUseCase.ejecutar();
+		_documentosPendientes
+			..clear()
+			..addAll(pendientes);
+	}
+
+	Future<void> _encolarDocumentoPendiente(SolicitudDocumentoFirmado solicitud) async {
+		await _encolarDocumentoPendienteUseCase.ejecutar(solicitud);
+		await _cargarPendientesDesdeStorage();
+	}
+
+	Future<void> _quitarDocumentoPendiente(String servicioId) async {
+		await _quitarDocumentoPendienteUseCase.ejecutar(servicioId);
+		await _cargarPendientesDesdeStorage();
+	}
+
+	bool _esErrorFirmaNoPermitida(String mensaje) {
+		final texto = mensaje.toLowerCase();
+		return texto.contains('firma') &&
+				(texto.contains('canal') || texto.contains('remoto') || texto.contains('fabrica'));
 	}
 
 	String? _validarFormulario(ServicioFormularioState estado) {
