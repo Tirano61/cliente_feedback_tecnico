@@ -29,6 +29,7 @@ Authorization: Bearer <token>
 | GET | `/servicios/:id` | tecnico, admin-tecnico, admin-desarrollo, admin |
 | PATCH | `/servicios/:id` | tecnico |
 | PATCH | `/servicios/:id/documento` | tecnico, admin-tecnico, admin-desarrollo, admin |
+| POST | `/servicios/:id/documento/firmado` | tecnico, admin-tecnico, admin-desarrollo, admin |
 
 ### Payload ejemplo POST /servicios
 
@@ -116,7 +117,16 @@ Authorization: Bearer <token>
   "servicio": {
     "canal": "campo",
     "clienteId": "{{clienteId}}",
+    "cliente": {
+      "id": "{{clienteId}}",
+      "cuit": "20304050607",
+      "nombre": "Agro SRL",
+      "contacto": "Juan Perez",
+      "telefono": "+54 9 11 5555-0001",
+      "localidad": "Pergamino"
+    },
     "lugarProvinciaId": "{{zonaId}}",
+    "lugarProvinciaNombre": "Buenos Aires",
     "lugarDetalle": "Cestari 14",
     "equipoNroSerie": "SN-001",
     "equipoModelo": "ST455",
@@ -184,6 +194,8 @@ Notas:
 - La app puede generar el PDF inmediatamente con esta respuesta, sin una segunda llamada.
 - `facturacion.cotizacionDolarSnapshot` se define en backend con la ultima cotizacion disponible (no es necesario enviarla en el request).
 - `facturacion.valorKmUsdSnapshot` se define en backend con la ultima tarifa de km activa (no es necesario enviarla en el request).
+- `servicio.cliente` incluye los datos completos del cliente para generar PDF sin llamadas extra.
+- `servicio.lugarProvinciaNombre` incluye el nombre de la zona/provincia para mostrar en PDF.
 - `idempotencyKey` viaja en el body de `POST /servicios`.
 - Si un tecnico reintenta con el mismo `idempotencyKey`, el backend devuelve la misma orden creada previamente.
 - `replayed = true` indica que la respuesta es un replay idempotente (no una nueva insercion).
@@ -205,6 +217,35 @@ Notas:
 ### Respuesta PATCH /servicios/:id/documento
 
 Devuelve el mismo shape de `POST /servicios`, con `replayed = false` y `estadoOrden` actualizado (`firmada` cuando haya datos de firma).
+
+### Payload POST /servicios/:id/documento/firmado
+
+Content-Type: `multipart/form-data`
+
+Campos:
+
+- `file`: archivo PDF firmado (requerido)
+- `firmaClienteNombre`: string (requerido)
+- `firmaClienteDocumento`: string (opcional)
+- `firmaFechaHora`: datetime ISO-8601 (requerido)
+
+Ejemplo cURL:
+
+```bash
+curl -X POST "{{baseUrl}}/servicios/{{servicioId}}/documento/firmado" \
+  -H "Authorization: Bearer {{token}}" \
+  -F "file=@orden-firmada.pdf;type=application/pdf" \
+  -F "firmaClienteNombre=Juan Perez" \
+  -F "firmaClienteDocumento=30111222" \
+  -F "firmaFechaHora=2026-03-29T10:30:00-03:00"
+```
+
+Notas:
+
+- El backend calcula `pdfHashSha256` automaticamente a partir del archivo recibido.
+- El backend sube el PDF a Cloudinary y persiste `pdfUrl` con la URL remota del archivo.
+- Si se recibe archivo PDF + datos de firma validos, el estado de la orden pasa a `firmada`.
+- Flujo de estados de orden: `abierta` -> `cerrada` -> `firmada`.
 
 ## Clientes
 

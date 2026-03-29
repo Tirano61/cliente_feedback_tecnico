@@ -7,6 +7,7 @@ import 'package:cliente_feedback_tecnico/features/servicios/application/buscar_c
 import 'package:cliente_feedback_tecnico/features/servicios/application/buscar_repuestos_use_case.dart';
 import 'package:cliente_feedback_tecnico/features/servicios/application/cargar_servicio_use_case.dart';
 import 'package:cliente_feedback_tecnico/features/servicios/application/crear_cliente_rapido_use_case.dart';
+import 'package:cliente_feedback_tecnico/features/servicios/application/generar_pdf_orden_servicio_use_case.dart';
 import 'package:cliente_feedback_tecnico/features/servicios/application/obtener_cotizacion_actual_use_case.dart';
 import 'package:cliente_feedback_tecnico/features/servicios/application/obtener_mis_servicios_use_case.dart';
 import 'package:cliente_feedback_tecnico/features/servicios/domain/repositories/i_servicio_repository.dart';
@@ -32,6 +33,7 @@ class AppDependencies {
 	final CrearClienteRapidoUseCase crearClienteRapidoUseCase;
 	final ObtenerCotizacionActualUseCase obtenerCotizacionActualUseCase;
 	final BuscarRepuestosUseCase buscarRepuestosUseCase;
+	final GenerarPdfOrdenServicioUseCase generarPdfOrdenServicioUseCase;
 
 	AppDependencies._({
 		required this.secureStorage,
@@ -47,6 +49,7 @@ class AppDependencies {
 		required this.crearClienteRapidoUseCase,
 		required this.obtenerCotizacionActualUseCase,
 		required this.buscarRepuestosUseCase,
+		required this.generarPdfOrdenServicioUseCase,
 	});
 
 	factory AppDependencies.create() {
@@ -74,6 +77,7 @@ class AppDependencies {
 			obtenerCotizacionActualUseCase:
 					ObtenerCotizacionActualUseCase(servicioRepository),
 			buscarRepuestosUseCase: BuscarRepuestosUseCase(servicioRepository),
+			generarPdfOrdenServicioUseCase: GenerarPdfOrdenServicioUseCase(),
 		);
 	}
 }

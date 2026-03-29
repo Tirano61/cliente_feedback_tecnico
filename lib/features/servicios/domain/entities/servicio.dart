@@ -15,7 +15,13 @@ class Servicio extends Equatable {
 	final int? utcOffsetMinutos;
 	final Canal canal;
 	final String clienteId;
+	final String? clienteNombre;
+	final String? clienteCuit;
+	final String? clienteTelefono;
+	final String? clienteLocalidad;
+	final String? clienteContacto;
 	final String lugarProvinciaId;
+	final String? lugarProvinciaNombre;
 	final String lugarDetalle;
 	final String equipoNroSerie;
 	final String equipoModelo;
@@ -46,7 +52,13 @@ class Servicio extends Equatable {
 		this.utcOffsetMinutos,
 		required this.canal,
 		required this.clienteId,
+		this.clienteNombre,
+		this.clienteCuit,
+		this.clienteTelefono,
+		this.clienteLocalidad,
+		this.clienteContacto,
 		required this.lugarProvinciaId,
+		this.lugarProvinciaNombre,
 		required this.lugarDetalle,
 		required this.equipoNroSerie,
 		required this.equipoModelo,
@@ -78,7 +90,13 @@ class Servicio extends Equatable {
 				utcOffsetMinutos,
 				canal,
 				clienteId,
+				clienteNombre,
+				clienteCuit,
+				clienteTelefono,
+				clienteLocalidad,
+				clienteContacto,
 				lugarProvinciaId,
+				lugarProvinciaNombre,
 				lugarDetalle,
 				equipoNroSerie,
 				equipoModelo,

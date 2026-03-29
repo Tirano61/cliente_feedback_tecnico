@@ -14,11 +14,19 @@ class MisServiciosPage extends StatefulWidget {
 
 class _MisServiciosPageState extends State<MisServiciosPage> {
 	FiltroEstado _filtroSeleccionado = FiltroEstado.todos;
+	final TextEditingController _busquedaController = TextEditingController();
+	String _busquedaTexto = '';
 
 	@override
 	void initState() {
 		super.initState();
 		context.read<ServicioBloc>().add(const MisServiciosSolicitados());
+	}
+
+	@override
+	void dispose() {
+		_busquedaController.dispose();
+		super.dispose();
 	}
 
 	@override
@@ -46,6 +54,22 @@ class _MisServiciosPageState extends State<MisServiciosPage> {
 							return Column(
 								children: [
 									const SizedBox(height: 12),
+									Padding(
+										padding: const EdgeInsets.symmetric(horizontal: 16),
+										child: TextField(
+											controller: _busquedaController,
+											decoration: const InputDecoration(
+												prefixIcon: Icon(Icons.search),
+												labelText: 'Buscar por sintoma, modelo, serie o ID',
+											),
+											onChanged: (valor) {
+												setState(() {
+													_busquedaTexto = valor;
+												});
+											},
+										),
+									),
+									const SizedBox(height: 10),
 									_FiltrosEstado(
 										filtroSeleccionado: _filtroSeleccionado,
 										onChanged: (filtro) {
@@ -54,7 +78,7 @@ class _MisServiciosPageState extends State<MisServiciosPage> {
 									),
 									const Expanded(
 										child: Center(
-											child: Text('No hay servicios para este filtro.'),
+											child: Text('No hay servicios para los filtros aplicados.'),
 										),
 									),
 								],
@@ -64,21 +88,52 @@ class _MisServiciosPageState extends State<MisServiciosPage> {
 						return Column(
 							children: [
 								const SizedBox(height: 12),
+								Padding(
+									padding: const EdgeInsets.symmetric(horizontal: 16),
+									child: TextField(
+										controller: _busquedaController,
+										decoration: const InputDecoration(
+											prefixIcon: Icon(Icons.search),
+											labelText: 'Buscar por sintoma, modelo, serie o ID',
+										),
+										onChanged: (valor) {
+											setState(() {
+												_busquedaTexto = valor;
+											});
+										},
+									),
+								),
+								const SizedBox(height: 10),
 								_FiltrosEstado(
 									filtroSeleccionado: _filtroSeleccionado,
 									onChanged: (filtro) {
 										setState(() => _filtroSeleccionado = filtro);
 									},
 								),
+								Padding(
+									padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+									child: Align(
+										alignment: Alignment.centerLeft,
+										child: Text(
+											'Se muestran ${serviciosFiltrados.length} de ${state.servicios.length} servicios',
+											style: Theme.of(context).textTheme.bodySmall,
+										),
+									),
+								),
 								Expanded(
-									child: ListView.separated(
-										padding: const EdgeInsets.all(16),
-										itemCount: serviciosFiltrados.length,
-										separatorBuilder: (_, __) => const SizedBox(height: 12),
-										itemBuilder: (context, index) {
-											final servicio = serviciosFiltrados[index];
-											return _TarjetaServicio(servicio: servicio);
+									child: RefreshIndicator(
+										onRefresh: () async {
+											context.read<ServicioBloc>().add(const MisServiciosSolicitados());
 										},
+										child: ListView.separated(
+											padding: const EdgeInsets.all(16),
+											itemCount: serviciosFiltrados.length,
+											separatorBuilder: (_, _) => const SizedBox(height: 12),
+											itemBuilder: (context, index) {
+												final servicio = serviciosFiltrados[index];
+												return _TarjetaServicio(servicio: servicio);
+											},
+										),
 									),
 								),
 							],
@@ -92,14 +147,45 @@ class _MisServiciosPageState extends State<MisServiciosPage> {
 	}
 
 	List<Servicio> _filtrarServicios(List<Servicio> servicios) {
-		switch (_filtroSeleccionado) {
-			case FiltroEstado.aprobados:
-				return servicios.where((servicio) => servicio.aprobado).toList();
-			case FiltroEstado.pendientes:
-				return servicios.where((servicio) => !servicio.aprobado).toList();
-			case FiltroEstado.todos:
-				return servicios;
-		}
+		final texto = _busquedaTexto.trim().toLowerCase();
+
+		final filtrados = servicios.where((servicio) {
+			final coincideEstado = switch (_filtroSeleccionado) {
+				FiltroEstado.aprobados => servicio.aprobado,
+				FiltroEstado.pendientes => !servicio.aprobado,
+				FiltroEstado.todos => true,
+			};
+
+			if (!coincideEstado) {
+				return false;
+			}
+
+			if (texto.isEmpty) {
+				return true;
+			}
+
+			return servicio.sintoma.toLowerCase().contains(texto) ||
+					servicio.equipoModelo.toLowerCase().contains(texto) ||
+					servicio.equipoNroSerie.toLowerCase().contains(texto) ||
+					servicio.id.toLowerCase().contains(texto);
+		}).toList();
+
+		filtrados.sort((a, b) {
+			final fechaA = a.fechaHoraServicio ?? a.fecha;
+			final fechaB = b.fechaHoraServicio ?? b.fecha;
+			if (fechaA == null && fechaB == null) {
+				return 0;
+			}
+			if (fechaA == null) {
+				return 1;
+			}
+			if (fechaB == null) {
+				return -1;
+			}
+			return fechaB.compareTo(fechaA);
+		});
+
+		return filtrados;
 	}
 }
 
@@ -151,16 +237,14 @@ class _TarjetaServicio extends StatelessWidget {
 
 	@override
 	Widget build(BuildContext context) {
-		final aprobado = servicio.aprobado;
-		final colorEstado = aprobado ? Colors.green : Colors.orange;
-		final textoEstado = aprobado ? 'Aprobado' : 'Pendiente de aprobacion';
-		final iconoEstado = aprobado ? Icons.verified : Icons.pending_actions;
-		final fecha = _formatearFecha(servicio.fecha ?? DateTime.now());
+		final estadoVisual = _resolverEstadoVisual(servicio);
+		final fechaOrden = servicio.fechaHoraServicio ?? servicio.fecha;
+		final fecha = fechaOrden == null ? 'Sin fecha informada' : _formatearFecha(fechaOrden);
 
 		return Card(
 			shape: RoundedRectangleBorder(
 				borderRadius: BorderRadius.circular(12),
-				side: BorderSide(color: colorEstado.withValues(alpha: 0.6), width: 1.4),
+				side: BorderSide(color: estadoVisual.color.withValues(alpha: 0.6), width: 1.4),
 			),
 			child: Padding(
 				padding: const EdgeInsets.all(12),
@@ -172,27 +256,27 @@ class _TarjetaServicio extends StatelessWidget {
 							children: [
 								Expanded(
 									child: Text(
-										'Canal: ${servicio.canal.name}',
+										'${servicio.canal.name.toUpperCase()} - ${servicio.id.isEmpty ? 'sin-id' : servicio.id}',
 										style: const TextStyle(fontWeight: FontWeight.w600),
 									),
 								),
 								Container(
 									padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
 									decoration: BoxDecoration(
-										color: colorEstado.withValues(alpha: 0.14),
+										color: estadoVisual.color.withValues(alpha: 0.14),
 										borderRadius: BorderRadius.circular(999),
 									),
 									child: Row(
 										mainAxisSize: MainAxisSize.min,
 										children: [
-											Icon(iconoEstado, color: colorEstado, size: 16),
+											Icon(estadoVisual.icono, color: estadoVisual.color, size: 16),
 											const SizedBox(width: 6),
 											Text(
-												textoEstado,
+												estadoVisual.texto,
 												style: TextStyle(
 													fontWeight: FontWeight.w600,
 													fontSize: 12,
-													color: colorEstado,
+													color: estadoVisual.color,
 												),
 											),
 										],
@@ -210,13 +294,50 @@ class _TarjetaServicio extends StatelessWidget {
 						),
 						const SizedBox(height: 6),
 						Text(
+							'Modelo: ${servicio.equipoModelo} | Serie: ${servicio.equipoNroSerie} | Km: ${servicio.km}',
+							style: TextStyle(
+								color: Theme.of(context).colorScheme.onSurfaceVariant,
+								fontSize: 12,
+							),
+						),
+						const SizedBox(height: 6),
+						Text(
 							servicio.sintoma,
 							maxLines: 2,
 							overflow: TextOverflow.ellipsis,
 						),
+						if (servicio.facturacion != null) ...[
+							const SizedBox(height: 8),
+							Text(
+								'Total facturado ARS: ${servicio.facturacion!.totalFinalArs.toStringAsFixed(2)}',
+								style: const TextStyle(fontWeight: FontWeight.w600),
+							),
+						],
 					],
 				),
 			),
+		);
+	}
+
+	_EstadoServicioVisual _resolverEstadoVisual(Servicio servicio) {
+		if (servicio.aprobado) {
+			return const _EstadoServicioVisual(
+				color: Colors.green,
+				texto: 'Aprobado',
+				icono: Icons.verified,
+			);
+		}
+		if (servicio.resuelto) {
+			return const _EstadoServicioVisual(
+				color: Colors.blue,
+				texto: 'Resuelto',
+				icono: Icons.task_alt,
+			);
+		}
+		return const _EstadoServicioVisual(
+			color: Colors.orange,
+			texto: 'Pendiente de aprobacion',
+			icono: Icons.pending_actions,
 		);
 	}
 
@@ -229,6 +350,18 @@ class _TarjetaServicio extends StatelessWidget {
 		final minuto = local.minute.toString().padLeft(2, '0');
 		return '$dia/$mes/$anio - $hora:$minuto';
 	}
+}
+
+class _EstadoServicioVisual {
+	final Color color;
+	final String texto;
+	final IconData icono;
+
+	const _EstadoServicioVisual({
+		required this.color,
+		required this.texto,
+		required this.icono,
+	});
 }
 
 

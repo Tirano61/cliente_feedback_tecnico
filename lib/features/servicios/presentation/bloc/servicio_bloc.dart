@@ -1,11 +1,12 @@
 import 'dart:convert';
-import 'dart:math';
+import 'dart:typed_data';
 
 import 'package:cliente_feedback_tecnico/core/error/failures.dart';
 import 'package:cliente_feedback_tecnico/features/servicios/application/buscar_clientes_use_case.dart';
 import 'package:cliente_feedback_tecnico/features/servicios/application/buscar_repuestos_use_case.dart';
 import 'package:cliente_feedback_tecnico/features/servicios/application/cargar_servicio_use_case.dart';
 import 'package:cliente_feedback_tecnico/features/servicios/application/crear_cliente_rapido_use_case.dart';
+import 'package:cliente_feedback_tecnico/features/servicios/application/generar_pdf_orden_servicio_use_case.dart';
 import 'package:cliente_feedback_tecnico/features/servicios/application/obtener_cotizacion_actual_use_case.dart';
 import 'package:cliente_feedback_tecnico/features/servicios/application/obtener_mis_servicios_use_case.dart';
 import 'package:cliente_feedback_tecnico/features/servicios/domain/entities/facturacion.dart';
@@ -15,6 +16,7 @@ import 'package:cliente_feedback_tecnico/features/servicios/domain/entities/serv
 import 'package:cliente_feedback_tecnico/features/servicios/presentation/bloc/servicio_event.dart';
 import 'package:cliente_feedback_tecnico/features/servicios/presentation/bloc/servicio_state.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:uuid/uuid.dart';
 
 class ServicioBloc extends Bloc<ServicioEvent, ServicioState> {
 	static const Set<String> _partesFallaronPermitidas = {
@@ -25,7 +27,10 @@ class ServicioBloc extends Bloc<ServicioEvent, ServicioState> {
 		'tablet',
 		'otro',
 	};
-	static final Random _random = Random();
+	static const Uuid _uuid = Uuid();
+	static final RegExp _uuidRegex = RegExp(
+		r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$',
+	);
 
 	final CargarServicioUseCase _cargarServicioUseCase;
 	final ObtenerMisServiciosUseCase _obtenerMisServiciosUseCase;
@@ -33,6 +38,7 @@ class ServicioBloc extends Bloc<ServicioEvent, ServicioState> {
 	final CrearClienteRapidoUseCase _crearClienteRapidoUseCase;
 	final ObtenerCotizacionActualUseCase _obtenerCotizacionActualUseCase;
 	final BuscarRepuestosUseCase _buscarRepuestosUseCase;
+	final GenerarPdfOrdenServicioUseCase _generarPdfOrdenServicioUseCase;
 
 	ServicioBloc(
 		this._cargarServicioUseCase,
@@ -41,6 +47,7 @@ class ServicioBloc extends Bloc<ServicioEvent, ServicioState> {
 		this._crearClienteRapidoUseCase,
 		this._obtenerCotizacionActualUseCase,
 		this._buscarRepuestosUseCase,
+		this._generarPdfOrdenServicioUseCase,
 	) : super(_crearEstadoFormularioInicial()) {
 		on<ServicioFormularioCambiado>(_onServicioFormularioCambiado);
 		on<ServicioBuscarClienteSolicitado>(_onServicioBuscarClienteSolicitado);
@@ -426,9 +433,10 @@ class ServicioBloc extends Bloc<ServicioEvent, ServicioState> {
 		Emitter<ServicioState> emit,
 	) async {
 		final actual = _recalcularFacturacion(_estadoFormularioActual());
-		final idempotencyKey = actual.idempotencyKey.trim().isEmpty
-				? _generarIdempotencyKey()
-				: actual.idempotencyKey.trim();
+		final idempotencyKeyActual = actual.idempotencyKey.trim();
+		final idempotencyKey = _esUuidValido(idempotencyKeyActual)
+				? idempotencyKeyActual
+				: _generarIdempotencyKey();
 		final fechaHoraServicio = actual.fechaHoraServicio ?? DateTime.now();
 		final timezoneIana = actual.timezoneIana.trim().isEmpty
 				? _resolverTimezoneIana()
@@ -456,12 +464,24 @@ class ServicioBloc extends Bloc<ServicioEvent, ServicioState> {
 			final fechaHoraTexto = fechaHoraOrden == null
 					? null
 					: _formatearFechaHoraLocal(fechaHoraOrden);
-			final mensajeExito = orden.replayed
+			final mensajeExitoBase = orden.replayed
 					? 'Orden recuperada por idempotencia (${orden.servicioId})${fechaHoraTexto == null ? '' : ' - Fecha y hora: $fechaHoraTexto'}.'
 					: 'Orden de servicio creada correctamente (${orden.servicioId})${fechaHoraTexto == null ? '' : ' - Fecha y hora: $fechaHoraTexto'}.';
+			String mensajeExito = mensajeExitoBase;
+			final nombreArchivoPdf = 'orden_servicio_${orden.servicioId}.pdf';
+			Uint8List? pdfBytes;
+
+			try {
+				pdfBytes = await _generarPdfOrdenServicioUseCase.ejecutar(orden);
+			} catch (_) {
+				mensajeExito = '$mensajeExitoBase PDF no generado en este intento.';
+			}
+
 			emit(
 				_crearEstadoFormularioInicial().copyWith(
 					exitoMensaje: mensajeExito,
+					pdfOrdenBytes: pdfBytes,
+					pdfOrdenNombre: nombreArchivoPdf,
 				),
 			);
 		} on ServerException catch (e) {
@@ -617,9 +637,14 @@ class ServicioBloc extends Bloc<ServicioEvent, ServicioState> {
 	}
 
 	String _generarIdempotencyKey() {
-		final timestamp = DateTime.now().millisecondsSinceEpoch;
-		final random = _random.nextInt(0x7fffffff).toRadixString(16);
-		return 'servicio-$timestamp-$random';
+		return _uuid.v4();
+	}
+
+	bool _esUuidValido(String valor) {
+		if (valor.isEmpty) {
+			return false;
+		}
+		return _uuidRegex.hasMatch(valor);
 	}
 
 	String _resolverTimezoneIana() {

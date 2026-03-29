@@ -40,6 +40,7 @@ class App extends StatelessWidget {
             deps.crearClienteRapidoUseCase,
             deps.obtenerCotizacionActualUseCase,
             deps.buscarRepuestosUseCase,
+            deps.generarPdfOrdenServicioUseCase,
           ),
         ),
       ],
