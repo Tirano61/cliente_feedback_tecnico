@@ -5,6 +5,7 @@ import 'package:cliente_feedback_tecnico/features/catalogos/presentation/bloc/ca
 import 'package:cliente_feedback_tecnico/features/catalogos/presentation/bloc/catalogo_event.dart';
 import 'package:cliente_feedback_tecnico/features/catalogos/presentation/bloc/catalogo_state.dart';
 import 'package:cliente_feedback_tecnico/features/catalogos/domain/entities/producto.dart';
+import 'package:cliente_feedback_tecnico/features/servicios/domain/entities/cliente.dart';
 import 'package:cliente_feedback_tecnico/features/servicios/domain/entities/orden_servicio_respuesta.dart';
 import 'package:cliente_feedback_tecnico/features/servicios/domain/entities/politica_firma_canal.dart';
 import 'package:cliente_feedback_tecnico/features/servicios/domain/entities/producto_falla.dart';
@@ -44,6 +45,7 @@ class _FormularioServicioState extends State<FormularioServicio> {
 	final Map<String, _ProductoFallaSeleccionado> _productosFallaSeleccionados =
 			<String, _ProductoFallaSeleccionado>{};
 	String? _ultimoServicioConFlujoDocumento;
+	String? _clienteSeleccionadoVisualId;
 
 	@override
 	void initState() {
@@ -74,6 +76,7 @@ class _FormularioServicioState extends State<FormularioServicio> {
 
 	void _limpiarFormularioVisual() {
 		_buscarClienteController.clear();
+		_clienteSeleccionadoVisualId = null;
 		_lugarDetalleController.clear();
 		_equipoNroSerieController.clear();
 		_equipoUbicacionController.clear();
@@ -470,6 +473,16 @@ class _FormularioServicioState extends State<FormularioServicio> {
 						TextPosition(offset: _descuentoController.text.length),
 					);
 				}
+				final clienteSeleccionado = estadoFormulario.clienteSeleccionado;
+				if (clienteSeleccionado != null &&
+						_clienteSeleccionadoVisualId != clienteSeleccionado.id) {
+					final etiquetaCliente = _etiquetaClienteSeleccionado(clienteSeleccionado);
+					_buscarClienteController.value = TextEditingValue(
+						text: etiquetaCliente,
+						selection: TextSelection.collapsed(offset: etiquetaCliente.length),
+					);
+					_clienteSeleccionadoVisualId = clienteSeleccionado.id;
+				}
 
 				return BlocBuilder<CatalogoBloc, CatalogoState>(
 					builder: (context, catalogoState) {
@@ -581,9 +594,19 @@ class _FormularioServicioState extends State<FormularioServicio> {
 													const SizedBox(height: 8),
 													_buildZonaVisual(
 														context: context,
-														titulo: '1. Datos de la orden y equipo',
-														icono: Icons.assignment_ind_outlined,
-														child: _buildZonaDatosOrdenEquipo(
+																																																												titulo: '1. Tipo de orden',
+																																																												icono: Icons.flag_outlined,
+																																																												child: _buildZonaTipoOrden(
+																																																													context: context,
+																																																													estadoFormulario: estadoFormulario,
+																																																												),
+																																																											),
+																																																											const SizedBox(height: 12),
+																																																											_buildZonaVisual(
+																																																												context: context,
+																																																												titulo: '2. Datos de la orden y equipo',
+																																																												icono: Icons.assignment_ind_outlined,
+																																																												child: _buildZonaDatosOrdenEquipo(
 															context: context,
 															estadoFormulario: estadoFormulario,
 															catalogos: catalogos,
@@ -593,7 +616,7 @@ class _FormularioServicioState extends State<FormularioServicio> {
 													const SizedBox(height: 12),
 													_buildZonaVisual(
 														context: context,
-														titulo: '2. Falla, diagnostico y resolucion',
+																																																												titulo: '3. Falla, diagnostico y resolucion',
 														icono: Icons.build_circle_outlined,
 														child: _buildZonaFallaDiagnosticoResolucion(
 															context: context,
@@ -667,7 +690,7 @@ class _FormularioServicioState extends State<FormularioServicio> {
 		final colorScheme = Theme.of(context).colorScheme;
 		return Container(
 			width: double.infinity,
-			padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+			padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 2),
 			decoration: BoxDecoration(
 				color: colorScheme.primary.withValues(alpha: 0.07),
 				borderRadius: BorderRadius.circular(12),
@@ -696,39 +719,67 @@ class _FormularioServicioState extends State<FormularioServicio> {
 		);
 	}
 
-	Widget _buildFechaHoraOrden(
-		BuildContext context,
-		ServicioFormularioState estado,
-	) {
-		final fechaHora = estado.fechaHoraServicio;
+	Widget _buildZonaTipoOrden({
+		required BuildContext context,
+		required ServicioFormularioState estadoFormulario,
+	}) {
+		final tipoSeleccionado = _labelTipoOrdenSeleccionado(estadoFormulario.canal);
+		final fechaHora = estadoFormulario.fechaHoraServicio;
 		final fechaHoraTexto = fechaHora == null
-				? 'Se completara al iniciar la carga de la orden'
+				? 'Sin fecha'
 				: _formatearFechaHora(fechaHora);
-		final zonaTexto = estado.timezoneIana.trim().isEmpty
-				? 'Zona horaria pendiente'
-				: estado.timezoneIana.trim();
 
-		return Container(
-			width: double.infinity,
-			padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-			decoration: BoxDecoration(
-				color: Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: 0.25),
-				borderRadius: BorderRadius.circular(10),
-				border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
-			),
-			child: Row(
-				children: [
-					const Icon(Icons.schedule, size: 16),
-					const SizedBox(width: 8),
-					Expanded(
-						child: Text(
-							'Fecha y hora de orden: $fechaHoraTexto ($zonaTexto)',
-							style: _estiloTextoCompacto(context),
+		return Column(
+			crossAxisAlignment: CrossAxisAlignment.start,
+			children: [
+				Row(
+					children: [
+						Expanded(
+							child: Text(
+								'Tipo seleccionado: $tipoSeleccionado',
+								style: Theme.of(context).textTheme.titleSmall,
+							),
 						),
+						Text(
+							'Fecha y hora: $fechaHoraTexto',
+							style: _estiloTextoCompacto(context),
+							textAlign: TextAlign.right,
+						),
+					],
+				),
+				const SizedBox(height: 10),
+				SingleChildScrollView(
+					scrollDirection: Axis.horizontal,
+					child: Row(
+						children: Canal.values.map((canal) {
+							return Padding(
+								padding: const EdgeInsets.only(right: 8),
+								child: ChoiceChip(
+									visualDensity: const VisualDensity(horizontal: -2, vertical: -3),
+									materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+									labelPadding: const EdgeInsets.symmetric(horizontal: 6, vertical: 0),
+									padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 0),
+									label: Text(canal.name),
+									selected: estadoFormulario.canal == canal,
+									onSelected: (_) {
+										context.read<ServicioBloc>().add(
+												ServicioFormularioCambiado(canal: canal),
+										);
+									},
+								),
+							);
+						}).toList(),
 					),
-				],
-			),
+				),
+			],
 		);
+	}
+
+	String _labelTipoOrdenSeleccionado(Canal? canal) {
+		if (canal == null) {
+			return 'Sin seleccionar';
+		}
+		return canal.name;
 	}
 
 	Widget _buildZonaVisual({
@@ -740,7 +791,7 @@ class _FormularioServicioState extends State<FormularioServicio> {
 		final colorScheme = Theme.of(context).colorScheme;
 		return Container(
 			width: double.infinity,
-			padding: const EdgeInsets.all(12),
+			padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
 			decoration: BoxDecoration(
 				color: colorScheme.surfaceContainerHighest.withValues(alpha: 0.16),
 				borderRadius: BorderRadius.circular(12),
@@ -777,28 +828,7 @@ class _FormularioServicioState extends State<FormularioServicio> {
 		return Column(
 			crossAxisAlignment: CrossAxisAlignment.start,
 			children: [
-				_buildFechaHoraOrden(context, estadoFormulario),
-				const SizedBox(height: 12),
-				SingleChildScrollView(
-					scrollDirection: Axis.horizontal,
-					child: Row(
-						children: Canal.values.map((canal) {
-							return Padding(
-								padding: const EdgeInsets.only(right: 8),
-								child: ChoiceChip(
-									label: Text(canal.name),
-									selected: estadoFormulario.canal == canal,
-									onSelected: (_) {
-										context.read<ServicioBloc>().add(
-												ServicioFormularioCambiado(canal: canal),
-										);
-									},
-								),
-							);
-						}).toList(),
-					),
-				),
-				const SizedBox(height: 16),
+				const SizedBox(height: 4),
 				Row(
 					crossAxisAlignment: CrossAxisAlignment.start,
 					children: [
@@ -882,6 +912,13 @@ class _FormularioServicioState extends State<FormularioServicio> {
 						}).toList(),
 					),
 				),
+				if (estadoFormulario.clienteSeleccionado != null) ...[
+					const SizedBox(height: 10),
+					_buildResumenClienteSeleccionado(
+						context: context,
+						cliente: estadoFormulario.clienteSeleccionado!,
+					),
+				],
 				const SizedBox(height: 16),
 				_filaDosCampos(
 					izquierda: _dropdownZonas(context, catalogos, estadoFormulario),
@@ -938,6 +975,76 @@ class _FormularioServicioState extends State<FormularioServicio> {
 				),
 			],
 		);
+	}
+
+	Widget _buildResumenClienteSeleccionado({
+		required BuildContext context,
+		required Cliente cliente,
+	}) {
+		return Container(
+			width: double.infinity,
+			padding: const EdgeInsets.all(10),
+			decoration: BoxDecoration(
+				color: Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: 0.2),
+				borderRadius: BorderRadius.circular(10),
+				border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
+			),
+			child: Column(
+				crossAxisAlignment: CrossAxisAlignment.start,
+				children: [
+					Text(
+						'Datos del cliente seleccionado',
+						style: Theme.of(context).textTheme.titleSmall,
+					),
+					const SizedBox(height: 8),
+					_filaDosCampos(
+						izquierda: _buildCampoSoloLectura(
+							context,
+							label: 'Nombre',
+							value: _textoClienteDetalle(cliente.nombre),
+						),
+						derecha: _buildCampoSoloLectura(
+							context,
+							label: 'CUIT',
+							value: _textoClienteDetalle(cliente.cuit),
+						),
+					),
+					const SizedBox(height: 8),
+					_filaDosCampos(
+						izquierda: _buildCampoSoloLectura(
+							context,
+							label: 'Contacto',
+							value: _textoClienteDetalle(cliente.contacto),
+						),
+						derecha: _buildCampoSoloLectura(
+							context,
+							label: 'Telefono',
+							value: _textoClienteDetalle(cliente.telefono),
+						),
+					),
+					const SizedBox(height: 8),
+					_buildCampoSoloLectura(
+						context,
+						label: 'Localidad',
+						value: _textoClienteDetalle(cliente.localidad),
+					),
+				],
+			),
+		);
+	}
+
+	String _etiquetaClienteSeleccionado(Cliente cliente) {
+		final nombre = _textoClienteDetalle(cliente.nombre, fallback: 'Cliente sin nombre');
+		final cuit = (cliente.cuit ?? '').trim();
+		if (cuit.isEmpty) {
+			return nombre;
+		}
+		return '$nombre ($cuit)';
+	}
+
+	String _textoClienteDetalle(String? valor, {String fallback = 'No informado'}) {
+		final normalizado = (valor ?? '').trim();
+		return normalizado.isEmpty ? fallback : normalizado;
 	}
 
 	Widget _buildZonaFallaDiagnosticoResolucion({
@@ -1041,28 +1148,13 @@ class _FormularioServicioState extends State<FormularioServicio> {
 				],
 				const SizedBox(height: 12),
 				TextField(
-					controller: _kmController,
-					keyboardType: TextInputType.number,
-					style: _estiloTextoCompacto(context),
-					decoration: _decoracionCampoCompacta(
-						context,
-						labelText: 'Kilometros (km)',
-					),
-					onChanged: (valor) {
-						context.read<ServicioBloc>().add(
-								ServicioFormularioCambiado(km: valor),
-						);
-					},
-				),
-				const SizedBox(height: 12),
-				TextField(
 					controller: _sintomaController,
 					minLines: 2,
 					maxLines: 2,
 					style: _estiloTextoCompacto(context),
 					decoration: _decoracionCampoCompacta(
 						context,
-						labelText: 'Sintoma',
+						labelText: 'Escriba los detalles del síntoma',
 					),
 					onChanged: (valor) {
 						context.read<ServicioBloc>().add(
@@ -1115,7 +1207,7 @@ class _FormularioServicioState extends State<FormularioServicio> {
 					style: _estiloTextoCompacto(context),
 					decoration: _decoracionCampoCompacta(
 						context,
-						labelText: 'Diagnostico detalle',
+						labelText: 'Escriba los detalles del diagnóstico',
 					),
 					onChanged: (valor) {
 						context.read<ServicioBloc>().add(
@@ -1170,6 +1262,11 @@ class _FormularioServicioState extends State<FormularioServicio> {
 		final hayViatico = kmCantidad > 0;
 		final subtotalKmUsdCalculado = kmCantidad * estado.valorKmUsdSnapshot;
 		final subtotalKmArsCalculado = subtotalKmUsdCalculado * estado.cotizacionDolarSnapshot;
+		final descuentoPorcentaje = _doubleDesdeTextoLocal(estado.descuentoPorcentaje);
+		final subtotalBrutoUsd = estado.subtotalKmUsd + estado.subtotalRepuestosUsd;
+		final subtotalBrutoArs = estado.subtotalKmArs + estado.subtotalRepuestosArs;
+		final descuentoMontoUsd = subtotalBrutoUsd * (descuentoPorcentaje / 100);
+		final descuentoMontoArs = subtotalBrutoArs * (descuentoPorcentaje / 100);
 		final terminoBusquedaRepuesto = _buscarRepuestoController.text.trim();
 		final repuestosMostrados = estado.repuestosDisponibles.take(20).toList();
 
@@ -1206,9 +1303,31 @@ class _FormularioServicioState extends State<FormularioServicio> {
 						),
 					),
 					const SizedBox(height: 8),
-					Text(
-						'Calculo km: ${_formatearCantidad(kmCantidad)} x ${_formatearMonto(estado.valorKmUsdSnapshot)} USD = ${_formatearMonto(subtotalKmUsdCalculado)} USD / ${_formatearMonto(subtotalKmArsCalculado)} ARS',
-						style: _estiloTextoCompacto(context),
+					_filaDosCampos(
+						izquierda: Align(
+							alignment: Alignment.centerLeft,
+							child: Padding(
+								padding: const EdgeInsets.only(top: 10),
+								child: Text(
+									'Calculo km: ${_formatearCantidad(kmCantidad)} x ${_formatearMonto(estado.valorKmUsdSnapshot)} USD = ${_formatearMonto(subtotalKmUsdCalculado)} USD / ${_formatearMonto(subtotalKmArsCalculado)} ARS',
+									style: _estiloTextoCompacto(context),
+								),
+							),
+						),
+						derecha: TextField(
+							controller: _kmController,
+							keyboardType: const TextInputType.numberWithOptions(decimal: true),
+							style: _estiloTextoCompacto(context),
+							decoration: _decoracionCampoCompacta(
+								context,
+								labelText: 'Kilometros (km)',
+							),
+							onChanged: (valor) {
+								context.read<ServicioBloc>().add(
+										ServicioFormularioCambiado(km: valor),
+								);
+							},
+						),
 					),
 					const SizedBox(height: 10),
 					TextField(
@@ -1305,66 +1424,47 @@ class _FormularioServicioState extends State<FormularioServicio> {
 							subtotalKmArsCalculado: subtotalKmArsCalculado,
 						),
 					const SizedBox(height: 10),
-					_filaDosCampos(
-						izquierda: TextField(
-							controller: _ivaController,
-							keyboardType: const TextInputType.numberWithOptions(decimal: true),
-							decoration: _decoracionCampoCompacta(
-								context,
-								labelText: 'IVA %',
-							),
-							onChanged: (valor) {
-								context.read<ServicioBloc>().add(
-										ServicioFacturacionParametrosCambiados(ivaPorcentaje: valor),
-								);
-							},
-						),
-						derecha: TextField(
-							controller: _descuentoController,
-							keyboardType: const TextInputType.numberWithOptions(decimal: true),
-							decoration: _decoracionCampoCompacta(
-								context,
-								labelText: 'Descuento % (opcional)',
-							),
-							onChanged: (valor) {
-								context.read<ServicioBloc>().add(
-										ServicioFacturacionParametrosCambiados(descuentoPorcentaje: valor),
-								);
-							},
-						),
-					),
 					const SizedBox(height: 10),
-					_buildFilaResumenFacturacion(
-						context,
-						label: 'Subtotal km USD',
-						value: _formatearMonto(estado.subtotalKmUsd),
-					),
-					_buildFilaResumenFacturacion(
-						context,
-						label: 'Subtotal repuestos USD',
-						value: _formatearMonto(estado.subtotalRepuestosUsd),
-					),
-					_buildFilaResumenFacturacion(
-						context,
-						label: 'Subtotal general USD',
-						value: _formatearMonto(estado.subtotalGeneralUsd),
-					),
-					_buildFilaResumenFacturacion(
-						context,
-						label: 'Subtotal general ARS',
-						value: _formatearMonto(estado.subtotalGeneralArs),
-					),
-					const Divider(height: 14),
-					_buildFilaResumenFacturacion(
-						context,
-						label: 'Total con IVA ARS',
-						value: _formatearMonto(estado.totalConIvaArs),
-					),
-					_buildFilaResumenFacturacion(
-						context,
-						label: 'Total final ARS',
-						value: _formatearMonto(estado.totalFinalArs),
-						resaltado: true,
+					_buildTablaResumenFacturacion(
+						context: context,
+						filas: [
+							_FilaResumenFacturacion(
+								item: 'Subtotal km',
+								dolares: estado.subtotalKmUsd,
+								pesos: estado.subtotalKmArs,
+							),
+							_FilaResumenFacturacion(
+								item: 'Subtotal repuestos',
+								dolares: estado.subtotalRepuestosUsd,
+								pesos: estado.subtotalRepuestosArs,
+							),
+							_FilaResumenFacturacion(
+								item: 'Descuento aplicado',
+								dolares: -descuentoMontoUsd,
+								pesos: -descuentoMontoArs,
+								mostrarInputDescuento: true,
+								mostrarDolares: false,
+							),
+							_FilaResumenFacturacion(
+								item: 'Subtotal general',
+								dolares: estado.subtotalGeneralUsd,
+								pesos: estado.subtotalGeneralArs,
+							),
+							_FilaResumenFacturacion(
+								item: 'Total con IVA',
+								dolares: 0,
+								pesos: estado.totalConIvaArs,
+								mostrarInputIva: true,
+								mostrarDolares: false,
+							),
+							_FilaResumenFacturacion(
+								item: 'Total final',
+								dolares: 0,
+								pesos: estado.totalFinalArs,
+								esTotal: true,
+								mostrarDolares: false,
+							),
+						],
 					),
 				],
 			),
@@ -1762,21 +1862,128 @@ class _FormularioServicioState extends State<FormularioServicio> {
 		);
 	}
 
-	Widget _buildFilaResumenFacturacion(
-		BuildContext context, {
-		required String label,
-		required String value,
-		bool resaltado = false,
+	Widget _buildTablaResumenFacturacion({
+		required BuildContext context,
+		required List<_FilaResumenFacturacion> filas,
 	}) {
-		final style = _estiloTextoCompacto(context).copyWith(
-			fontWeight: resaltado ? FontWeight.w700 : FontWeight.w500,
-		);
-		return Padding(
-			padding: const EdgeInsets.only(bottom: 4),
-			child: Row(
+		final borderColor = Theme.of(context).colorScheme.outlineVariant;
+		final headerStyle = _estiloTextoCompacto(context).copyWith(fontWeight: FontWeight.w700);
+
+		return Container(
+			width: double.infinity,
+			decoration: BoxDecoration(
+				borderRadius: BorderRadius.circular(8),
+				border: Border.all(color: borderColor),
+			),
+			child: Column(
 				children: [
-					Expanded(child: Text(label, style: style)),
-					Text(value, style: style),
+					Container(
+						padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+						decoration: BoxDecoration(
+							color: Theme.of(context).colorScheme.surfaceContainer,
+							borderRadius: const BorderRadius.vertical(top: Radius.circular(7)),
+						),
+						child: Row(
+							children: [
+								Expanded(flex: 5, child: Text('Item', style: headerStyle)),
+								Expanded(
+									flex: 3,
+									child: Text('Dolares / %', style: headerStyle, textAlign: TextAlign.right),
+								),
+								Expanded(
+									flex: 3,
+									child: Text('Pesos', style: headerStyle, textAlign: TextAlign.right),
+								),
+							],
+						),
+					),
+					...filas.asMap().entries.map((entry) {
+						final index = entry.key;
+						final fila = entry.value;
+						final esUltima = index == filas.length - 1;
+						final textStyle = _estiloTextoCompacto(context).copyWith(
+							fontWeight: fila.esTotal ? FontWeight.w700 : FontWeight.w500,
+						);
+
+						return Container(
+							padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+							decoration: BoxDecoration(
+								color: fila.esTotal
+										? Theme.of(context).colorScheme.primary.withValues(alpha: 0.07)
+										: null,
+								border: esUltima
+										? null
+										: Border(bottom: BorderSide(color: borderColor)),
+							),
+							child: Row(
+								children: [
+									Expanded(flex: 5, child: Text(fila.item, style: textStyle)),
+									Expanded(
+										flex: 3,
+										child: fila.mostrarInputIva
+												? SizedBox(
+													width: 72,
+													child: TextField(
+														controller: _ivaController,
+														keyboardType: const TextInputType.numberWithOptions(decimal: true),
+														textAlign: TextAlign.right,
+														style: _estiloTextoCompacto(context),
+														decoration: const InputDecoration(
+															isDense: true,
+															labelText: 'IVA %',
+															contentPadding: EdgeInsets.symmetric(
+																horizontal: 8,
+																vertical: 5,
+															),
+														),
+														onChanged: (valor) {
+															context.read<ServicioBloc>().add(
+																	ServicioFacturacionParametrosCambiados(ivaPorcentaje: valor),
+															);
+														},
+													),
+												)
+												: fila.mostrarInputDescuento
+														? SizedBox(
+															width: 80,
+															child: TextField(
+																controller: _descuentoController,
+																keyboardType: const TextInputType.numberWithOptions(decimal: true),
+																textAlign: TextAlign.right,
+																style: _estiloTextoCompacto(context),
+																decoration: const InputDecoration(
+																	isDense: true,
+																	labelText: 'Desc %',
+																	contentPadding: EdgeInsets.symmetric(
+																		horizontal: 8,
+																		vertical: 5,
+																	),
+																),
+																onChanged: (valor) {
+																	context.read<ServicioBloc>().add(
+																			ServicioFacturacionParametrosCambiados(descuentoPorcentaje: valor),
+																	);
+																},
+															),
+														)
+												: Text(
+													fila.mostrarDolares ? _formatearMonto(fila.dolares) : '',
+													style: textStyle,
+													textAlign: TextAlign.right,
+												),
+									),
+									Expanded(
+										flex: 3,
+										child: Text(
+											_formatearMonto(fila.pesos),
+											style: textStyle,
+											textAlign: TextAlign.right,
+										),
+									),
+								],
+							),
+						);
+					}),
 				],
 			),
 		);
@@ -2174,4 +2381,24 @@ class _DetalleFacturadoAnchos {
 
 	double get anchoTotal =>
 			anchoDetalle + anchoCantidad + anchoPrecioUsd + anchoSubtotalArs + anchoAcciones;
+}
+
+class _FilaResumenFacturacion {
+	final String item;
+	final double dolares;
+	final double pesos;
+	final bool esTotal;
+	final bool mostrarDolares;
+	final bool mostrarInputIva;
+	final bool mostrarInputDescuento;
+
+	const _FilaResumenFacturacion({
+		required this.item,
+		required this.dolares,
+		required this.pesos,
+		this.esTotal = false,
+		this.mostrarDolares = true,
+		this.mostrarInputIva = false,
+		this.mostrarInputDescuento = false,
+	});
 }

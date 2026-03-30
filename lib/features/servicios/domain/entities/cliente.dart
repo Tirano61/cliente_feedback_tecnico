@@ -6,6 +6,7 @@ class Cliente extends Equatable {
 	final String? cuit;
 	final String? contacto;
 	final String? telefono;
+	final String? localidad;
 
 	const Cliente({
 		required this.id,
@@ -13,8 +14,9 @@ class Cliente extends Equatable {
 		this.cuit,
 		this.contacto,
 		this.telefono,
+		this.localidad,
 	});
 
 	@override
-	List<Object?> get props => [id, nombre, cuit, contacto, telefono];
+	List<Object?> get props => [id, nombre, cuit, contacto, telefono, localidad];
 }
