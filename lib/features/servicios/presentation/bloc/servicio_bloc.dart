@@ -1003,6 +1003,7 @@ class ServicioBloc extends Bloc<ServicioEvent, ServicioState> {
 
 	Servicio _mapearServicio(ServicioFormularioState estado) {
 		final estadoRecalculado = _recalcularFacturacion(estado);
+		final clienteSeleccionado = estadoRecalculado.clienteSeleccionado;
 		final productosFalla = _productosFallaNormalizados(
 			estadoRecalculado.productosFallaSeleccionados,
 		);
@@ -1025,6 +1026,11 @@ class ServicioBloc extends Bloc<ServicioEvent, ServicioState> {
 			utcOffsetMinutos: estadoRecalculado.utcOffsetMinutos,
 			canal: estadoRecalculado.canal!,
 			clienteId: estadoRecalculado.clienteId.trim(),
+			clienteNombre: _textoClienteOpcional(clienteSeleccionado?.nombre),
+			clienteCuit: _textoClienteOpcional(clienteSeleccionado?.cuit),
+			clienteTelefono: _textoClienteOpcional(clienteSeleccionado?.telefono),
+			clienteLocalidad: _textoClienteOpcional(clienteSeleccionado?.localidad),
+			clienteContacto: _textoClienteOpcional(clienteSeleccionado?.contacto),
 			lugarProvinciaId: estadoRecalculado.lugarProvinciaId.trim(),
 			lugarDetalle: estadoRecalculado.lugarDetalle.trim(),
 			equipoNroSerie: estadoRecalculado.equipoNroSerie.trim(),
@@ -1067,6 +1073,11 @@ class ServicioBloc extends Bloc<ServicioEvent, ServicioState> {
 		);
 	}
 
+	String? _textoClienteOpcional(String? valor) {
+		final normalizado = (valor ?? '').trim();
+		return normalizado.isEmpty ? null : normalizado;
+	}
+
 	String _generarIdempotencyKey() {
 		return _uuid.v4();
 	}
@@ -1105,21 +1116,22 @@ class ServicioBloc extends Bloc<ServicioEvent, ServicioState> {
 			),
 		);
 		final subtotalRepuestosArs = _redondear2(subtotalRepuestosUsd * cotizacion);
-		final subtotalGeneralUsd = _redondear2(subtotalKmUsd + subtotalRepuestosUsd);
-		final subtotalGeneralArs = _redondear2(subtotalKmArs + subtotalRepuestosArs);
+		final subtotalBrutoUsd = _redondear2(subtotalKmUsd + subtotalRepuestosUsd);
+		final subtotalBrutoArs = _redondear2(subtotalKmArs + subtotalRepuestosArs);
 
 		final ivaPorcentaje = _doubleDesdeTexto(estado.ivaPorcentaje, valorPorDefecto: 21);
 		final descuentoPorcentaje = _doubleDesdeTexto(
 			estado.descuentoPorcentaje,
 			valorPorDefecto: 0,
 		);
+		final factorDescuento = (1 - (descuentoPorcentaje / 100)).clamp(0.0, 1.0);
+		final subtotalGeneralUsd = _redondear2(subtotalBrutoUsd * factorDescuento);
+		final subtotalGeneralArs = _redondear2(subtotalBrutoArs * factorDescuento);
 
 		final totalConIvaArs = _redondear2(
 			subtotalGeneralArs * (1 + (ivaPorcentaje / 100)),
 		);
-		final totalFinalArs = _redondear2(
-			totalConIvaArs * (1 - (descuentoPorcentaje / 100)),
-		);
+		final totalFinalArs = totalConIvaArs;
 
 		return estado.copyWith(
 			subtotalKmUsd: subtotalKmUsd,

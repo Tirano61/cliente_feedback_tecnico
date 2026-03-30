@@ -7,6 +7,7 @@ class ClienteDto extends Cliente {
 		super.cuit,
 		super.contacto,
 		super.telefono,
+		super.localidad,
 	});
 
 	factory ClienteDto.fromJson(Map<String, dynamic> json) {
@@ -16,6 +17,7 @@ class ClienteDto extends Cliente {
 			cuit: json['cuit']?.toString(),
 			contacto: json['contacto']?.toString(),
 			telefono: json['telefono']?.toString(),
+			localidad: json['localidad']?.toString(),
 		);
 	}
 }
