@@ -325,31 +325,55 @@ class _FormularioServicioState extends State<FormularioServicio> {
 																						? nombreFirmante.trim()
 																			: null;
 																	if (agregarFirma && (nombreFirma ?? '').isEmpty) {
-																		ScaffoldMessenger.of(context).showSnackBar(
-																			const SnackBar(
-																				content: Text(
-																					'Si firmas, el nombre del firmante es obligatorio.',
-																				),
-																			),
-																		);
+												await showDialog<void>(
+													context: sheetContext,
+													builder: (dialogCtx) => AlertDialog(
+														title: const Text('Dato requerido'),
+														content: const Text(
+															'Si agregás firma, el nombre del firmante es obligatorio.',
+														),
+														actions: [
+															TextButton(
+																onPressed: () => Navigator.of(dialogCtx).pop(),
+																child: const Text('Aceptar'),
+															),
+														],
+													),
+												);
 																		return;
 																	}
 
 																			Uint8List? firmaTrazoPng;
 																			if (agregarFirma) {
 																				if (firmaClienteController.isEmpty) {
-																					ScaffoldMessenger.of(context).showSnackBar(
-																						const SnackBar(
-																							content: Text('Debes dibujar la firma del cliente.'),
+																					await showDialog<void>(
+																						context: sheetContext,
+																						builder: (dialogCtx) => AlertDialog(
+																							title: const Text('Firma requerida'),
+																							content: const Text('Debés dibujar la firma del cliente en el recuadro.'),
+																							actions: [
+																								TextButton(
+																									onPressed: () => Navigator.of(dialogCtx).pop(),
+																									child: const Text('Aceptar'),
+																								),
+																							],
 																						),
 																					);
 																					return;
 																				}
 																				firmaTrazoPng = await firmaClienteController.toPngBytes();
 																				if (firmaTrazoPng == null || firmaTrazoPng.isEmpty) {
-																					ScaffoldMessenger.of(context).showSnackBar(
-																						const SnackBar(
-																							content: Text('No se pudo capturar la firma. Intenta de nuevo.'),
+																					await showDialog<void>(
+																						context: sheetContext,
+																						builder: (dialogCtx) => AlertDialog(
+																							title: const Text('Error al capturar firma'),
+																							content: const Text('No se pudo capturar la firma. Limpiá el recuadro e intentá de nuevo.'),
+																							actions: [
+																								TextButton(
+																									onPressed: () => Navigator.of(dialogCtx).pop(),
+																									child: const Text('Aceptar'),
+																								),
+																							],
 																						),
 																					);
 																					return;
