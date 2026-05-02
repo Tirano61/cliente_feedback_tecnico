@@ -1,6 +1,7 @@
 import 'dart:typed_data';
 
 import 'package:cliente_feedback_tecnico/features/servicios/domain/entities/cliente.dart';
+import 'package:cliente_feedback_tecnico/features/servicios/domain/entities/orden_servicio_respuesta.dart';
 import 'package:cliente_feedback_tecnico/features/servicios/domain/entities/producto_falla.dart';
 import 'package:cliente_feedback_tecnico/features/servicios/domain/entities/repuesto.dart';
 import 'package:cliente_feedback_tecnico/features/servicios/domain/entities/servicio.dart';
@@ -169,6 +170,7 @@ class ServicioFacturacionParametrosCambiados extends ServicioEvent {
 
 class ServicioDocumentoSubidaSolicitada extends ServicioEvent {
 	final String servicioId;
+	final OrdenServicioRespuesta? orden;
 	final Canal canal;
 	final Uint8List pdfBytes;
 	final Uint8List? firmaClienteTrazoPng;
@@ -180,6 +182,7 @@ class ServicioDocumentoSubidaSolicitada extends ServicioEvent {
 
 	const ServicioDocumentoSubidaSolicitada({
 		required this.servicioId,
+		this.orden,
 		required this.canal,
 		required this.pdfBytes,
 		this.firmaClienteTrazoPng,
@@ -193,6 +196,7 @@ class ServicioDocumentoSubidaSolicitada extends ServicioEvent {
 	@override
 	List<Object?> get props => [
 				servicioId,
+				orden,
 				canal,
 				pdfBytes,
 				firmaClienteTrazoPng,

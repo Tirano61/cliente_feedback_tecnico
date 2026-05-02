@@ -579,7 +579,7 @@ class ServicioBloc extends Bloc<ServicioEvent, ServicioState> {
 
 		var pdfBytesDocumento = event.pdfBytes;
 		if (firmaPermitida && intentoConFirma) {
-			final orden = actual.ordenActual;
+			final orden = event.orden ?? actual.ordenActual;
 			if (orden == null) {
 				emit(
 					actual.copyWith(
@@ -658,6 +658,7 @@ class ServicioBloc extends Bloc<ServicioEvent, ServicioState> {
 				add(
 					ServicioDocumentoSubidaSolicitada(
 						servicioId: event.servicioId,
+						orden: event.orden,
 						canal: event.canal,
 						pdfBytes: event.pdfBytes,
 						nombreArchivoPdf: event.nombreArchivoPdf,
