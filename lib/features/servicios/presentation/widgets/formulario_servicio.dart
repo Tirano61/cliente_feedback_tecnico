@@ -383,6 +383,7 @@ class _FormularioServicioState extends State<FormularioServicio> {
 																	context.read<ServicioBloc>().add(
 																		ServicioDocumentoSubidaSolicitada(
 																			servicioId: orden.servicioId,
+																			orden: orden,
 																			canal: canal,
 																			pdfBytes: pdfBytes,
 																					firmaClienteTrazoPng: firmaTrazoPng,
