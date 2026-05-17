@@ -24,6 +24,9 @@ class _MisServiciosPageState extends State<MisServiciosPage> {
 	FiltroEstado _filtroSeleccionado = FiltroEstado.todos;
 	final TextEditingController _busquedaController = TextEditingController();
 	String _busquedaTexto = '';
+	final Set<String> _serviciosConPdfConfirmado = <String>{};
+	final Set<String> _serviciosPdfVerificados = <String>{};
+	bool _verificandoPdf = false;
 
 	@override
 	void initState() {
@@ -43,22 +46,15 @@ class _MisServiciosPageState extends State<MisServiciosPage> {
 			appBar: AppBar(title: const Text('Mis servicios')),
 			body: BlocConsumer<ServicioBloc, ServicioState>(
 				listenWhen: (previous, current) {
-					if (current is! MisServiciosLoaded) {
-						return false;
-					}
-					final mensajeActual = (current.mensajePendientes ?? '').trim();
-					if (mensajeActual.isEmpty) {
-						return false;
-					}
-					if (previous is! MisServiciosLoaded) {
-						return true;
-					}
-					return previous.mensajePendientes != current.mensajePendientes;
+					return current is MisServiciosLoaded;
 				},
 				listener: (context, state) {
 					if (state is! MisServiciosLoaded) {
 						return;
 					}
+
+					_dispararVerificacionPdf(state.servicios);
+
 					final mensaje = (state.mensajePendientes ?? '').trim();
 					if (mensaje.isEmpty) {
 						return;
@@ -199,6 +195,8 @@ class _MisServiciosPageState extends State<MisServiciosPage> {
 												final servicio = serviciosFiltrados[index];
 												final subiendoPdfAhora =
 														state.servicioIdSubiendoPdf == servicio.id;
+												final pdfConfirmadoServidor = _serviciosConPdfConfirmado
+														.contains(servicio.id.trim());
 												return _TarjetaServicio(
 													servicio: servicio,
 													onVerPdf: () => _verPdfServicio(servicio),
@@ -209,6 +207,7 @@ class _MisServiciosPageState extends State<MisServiciosPage> {
 														);
 													},
 													subiendoPdfAhora: subiendoPdfAhora,
+													pdfConfirmadoServidor: pdfConfirmadoServidor,
 												);
 											},
 										),
@@ -222,6 +221,93 @@ class _MisServiciosPageState extends State<MisServiciosPage> {
 				},
 			),
 		);
+	}
+
+	Future<void> _dispararVerificacionPdf(List<Servicio> servicios) async {
+		if (_verificandoPdf) {
+			return;
+		}
+
+		final candidatos = servicios.where((servicio) {
+			final servicioId = servicio.id.trim();
+			if (servicioId.isEmpty) {
+				return false;
+			}
+			if (_serviciosPdfVerificados.contains(servicioId)) {
+				return false;
+			}
+			if (_tieneDocumentoEnListado(servicio)) {
+				return false;
+			}
+			return true;
+		}).take(20).toList();
+
+		if (candidatos.isEmpty) {
+			return;
+		}
+
+		_verificandoPdf = true;
+		try {
+			final token = (await SecureStorage().obtenerToken() ?? '').trim();
+			if (token.isEmpty) {
+				return;
+			}
+
+			final futuros = candidatos.map((servicio) async {
+				final servicioId = servicio.id.trim();
+				try {
+					final metadataEndpoint =
+							'${ApiConstants.baseUrl}${ApiConstants.servicioDocumento(servicioId)}';
+					final response = await http.get(
+						Uri.parse(metadataEndpoint),
+						headers: {'Authorization': 'Bearer $token'},
+					);
+
+					if (response.statusCode == 200) {
+						final dynamic payload = jsonDecode(response.body);
+						final documento = _extraerDocumentoDesdePayload(payload);
+						final bruto = _extraerPdfUrlDesdeDocumento(documento);
+						final pdfUrl = _normalizarUrlPdf(bruto);
+						if ((pdfUrl ?? '').trim().isNotEmpty && mounted) {
+							setState(() {
+								_serviciosConPdfConfirmado.add(servicioId);
+							});
+						}
+					}
+				} catch (_) {
+					// Ignorar errores puntuales; se reintentara con recarga de pantalla.
+				} finally {
+					_serviciosPdfVerificados.add(servicioId);
+				}
+			});
+
+			await Future.wait(futuros);
+		} finally {
+			_verificandoPdf = false;
+		}
+	}
+
+	bool _tieneDocumentoEnListado(Servicio servicio) {
+		final documento = servicio.documento;
+		if (documento == null) {
+			return false;
+		}
+
+		final pdfUrl = (documento.pdfUrl ?? '').trim();
+		if (pdfUrl.isNotEmpty) {
+			return true;
+		}
+
+		final pdfHash = (documento.pdfHashSha256 ?? '').trim();
+		if (pdfHash.isNotEmpty) {
+			return true;
+		}
+
+		final firmaNombre = (documento.firmaClienteNombre ?? '').trim();
+		final firmaDocumento = (documento.firmaClienteDocumento ?? '').trim();
+		final firmaFecha = documento.firmaFechaHora;
+
+		return firmaNombre.isNotEmpty || firmaDocumento.isNotEmpty || firmaFecha != null;
 	}
 
 	Future<void> _verPdfServicio(Servicio servicio) async {
@@ -560,6 +646,7 @@ class _TarjetaServicio extends StatelessWidget {
 	final VoidCallback onCopiarEnlacePdf;
 	final VoidCallback onSubirPdfAhora;
 	final bool subiendoPdfAhora;
+	final bool pdfConfirmadoServidor;
 
 	const _TarjetaServicio({
 		required this.servicio,
@@ -567,6 +654,7 @@ class _TarjetaServicio extends StatelessWidget {
 		required this.onCopiarEnlacePdf,
 		required this.onSubirPdfAhora,
 		required this.subiendoPdfAhora,
+		required this.pdfConfirmadoServidor,
 	});
 
 	@override
@@ -574,8 +662,7 @@ class _TarjetaServicio extends StatelessWidget {
 		final estadoVisual = _resolverEstadoVisual(servicio);
 		final fechaOrden = servicio.fechaHoraServicio ?? servicio.fecha;
 		final fecha = fechaOrden == null ? 'Sin fecha informada' : _formatearFecha(fechaOrden);
-		final pdfUrl = (servicio.documento?.pdfUrl ?? '').trim();
-		final tienePdf = pdfUrl.isNotEmpty;
+		final tienePdf = _tieneDocumentoSubido(servicio) || pdfConfirmadoServidor;
 		final nombreFirmante = (servicio.documento?.firmaClienteNombre ?? '').trim();
 
 		return Card(
@@ -741,6 +828,29 @@ class _TarjetaServicio extends StatelessWidget {
 		final hora = local.hour.toString().padLeft(2, '0');
 		final minuto = local.minute.toString().padLeft(2, '0');
 		return '$dia/$mes/$anio - $hora:$minuto';
+	}
+
+	bool _tieneDocumentoSubido(Servicio servicio) {
+		final documento = servicio.documento;
+		if (documento == null) {
+			return false;
+		}
+
+		final pdfUrl = (documento.pdfUrl ?? '').trim();
+		if (pdfUrl.isNotEmpty) {
+			return true;
+		}
+
+		final pdfHash = (documento.pdfHashSha256 ?? '').trim();
+		if (pdfHash.isNotEmpty) {
+			return true;
+		}
+
+		final firmaNombre = (documento.firmaClienteNombre ?? '').trim();
+		final firmaDocumento = (documento.firmaClienteDocumento ?? '').trim();
+		final firmaFecha = documento.firmaFechaHora;
+
+		return firmaNombre.isNotEmpty || firmaDocumento.isNotEmpty || firmaFecha != null;
 	}
 }
 
