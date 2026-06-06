@@ -95,11 +95,12 @@ class _FormularioServicioState extends State<FormularioServicio> {
 	}
 
 	Future<void> _mostrarDialogoAltaRapidaCliente(BuildContext context) async {
-		final payloadController = TextEditingController(
-			text: const JsonEncoder.withIndent('  ').convert({
-				'nombre': '',
-			}),
-		);
+		final formularioKey = GlobalKey<FormState>();
+		final cuitController = TextEditingController();
+		final nombreController = TextEditingController();
+		final contactoController = TextEditingController();
+		final telefonoController = TextEditingController();
+		final localidadController = TextEditingController();
 
 		await showDialog<void>(
 			context: context,
@@ -107,24 +108,90 @@ class _FormularioServicioState extends State<FormularioServicio> {
 				return AlertDialog(
 					title: const Text('Alta rapida de cliente'),
 					content: SizedBox(
-						width: 520,
-						child: Column(
-							mainAxisSize: MainAxisSize.min,
-							crossAxisAlignment: CrossAxisAlignment.start,
-							children: [
-								const Text(
-									'Pegá el JSON del endpoint POST /clientes segun el backend.',
+						width: 560,
+						child: Form(
+							key: formularioKey,
+							child: SingleChildScrollView(
+								child: Column(
+									mainAxisSize: MainAxisSize.min,
+									crossAxisAlignment: CrossAxisAlignment.start,
+									children: [
+										const Text('Completa los datos del cliente para crear el registro.'),
+										const SizedBox(height: 10),
+										TextFormField(
+											controller: cuitController,
+											keyboardType: TextInputType.number,
+											decoration: const InputDecoration(
+												labelText: 'CUIT',
+												border: OutlineInputBorder(),
+											),
+											validator: (valor) {
+												if ((valor ?? '').trim().isEmpty) {
+													return 'El CUIT es obligatorio.';
+												}
+												return null;
+											},
+										),
+										const SizedBox(height: 10),
+										TextFormField(
+											controller: nombreController,
+											decoration: const InputDecoration(
+												labelText: 'Nombre',
+												border: OutlineInputBorder(),
+											),
+											validator: (valor) {
+												if ((valor ?? '').trim().isEmpty) {
+													return 'El nombre es obligatorio.';
+												}
+												return null;
+											},
+										),
+										const SizedBox(height: 10),
+										TextFormField(
+											controller: contactoController,
+											decoration: const InputDecoration(
+												labelText: 'Contacto',
+												border: OutlineInputBorder(),
+											),
+											validator: (valor) {
+												if ((valor ?? '').trim().isEmpty) {
+													return 'El contacto es obligatorio.';
+												}
+												return null;
+											},
+										),
+										const SizedBox(height: 10),
+										TextFormField(
+											controller: telefonoController,
+											keyboardType: TextInputType.phone,
+											decoration: const InputDecoration(
+												labelText: 'Telefono',
+												border: OutlineInputBorder(),
+											),
+											validator: (valor) {
+												if ((valor ?? '').trim().isEmpty) {
+													return 'El telefono es obligatorio.';
+												}
+												return null;
+											},
+										),
+										const SizedBox(height: 10),
+										TextFormField(
+											controller: localidadController,
+											decoration: const InputDecoration(
+												labelText: 'Localidad',
+												border: OutlineInputBorder(),
+											),
+											validator: (valor) {
+												if ((valor ?? '').trim().isEmpty) {
+													return 'La localidad es obligatoria.';
+												}
+												return null;
+											},
+										),
+									],
 								),
-								const SizedBox(height: 8),
-								TextField(
-									controller: payloadController,
-									maxLines: 9,
-									decoration: const InputDecoration(
-										border: OutlineInputBorder(),
-										hintText: '{"nombre":"Cliente"}',
-									),
-								),
-							],
+							),
 						),
 					),
 					actions: [
@@ -134,9 +201,20 @@ class _FormularioServicioState extends State<FormularioServicio> {
 						),
 						ElevatedButton(
 							onPressed: () {
+								if (!(formularioKey.currentState?.validate() ?? false)) {
+									return;
+								}
+
+								final payload = <String, dynamic>{
+									'cuit': cuitController.text.trim(),
+									'nombre': nombreController.text.trim(),
+									'contacto': contactoController.text.trim(),
+									'telefono': telefonoController.text.trim(),
+									'localidad': localidadController.text.trim(),
+								};
 								context.read<ServicioBloc>().add(
 										ServicioCrearClienteRapidoSolicitado(
-											payloadJson: payloadController.text,
+											payloadJson: jsonEncode(payload),
 										),
 								);
 								Navigator.of(dialogContext).pop();
@@ -147,6 +225,12 @@ class _FormularioServicioState extends State<FormularioServicio> {
 				);
 			},
 		);
+
+		cuitController.dispose();
+		nombreController.dispose();
+		contactoController.dispose();
+		telefonoController.dispose();
+		localidadController.dispose();
 	}
 
 
