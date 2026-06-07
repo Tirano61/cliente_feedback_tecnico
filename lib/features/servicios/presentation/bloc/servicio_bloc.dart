@@ -395,6 +395,7 @@ class ServicioBloc extends Bloc<ServicioEvent, ServicioState> {
 		Emitter<ServicioState> emit,
 	) async {
 		final actual = _estadoFormularioActual();
+		Map<String, dynamic>? payloadCliente;
 		emit(
 			actual.copyWith(
 				creandoCliente: true,
@@ -414,6 +415,7 @@ class ServicioBloc extends Bloc<ServicioEvent, ServicioState> {
 				);
 				return;
 			}
+			payloadCliente = payload;
 
 			final cliente = await _crearClienteRapidoUseCase.ejecutar(payload);
 			emit(
@@ -433,10 +435,18 @@ class ServicioBloc extends Bloc<ServicioEvent, ServicioState> {
 				),
 			);
 		} on ServerException catch (e) {
+			final cuit = (payloadCliente?['cuit'] ?? '').toString().trim();
+			final mensajeBackend = e.mensaje.toLowerCase();
+			final yaExiste = e.statusCode == 400 && mensajeBackend.contains('cliente ya existe');
+			final mensajeMostrar = yaExiste
+					? (cuit.isNotEmpty
+							? 'El cliente con el CUIT: $cuit ya existe.'
+							: 'El cliente ya existe.')
+					: e.mensaje;
 			emit(
 				actual.copyWith(
 					creandoCliente: false,
-					errorMensaje: e.mensaje,
+					errorMensaje: mensajeMostrar,
 				),
 			);
 		} catch (_) {
