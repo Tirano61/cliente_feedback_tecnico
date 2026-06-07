@@ -96,141 +96,237 @@ class _FormularioServicioState extends State<FormularioServicio> {
 
 	Future<void> _mostrarDialogoAltaRapidaCliente(BuildContext context) async {
 		final formularioKey = GlobalKey<FormState>();
-		final cuitController = TextEditingController();
-		final nombreController = TextEditingController();
-		final contactoController = TextEditingController();
-		final telefonoController = TextEditingController();
-		final localidadController = TextEditingController();
+		var cuit = '';
+		var nombre = '';
+		var contacto = '';
+		var telefono = '';
+		var localidad = '';
+		var intentoCrear = false;
+		final colorScheme = Theme.of(context).colorScheme;
+		final textTheme = Theme.of(context).textTheme;
 
 		await showDialog<void>(
 			context: context,
 			builder: (dialogContext) {
-				return AlertDialog(
-					title: const Text('Alta rapida de cliente'),
-					content: SizedBox(
-						width: 560,
-						child: Form(
-							key: formularioKey,
-							child: SingleChildScrollView(
-								child: Column(
-									mainAxisSize: MainAxisSize.min,
-									crossAxisAlignment: CrossAxisAlignment.start,
-									children: [
-										const Text('Completa los datos del cliente para crear el registro.'),
-										const SizedBox(height: 10),
-										TextFormField(
-											controller: cuitController,
-											keyboardType: TextInputType.number,
-											decoration: const InputDecoration(
-												labelText: 'CUIT',
-												border: OutlineInputBorder(),
+				return StatefulBuilder(
+					builder: (context, setDialogState) {
+						return BlocBuilder<ServicioBloc, ServicioState>(
+							builder: (context, state) {
+								final estadoFormulario = state is ServicioFormularioState
+										? state
+										: const ServicioFormularioState();
+								final mensaje = estadoFormulario.errorMensaje?.isNotEmpty == true
+										? estadoFormulario.errorMensaje
+										: estadoFormulario.exitoMensaje;
+								final esError = estadoFormulario.errorMensaje?.isNotEmpty == true;
+
+								return AlertDialog(
+									shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+									titlePadding: const EdgeInsets.fromLTRB(18, 16, 18, 10),
+									contentPadding: const EdgeInsets.fromLTRB(18, 0, 18, 10),
+									actionsPadding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+									title: Row(
+										children: [
+											Container(
+												padding: const EdgeInsets.all(8),
+												decoration: BoxDecoration(
+													color: colorScheme.primary.withValues(alpha: 0.12),
+													borderRadius: BorderRadius.circular(10),
+												),
+												child: Icon(
+													Icons.person_add_alt_1_outlined,
+													size: 20,
+													color: colorScheme.primary,
+												),
 											),
-											validator: (valor) {
-												if ((valor ?? '').trim().isEmpty) {
-													return 'El CUIT es obligatorio.';
-												}
-												return null;
-											},
+											const SizedBox(width: 10),
+											Expanded(
+												child: Text(
+													'Alta rapida de cliente',
+													style: textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+												),
+											),
+										],
+									),
+									content: SizedBox(
+										width: 580,
+										child: Form(
+											key: formularioKey,
+											autovalidateMode: AutovalidateMode.onUserInteraction,
+											child: SingleChildScrollView(
+												child: Column(
+													mainAxisSize: MainAxisSize.min,
+													crossAxisAlignment: CrossAxisAlignment.start,
+													children: [
+														Container(
+															width: double.infinity,
+															padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+															decoration: BoxDecoration(
+																color: colorScheme.surfaceContainerHighest.withValues(alpha: 0.35),
+																borderRadius: BorderRadius.circular(10),
+															),
+															child: Text(
+																'Completá los datos para crear y seleccionar el cliente.',
+																style: textTheme.bodySmall?.copyWith(
+																	color: colorScheme.onSurfaceVariant,
+																),
+															),
+														),
+														const SizedBox(height: 12),
+														TextFormField(
+															onChanged: (valor) => cuit = valor,
+															keyboardType: TextInputType.number,
+															decoration: const InputDecoration(
+																labelText: 'CUIT',
+																hintText: 'Ej: 20240854124',
+																border: OutlineInputBorder(),
+															),
+															validator: (valor) {
+																if ((valor ?? '').trim().isEmpty) {
+																	return 'El CUIT es obligatorio.';
+																}
+																return null;
+															},
+														),
+														const SizedBox(height: 10),
+														TextFormField(
+															onChanged: (valor) => nombre = valor,
+															decoration: const InputDecoration(
+																labelText: 'Nombre',
+																hintText: 'Razón social o nombre del cliente',
+																border: OutlineInputBorder(),
+															),
+															validator: (valor) {
+																if ((valor ?? '').trim().isEmpty) {
+																	return 'El nombre es obligatorio.';
+																}
+																return null;
+															},
+														),
+														const SizedBox(height: 10),
+														TextFormField(
+															onChanged: (valor) => contacto = valor,
+															decoration: const InputDecoration(
+																labelText: 'Contacto',
+																border: OutlineInputBorder(),
+															),
+															validator: (valor) {
+																if ((valor ?? '').trim().isEmpty) {
+																	return 'El contacto es obligatorio.';
+																}
+																return null;
+															},
+														),
+														const SizedBox(height: 10),
+														TextFormField(
+															onChanged: (valor) => telefono = valor,
+															keyboardType: TextInputType.phone,
+															decoration: const InputDecoration(
+																labelText: 'Telefono',
+																hintText: 'Ej: +54 9 11 3462-552333',
+																border: OutlineInputBorder(),
+															),
+															validator: (valor) {
+																if ((valor ?? '').trim().isEmpty) {
+																	return 'El telefono es obligatorio.';
+																}
+																return null;
+															},
+														),
+														const SizedBox(height: 10),
+														TextFormField(
+															onChanged: (valor) => localidad = valor,
+															decoration: const InputDecoration(
+																labelText: 'Localidad',
+																hintText: 'Ej: Venado Tuerto',
+																border: OutlineInputBorder(),
+															),
+															validator: (valor) {
+																if ((valor ?? '').trim().isEmpty) {
+																	return 'La localidad es obligatoria.';
+																}
+																return null;
+															},
+														),
+														if (intentoCrear && mensaje != null && mensaje.isNotEmpty) ...[
+															const SizedBox(height: 12),
+															Container(
+																width: double.infinity,
+																padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+																decoration: BoxDecoration(
+																	color: esError
+																		? colorScheme.errorContainer.withValues(alpha: 0.65)
+																		: colorScheme.primaryContainer.withValues(alpha: 0.55),
+																	borderRadius: BorderRadius.circular(10),
+																),
+																child: Text(
+																	mensaje,
+																	style: textTheme.bodySmall?.copyWith(
+																		color: esError
+																			? colorScheme.onErrorContainer
+																			: colorScheme.onPrimaryContainer,
+																	),
+																),
+															),
+														],
+													],
+												),
+											),
 										),
-										const SizedBox(height: 10),
-										TextFormField(
-											controller: nombreController,
-											decoration: const InputDecoration(
-												labelText: 'Nombre',
-												border: OutlineInputBorder(),
-											),
-											validator: (valor) {
-												if ((valor ?? '').trim().isEmpty) {
-													return 'El nombre es obligatorio.';
-												}
-												return null;
-											},
+									),
+									actions: [
+										TextButton(
+											onPressed: estadoFormulario.creandoCliente
+												? null
+												: () => Navigator.of(dialogContext).pop(),
+											child: const Text('Cancelar'),
 										),
-										const SizedBox(height: 10),
-										TextFormField(
-											controller: contactoController,
-											decoration: const InputDecoration(
-												labelText: 'Contacto',
-												border: OutlineInputBorder(),
+										ElevatedButton(
+											style: ElevatedButton.styleFrom(
+												padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+												shape: RoundedRectangleBorder(
+													borderRadius: BorderRadius.circular(10),
+												),
 											),
-											validator: (valor) {
-												if ((valor ?? '').trim().isEmpty) {
-													return 'El contacto es obligatorio.';
-												}
-												return null;
-											},
-										),
-										const SizedBox(height: 10),
-										TextFormField(
-											controller: telefonoController,
-											keyboardType: TextInputType.phone,
-											decoration: const InputDecoration(
-												labelText: 'Telefono',
-												border: OutlineInputBorder(),
-											),
-											validator: (valor) {
-												if ((valor ?? '').trim().isEmpty) {
-													return 'El telefono es obligatorio.';
-												}
-												return null;
-											},
-										),
-										const SizedBox(height: 10),
-										TextFormField(
-											controller: localidadController,
-											decoration: const InputDecoration(
-												labelText: 'Localidad',
-												border: OutlineInputBorder(),
-											),
-											validator: (valor) {
-												if ((valor ?? '').trim().isEmpty) {
-													return 'La localidad es obligatoria.';
-												}
-												return null;
-											},
+											onPressed: estadoFormulario.creandoCliente
+												? null
+												: () {
+													setDialogState(() {
+														intentoCrear = true;
+													});
+													if (!(formularioKey.currentState?.validate() ?? false)) {
+														return;
+													}
+
+													final payload = <String, dynamic>{
+														'cuit': cuit.trim(),
+														'nombre': nombre.trim(),
+														'contacto': contacto.trim(),
+														'telefono': telefono.trim(),
+														'localidad': localidad.trim(),
+													};
+													context.read<ServicioBloc>().add(
+														ServicioCrearClienteRapidoSolicitado(
+															payloadJson: jsonEncode(payload),
+														),
+													);
+												},
+											child: estadoFormulario.creandoCliente
+												? const SizedBox(
+													height: 16,
+													width: 16,
+													child: CircularProgressIndicator(strokeWidth: 2),
+												)
+												: const Text('Crear cliente'),
 										),
 									],
-								),
-							),
-						),
-					),
-					actions: [
-						TextButton(
-							onPressed: () => Navigator.of(dialogContext).pop(),
-							child: const Text('Cancelar'),
-						),
-						ElevatedButton(
-							onPressed: () {
-								if (!(formularioKey.currentState?.validate() ?? false)) {
-									return;
-								}
-
-								final payload = <String, dynamic>{
-									'cuit': cuitController.text.trim(),
-									'nombre': nombreController.text.trim(),
-									'contacto': contactoController.text.trim(),
-									'telefono': telefonoController.text.trim(),
-									'localidad': localidadController.text.trim(),
-								};
-								context.read<ServicioBloc>().add(
-										ServicioCrearClienteRapidoSolicitado(
-											payloadJson: jsonEncode(payload),
-										),
 								);
-								Navigator.of(dialogContext).pop();
 							},
-							child: const Text('Crear cliente'),
-						),
-					],
+						);
+					},
 				);
 			},
 		);
-
-		cuitController.dispose();
-		nombreController.dispose();
-		contactoController.dispose();
-		telefonoController.dispose();
-		localidadController.dispose();
 	}
 
 
