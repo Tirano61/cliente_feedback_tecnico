@@ -1,6 +1,7 @@
 import 'package:cliente_feedback_tecnico/features/servicios/presentation/widgets/formulario_servicio.dart';
 import 'package:flutter/material.dart';
 
+import 'package:cliente_feedback_tecnico/features/liquidaciones/presentation/pages/liquidaciones_screen.dart';
 import 'package:cliente_feedback_tecnico/features/servicios/presentation/pages/mis_servicios_page.dart';
 
 class NuevaOrdenServicioPage extends StatelessWidget {
@@ -12,6 +13,15 @@ class NuevaOrdenServicioPage extends StatelessWidget {
 			appBar: AppBar(
 				title: const Text('Nueva orden de servicio'),
 				actions: [
+					IconButton(
+						onPressed: () {
+							Navigator.of(context).push(
+								MaterialPageRoute(builder: (_) => const LiquidacionesScreen()),
+							);
+						},
+						icon: const Icon(Icons.payments_outlined),
+						tooltip: 'Liquidaciones',
+					),
 					IconButton(
 						onPressed: () {
 							Navigator.of(context).push(

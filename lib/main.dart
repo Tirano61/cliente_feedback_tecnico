@@ -6,6 +6,7 @@ import 'package:cliente_feedback_tecnico/features/auth/presentation/bloc/auth_bl
 import 'package:cliente_feedback_tecnico/features/auth/presentation/bloc/auth_event.dart';
 import 'package:cliente_feedback_tecnico/features/auth/presentation/bloc/auth_state.dart';
 import 'package:cliente_feedback_tecnico/features/auth/presentation/pages/login_page.dart';
+import 'package:cliente_feedback_tecnico/features/liquidaciones/presentation/bloc/liquidaciones_bloc.dart';
 import 'package:cliente_feedback_tecnico/features/servicios/presentation/bloc/servicio_bloc.dart';
 import 'package:cliente_feedback_tecnico/features/servicios/presentation/pages/nueva_orden_servicio_page.dart';
 import 'package:cliente_feedback_tecnico/features/catalogos/presentation/bloc/catalogo_bloc.dart';
@@ -45,6 +46,12 @@ class App extends StatelessWidget {
 			deps.encolarDocumentoPendienteUseCase,
 			deps.obtenerDocumentosPendientesUseCase,
 			deps.quitarDocumentoPendienteUseCase,
+          ),
+        ),
+        BlocProvider(
+          create: (_) => LiquidacionesBloc(
+            deps.obtenerMisLiquidacionesUseCase,
+            deps.obtenerItemsLiquidacionUseCase,
           ),
         ),
       ],
