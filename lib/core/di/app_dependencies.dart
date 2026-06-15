@@ -16,6 +16,11 @@ import 'package:cliente_feedback_tecnico/features/servicios/application/quitar_d
 import 'package:cliente_feedback_tecnico/features/servicios/application/subir_documento_firmado_use_case.dart';
 import 'package:cliente_feedback_tecnico/features/servicios/domain/repositories/i_servicio_repository.dart';
 import 'package:cliente_feedback_tecnico/features/servicios/infrastructure/repositories/servicio_repository_impl.dart';
+import 'package:cliente_feedback_tecnico/features/liquidaciones/application/obtener_items_liquidacion_use_case.dart';
+import 'package:cliente_feedback_tecnico/features/liquidaciones/application/obtener_mis_liquidaciones_use_case.dart';
+import 'package:cliente_feedback_tecnico/features/liquidaciones/domain/repositories/i_liquidacion_repository.dart';
+import 'package:cliente_feedback_tecnico/features/liquidaciones/infrastructure/datasources/liquidacion_remote_data_source.dart';
+import 'package:cliente_feedback_tecnico/features/liquidaciones/infrastructure/repositories/liquidacion_repository_impl.dart';
 import 'package:cliente_feedback_tecnico/features/catalogos/application/obtener_catalogos_use_case.dart';
 import 'package:cliente_feedback_tecnico/features/catalogos/domain/repositories/i_catalogo_repository.dart';
 import 'package:cliente_feedback_tecnico/features/catalogos/infrastructure/repositories/catalogo_repository_impl.dart';
@@ -28,6 +33,7 @@ class AppDependencies {
 	final IAuthRepository authRepository;
 	final ICatalogoRepository catalogoRepository;
 	final IServicioRepository servicioRepository;
+	final ILiquidacionRepository liquidacionRepository;
 
 	final LoginUseCase loginUseCase;
 	final ObtenerCatalogosUseCase obtenerCatalogosUseCase;
@@ -42,6 +48,8 @@ class AppDependencies {
 	final EncolarDocumentoPendienteUseCase encolarDocumentoPendienteUseCase;
 	final ObtenerDocumentosPendientesUseCase obtenerDocumentosPendientesUseCase;
 	final QuitarDocumentoPendienteUseCase quitarDocumentoPendienteUseCase;
+	final ObtenerMisLiquidacionesUseCase obtenerMisLiquidacionesUseCase;
+	final ObtenerItemsLiquidacionUseCase obtenerItemsLiquidacionUseCase;
 
 	AppDependencies._({
 		required this.secureStorage,
@@ -49,6 +57,7 @@ class AppDependencies {
 		required this.authRepository,
 		required this.catalogoRepository,
 		required this.servicioRepository,
+		required this.liquidacionRepository,
 		required this.loginUseCase,
 		required this.obtenerCatalogosUseCase,
 		required this.cargarServicioUseCase,
@@ -62,6 +71,8 @@ class AppDependencies {
 		required this.encolarDocumentoPendienteUseCase,
 		required this.obtenerDocumentosPendientesUseCase,
 		required this.quitarDocumentoPendienteUseCase,
+		required this.obtenerMisLiquidacionesUseCase,
+		required this.obtenerItemsLiquidacionUseCase,
 	});
 
 	factory AppDependencies.create() {
@@ -71,6 +82,8 @@ class AppDependencies {
 		final authRepository = AuthRepositoryImpl(apiClient, secureStorage);
 		final catalogoRepository = CatalogoRepositoryImpl(apiClient);
 		final servicioRepository = ServicioRepositoryImpl(apiClient, secureStorage);
+		final liquidacionRemoteDataSource = LiquidacionRemoteDataSource(apiClient);
+		final liquidacionRepository = LiquidacionRepositoryImpl(liquidacionRemoteDataSource);
 
 		return AppDependencies._(
 			secureStorage: secureStorage,
@@ -78,6 +91,7 @@ class AppDependencies {
 			authRepository: authRepository,
 			catalogoRepository: catalogoRepository,
 			servicioRepository: servicioRepository,
+			liquidacionRepository: liquidacionRepository,
 			loginUseCase: LoginUseCase(authRepository),
 			obtenerCatalogosUseCase: ObtenerCatalogosUseCase(catalogoRepository),
 			cargarServicioUseCase: CargarServicioUseCase(servicioRepository),
@@ -98,6 +112,10 @@ class AppDependencies {
 					ObtenerDocumentosPendientesUseCase(servicioRepository),
 			quitarDocumentoPendienteUseCase:
 					QuitarDocumentoPendienteUseCase(servicioRepository),
+			obtenerMisLiquidacionesUseCase:
+					ObtenerMisLiquidacionesUseCase(liquidacionRepository),
+			obtenerItemsLiquidacionUseCase:
+					ObtenerItemsLiquidacionUseCase(liquidacionRepository),
 		);
 	}
 }
