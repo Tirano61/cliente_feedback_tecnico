@@ -121,6 +121,11 @@ class _LiquidacionesScreenState extends State<LiquidacionesScreen> {
                                 );
                           },
                           onAbrirDetalle: _abrirDetalleLiquidacion,
+                          onCargarItems: (id) {
+                            context.read<LiquidacionesBloc>().add(
+                                  LiquidacionDetalleSolicitado(liquidacionId: id),
+                                );
+                          },
                         ),
                         _ListaLiquidacionesTab(
                           estado: EstadoLiquidacion.reabierta,
@@ -282,13 +287,14 @@ class _ChipCantidad extends StatelessWidget {
   }
 }
 
-class _ListaLiquidacionesTab extends StatelessWidget {
+class _ListaLiquidacionesTab extends StatefulWidget {
   final EstadoLiquidacion estado;
   final List<Liquidacion> liquidaciones;
   final Map<String, List<ItemLiquidacion>> detallesItemsPorLiquidacion;
   final Set<String> detallesCargandoIds;
   final Future<void> Function() onRefresh;
   final void Function(Liquidacion liquidacion) onAbrirDetalle;
+  final void Function(String liquidacionId)? onCargarItems;
 
   const _ListaLiquidacionesTab({
     required this.estado,
@@ -297,13 +303,48 @@ class _ListaLiquidacionesTab extends StatelessWidget {
     required this.detallesCargandoIds,
     required this.onRefresh,
     required this.onAbrirDetalle,
+    this.onCargarItems,
   });
 
   @override
+  State<_ListaLiquidacionesTab> createState() => _ListaLiquidacionesTabState();
+}
+
+class _ListaLiquidacionesTabState extends State<_ListaLiquidacionesTab> {
+  @override
+  void initState() {
+    super.initState();
+    // Precarga automática de items para liquidaciones aprobadas.
+    if (widget.onCargarItems != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => _precargarItems());
+    }
+  }
+
+  @override
+  void didUpdateWidget(_ListaLiquidacionesTab oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // Si cambiaron las liquidaciones (ej: refresh), precarga de nuevo.
+    if (widget.onCargarItems != null &&
+        widget.liquidaciones != oldWidget.liquidaciones) {
+      _precargarItems();
+    }
+  }
+
+  void _precargarItems() {
+    for (final liq in widget.liquidaciones) {
+      final yaCargado = widget.detallesItemsPorLiquidacion.containsKey(liq.id);
+      final cargando = widget.detallesCargandoIds.contains(liq.id);
+      if (!yaCargado && !cargando) {
+        widget.onCargarItems!(liq.id);
+      }
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
-    if (liquidaciones.isEmpty) {
+    if (widget.liquidaciones.isEmpty) {
       return RefreshIndicator(
-        onRefresh: onRefresh,
+        onRefresh: widget.onRefresh,
         child: ListView(
           children: [
             const SizedBox(height: 140),
@@ -311,7 +352,7 @@ class _ListaLiquidacionesTab extends StatelessWidget {
               child: Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 24),
                 child: Text(
-                  _mensajeSinDatos(estado),
+                  _mensajeSinDatos(widget.estado),
                   textAlign: TextAlign.center,
                 ),
               ),
@@ -322,24 +363,22 @@ class _ListaLiquidacionesTab extends StatelessWidget {
     }
 
     return RefreshIndicator(
-      onRefresh: onRefresh,
+      onRefresh: widget.onRefresh,
       child: ListView.separated(
         padding: const EdgeInsets.all(16),
         itemBuilder: (_, index) {
-          final liquidacion = liquidaciones[index];
-          final tieneDetalleCargado =
-              detallesItemsPorLiquidacion.containsKey(liquidacion.id);
-          final cargandoDetalle = detallesCargandoIds.contains(liquidacion.id);
+          final liquidacion = widget.liquidaciones[index];
+          final cargandoDetalle = widget.detallesCargandoIds.contains(liquidacion.id);
 
           return _LiquidacionCard(
             liquidacion: liquidacion,
-            tieneDetalleCargado: tieneDetalleCargado,
+            itemsDetalle: widget.detallesItemsPorLiquidacion[liquidacion.id],
             cargandoDetalle: cargandoDetalle,
-            onTap: () => onAbrirDetalle(liquidacion),
+            onTap: () => widget.onAbrirDetalle(liquidacion),
           );
         },
         separatorBuilder: (_, _) => const SizedBox(height: 12),
-        itemCount: liquidaciones.length,
+        itemCount: widget.liquidaciones.length,
       ),
     );
   }
@@ -360,19 +399,22 @@ class _ListaLiquidacionesTab extends StatelessWidget {
 
 class _LiquidacionCard extends StatelessWidget {
   final Liquidacion liquidacion;
-  final bool tieneDetalleCargado;
+  final List<ItemLiquidacion>? itemsDetalle;
   final bool cargandoDetalle;
   final VoidCallback onTap;
 
   const _LiquidacionCard({
     required this.liquidacion,
-    required this.tieneDetalleCargado,
+    required this.itemsDetalle,
     required this.cargandoDetalle,
     required this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
+    // Usa los items del detalle si ya se cargaron, sino los embebidos en el listado.
+    final itemsMostrados = itemsDetalle ?? liquidacion.items;
+
     return Card(
       child: InkWell(
         borderRadius: BorderRadius.circular(12),
@@ -395,36 +437,68 @@ class _LiquidacionCard extends StatelessWidget {
                   _BadgeEstado(estado: liquidacion.estado),
                 ],
               ),
-              const SizedBox(height: 8),
+              const SizedBox(height: 6),
+              Text('Lugar: ${_textoSeguro(_combinarLugar(liquidacion))}'),
               Text(
-                'Lugar: ${_textoSeguro(_combinarLugar(liquidacion))}',
-              ),
-              Text(
-                'Fecha servicio: ${_formatearFecha(liquidacion.servicio.fechaHoraServicio)}',
+                'Fecha: ${_formatearFecha(liquidacion.servicio.fechaHoraServicio)}',
               ),
               Text(
                 'Tipo salida: ${_textoSeguro(liquidacion.tipoSalida.nombre)} (${_monedaUsd(liquidacion.tipoSalida.precioUsd)})',
               ),
-              Text('Items: ${liquidacion.resumen.cantidadItems}'),
               const SizedBox(height: 8),
-              Row(
-                children: [
-                  Text(
-                    'Total liquidacion: ${_monedaUsd(liquidacion.resumen.totalLiquidacionUsd)}',
-                    style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                          fontWeight: FontWeight.bold,
-                        ),
+              // Items de tipos de servicio
+              if (cargandoDetalle)
+                const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 4),
+                  child: SizedBox(
+                    height: 14,
+                    child: LinearProgressIndicator(),
                   ),
-                  const Spacer(),
-                  if (cargandoDetalle)
-                    const SizedBox(
-                      width: 16,
-                      height: 16,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  else if (tieneDetalleCargado)
-                    const Icon(Icons.check_circle, color: Colors.green, size: 18),
-                ],
+                )
+              else if (itemsMostrados.isNotEmpty) ...[
+                Text(
+                  'Tipos de servicio asignados:',
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        fontWeight: FontWeight.w600,
+                        color: Theme.of(context).colorScheme.primary,
+                      ),
+                ),
+                const SizedBox(height: 4),
+                ...itemsMostrados.map(
+                  (item) => Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 1),
+                    child: Row(
+                      children: [
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            _textoSeguro(item.tipoServicioNombre),
+                            style: Theme.of(context).textTheme.bodySmall,
+                          ),
+                        ),
+                        Text(
+                          _monedaUsd(item.precioUsdSnapshot),
+                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                fontWeight: FontWeight.w600,
+                              ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ] else
+                Text(
+                  'Sin tipos de servicio asignados',
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: Colors.grey,
+                      ),
+                ),
+              const SizedBox(height: 8),
+              Text(
+                'Total: ${_monedaUsd(liquidacion.resumen.totalLiquidacionUsd)}',
+                style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                      fontWeight: FontWeight.bold,
+                    ),
               ),
             ],
           ),
