@@ -10,3 +10,21 @@ abstract class CatalogoEvent extends Equatable {
 class CargarCatalogos extends CatalogoEvent {
 	const CargarCatalogos();
 }
+
+class CargarCatalogosBasicos extends CatalogoEvent {
+	final bool forzar;
+
+	const CargarCatalogosBasicos({this.forzar = false});
+
+	@override
+	List<Object?> get props => [forzar];
+}
+
+class CargarCatalogosProductos extends CatalogoEvent {
+	final bool forzar;
+
+	const CargarCatalogosProductos({this.forzar = false});
+
+	@override
+	List<Object?> get props => [forzar];
+}

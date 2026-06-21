@@ -21,16 +21,47 @@ class CatalogosData {
 	});
 }
 
+class CatalogosBasicosData {
+	final List<CatDiagnostico> diagnosticos;
+	final List<CatResolucion> resoluciones;
+	final List<Zona> zonas;
+	final List<CategoriaProducto> categorias;
+
+	const CatalogosBasicosData({
+		required this.diagnosticos,
+		required this.resoluciones,
+		required this.zonas,
+		required this.categorias,
+	});
+}
+
 class ObtenerCatalogosUseCase {
 	final ICatalogoRepository _repository;
 
 	ObtenerCatalogosUseCase(this._repository);
 
-	Future<CatalogosData> ejecutar() async {
-		final diagnosticos = await _repository.obtenerDiagnosticos();
-		final resoluciones = await _repository.obtenerResoluciones();
-		final zonas = await _repository.obtenerZonas();
-		final categorias = await _repository.obtenerCategorias();
+	Future<CatalogosBasicosData> ejecutarBasicos() async {
+		final resultados = await Future.wait<dynamic>([
+			_repository.obtenerDiagnosticos(),
+			_repository.obtenerResoluciones(),
+			_repository.obtenerZonas(),
+			_repository.obtenerCategorias(),
+		]);
+
+		return CatalogosBasicosData(
+			diagnosticos: resultados[0] as List<CatDiagnostico>,
+			resoluciones: resultados[1] as List<CatResolucion>,
+			zonas: resultados[2] as List<Zona>,
+			categorias: resultados[3] as List<CategoriaProducto>,
+		);
+	}
+
+	Future<List<Producto>> ejecutarProductosPorCategorias(
+		List<CategoriaProducto> categorias,
+	) async {
+		if (categorias.isEmpty) {
+			return const [];
+		}
 
 		final productosPorCategoria = await Future.wait(
 			categorias.map((categoria) {
@@ -45,13 +76,18 @@ class ObtenerCatalogosUseCase {
 			}
 		}
 
-		final productos = mapaProductos.values.toList();
+		return mapaProductos.values.toList();
+	}
+
+	Future<CatalogosData> ejecutar() async {
+		final basicos = await ejecutarBasicos();
+		final productos = await ejecutarProductosPorCategorias(basicos.categorias);
 
 		return CatalogosData(
-			diagnosticos: diagnosticos,
-			resoluciones: resoluciones,
-			zonas: zonas,
-			categorias: categorias,
+			diagnosticos: basicos.diagnosticos,
+			resoluciones: basicos.resoluciones,
+			zonas: basicos.zonas,
+			categorias: basicos.categorias,
 			productos: productos,
 		);
 	}
