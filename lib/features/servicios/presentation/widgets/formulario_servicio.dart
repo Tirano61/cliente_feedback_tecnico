@@ -40,6 +40,7 @@ class _FormularioServicioState extends State<FormularioServicio> {
 	final TextEditingController _observacionesController = TextEditingController();
 
 	String? _modeloIndicadorSeleccionadoId;
+	int _pasoActivo = 0;
 
 	final Set<String> _categoriasFallaSeleccionadasIds = <String>{};
 	final Map<String, _ProductoFallaSeleccionado> _productosFallaSeleccionados =
@@ -796,58 +797,25 @@ class _FormularioServicioState extends State<FormularioServicio> {
 														titulo: 'Orden de servicio',
 														subtitulo: 'Registro tecnico con validacion y trazabilidad.',
 													),
-													const SizedBox(height: 8),
-													_buildZonaVisual(
-														context: context,
-																																																												titulo: '1. Tipo de orden',
-																																																												icono: Icons.flag_outlined,
-																																																												child: _buildZonaTipoOrden(
-																																																													context: context,
-																																																													estadoFormulario: estadoFormulario,
-																																																												),
-																																																											),
-																																																											const SizedBox(height: 12),
-																																																											_buildZonaVisual(
-																																																												context: context,
-																																																												titulo: '2. Datos de la orden y equipo',
-																																																												icono: Icons.assignment_ind_outlined,
-																																																												child: _buildZonaDatosOrdenEquipo(
-															context: context,
-															estadoFormulario: estadoFormulario,
-															catalogos: catalogos,
-															indicadoresActivos: indicadoresActivos,
+													const SizedBox(height: 10),
+													_buildSelectorPasos(context),
+													const SizedBox(height: 10),
+													_buildAccionesPasos(context),
+													const SizedBox(height: 12),
+													AnimatedSwitcher(
+														duration: const Duration(milliseconds: 220),
+														child: KeyedSubtree(
+															key: ValueKey<int>(_pasoActivo),
+															child: _buildPasoContenido(
+																context: context,
+																estadoFormulario: estadoFormulario,
+																catalogos: catalogos,
+																indicadoresActivos: indicadoresActivos,
+																productosCategoriaFalla: productosCategoriaFalla,
+																resolucionLabel: resolucionLabel,
+															),
 														),
 													),
-													const SizedBox(height: 12),
-													_buildZonaVisual(
-														context: context,
-																																																												titulo: '3. Falla, diagnostico y resolucion',
-														icono: Icons.build_circle_outlined,
-														child: _buildZonaFallaDiagnosticoResolucion(
-															context: context,
-															estadoFormulario: estadoFormulario,
-															catalogos: catalogos,
-															productosCategoriaFalla: productosCategoriaFalla,
-															resolucionLabel: resolucionLabel,
-														),
-													),
-													const SizedBox(height: 12),
-													_buildSeccionFacturacion(context, estadoFormulario),
-																															const SizedBox(height: 12),
-											TextField(
-												controller: _observacionesController,
-												maxLines: 3,
-												style: _estiloTextoCompacto(context),
-												decoration: _decoracionCampoCompacta(
-													context,
-													labelText: 'Observaciones (opcional)',
-												),
-												onChanged: (valor) {
-													context.read<ServicioBloc>().add(
-															ServicioFormularioCambiado(observaciones: valor),
-													);
-												},
-											),
 											const SizedBox(height: 20),
 											SizedBox(
 												width: double.infinity,
@@ -987,6 +955,70 @@ class _FormularioServicioState extends State<FormularioServicio> {
 		return canal.name;
 	}
 
+	Widget _buildSelectorPasos(BuildContext context) {
+		const pasos = <String>[
+			'Tipo',
+			'Datos',
+			'Falla',
+			'Facturacion',
+			'Observaciones',
+		];
+
+		return SingleChildScrollView(
+			scrollDirection: Axis.horizontal,
+			child: Row(
+				children: List.generate(pasos.length, (index) {
+					final seleccionado = _pasoActivo == index;
+					return Padding(
+						padding: const EdgeInsets.only(right: 8),
+						child: ChoiceChip(
+							label: Text('${index + 1}. ${pasos[index]}'),
+							selected: seleccionado,
+							onSelected: (_) {
+								setState(() {
+									_pasoActivo = index;
+								});
+							},
+						),
+					);
+				}),
+			),
+		);
+	}
+
+	Widget _buildAccionesPasos(BuildContext context) {
+		const totalPasos = 5;
+		return Row(
+			children: [
+				OutlinedButton.icon(
+					onPressed: _pasoActivo == 0
+							? null
+							: () {
+								setState(() {
+									_pasoActivo -= 1;
+								});
+							},
+					icon: const Icon(Icons.arrow_back),
+					label: const Text('Anterior'),
+				),
+				const Spacer(),
+				Text('Paso ${_pasoActivo + 1} de $totalPasos'),
+				const Spacer(),
+				FilledButton.icon(
+					onPressed: _pasoActivo == totalPasos - 1
+							? null
+							: () {
+								setState(() {
+									_pasoActivo += 1;
+								});
+							},
+					icon: const Icon(Icons.arrow_forward),
+					label: const Text('Siguiente'),
+				),
+			],
+		);
+	}
+
 	Widget _buildZonaVisual({
 		required BuildContext context,
 		required String titulo,
@@ -1022,6 +1054,76 @@ class _FormularioServicioState extends State<FormularioServicio> {
 				],
 			),
 		);
+	}
+
+	Widget _buildPasoContenido({
+		required BuildContext context,
+		required ServicioFormularioState estadoFormulario,
+		required CatalogoLoaded catalogos,
+		required List<Producto> indicadoresActivos,
+		required List<Producto> productosCategoriaFalla,
+		required String resolucionLabel,
+	}) {
+		switch (_pasoActivo) {
+			case 0:
+				return _buildZonaVisual(
+					context: context,
+					titulo: '1. Tipo de orden',
+					icono: Icons.flag_outlined,
+					child: _buildZonaTipoOrden(
+						context: context,
+						estadoFormulario: estadoFormulario,
+					),
+				);
+			case 1:
+				return _buildZonaVisual(
+					context: context,
+					titulo: '2. Datos de la orden y equipo',
+					icono: Icons.assignment_ind_outlined,
+					child: _buildZonaDatosOrdenEquipo(
+						context: context,
+						estadoFormulario: estadoFormulario,
+						catalogos: catalogos,
+						indicadoresActivos: indicadoresActivos,
+					),
+				);
+			case 2:
+				return _buildZonaVisual(
+					context: context,
+					titulo: '3. Falla, diagnostico y resolucion',
+					icono: Icons.build_circle_outlined,
+					child: _buildZonaFallaDiagnosticoResolucion(
+						context: context,
+						estadoFormulario: estadoFormulario,
+						catalogos: catalogos,
+						productosCategoriaFalla: productosCategoriaFalla,
+						resolucionLabel: resolucionLabel,
+					),
+				);
+			case 3:
+				return _buildSeccionFacturacion(context, estadoFormulario);
+			case 4:
+				return _buildZonaVisual(
+					context: context,
+					titulo: '4. Observaciones y cierre',
+					icono: Icons.rate_review_outlined,
+					child: TextField(
+						controller: _observacionesController,
+						maxLines: 4,
+						style: _estiloTextoCompacto(context),
+						decoration: _decoracionCampoCompacta(
+							context,
+							labelText: 'Observaciones (opcional)',
+						),
+						onChanged: (valor) {
+							context.read<ServicioBloc>().add(
+									ServicioFormularioCambiado(observaciones: valor),
+							);
+						},
+					),
+				);
+		}
+		return const SizedBox.shrink();
 	}
 
 	Widget _buildZonaDatosOrdenEquipo({

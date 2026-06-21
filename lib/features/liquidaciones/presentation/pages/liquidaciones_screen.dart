@@ -121,11 +121,6 @@ class _LiquidacionesScreenState extends State<LiquidacionesScreen> {
                                 );
                           },
                           onAbrirDetalle: _abrirDetalleLiquidacion,
-                          onCargarItems: (id) {
-                            context.read<LiquidacionesBloc>().add(
-                                  LiquidacionDetalleSolicitado(liquidacionId: id),
-                                );
-                          },
                         ),
                         _ListaLiquidacionesTab(
                           estado: EstadoLiquidacion.reabierta,
@@ -162,10 +157,6 @@ class _LiquidacionesScreenState extends State<LiquidacionesScreen> {
   }
 
   void _abrirDetalleLiquidacion(Liquidacion liquidacion) {
-    context.read<LiquidacionesBloc>().add(
-          LiquidacionDetalleSolicitado(liquidacionId: liquidacion.id),
-        );
-
     showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
@@ -287,14 +278,13 @@ class _ChipCantidad extends StatelessWidget {
   }
 }
 
-class _ListaLiquidacionesTab extends StatefulWidget {
+class _ListaLiquidacionesTab extends StatelessWidget {
   final EstadoLiquidacion estado;
   final List<Liquidacion> liquidaciones;
   final Map<String, List<ItemLiquidacion>> detallesItemsPorLiquidacion;
   final Set<String> detallesCargandoIds;
   final Future<void> Function() onRefresh;
   final void Function(Liquidacion liquidacion) onAbrirDetalle;
-  final void Function(String liquidacionId)? onCargarItems;
 
   const _ListaLiquidacionesTab({
     required this.estado,
@@ -303,48 +293,13 @@ class _ListaLiquidacionesTab extends StatefulWidget {
     required this.detallesCargandoIds,
     required this.onRefresh,
     required this.onAbrirDetalle,
-    this.onCargarItems,
   });
 
   @override
-  State<_ListaLiquidacionesTab> createState() => _ListaLiquidacionesTabState();
-}
-
-class _ListaLiquidacionesTabState extends State<_ListaLiquidacionesTab> {
-  @override
-  void initState() {
-    super.initState();
-    // Precarga automática de items para liquidaciones aprobadas.
-    if (widget.onCargarItems != null) {
-      WidgetsBinding.instance.addPostFrameCallback((_) => _precargarItems());
-    }
-  }
-
-  @override
-  void didUpdateWidget(_ListaLiquidacionesTab oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    // Si cambiaron las liquidaciones (ej: refresh), precarga de nuevo.
-    if (widget.onCargarItems != null &&
-        widget.liquidaciones != oldWidget.liquidaciones) {
-      _precargarItems();
-    }
-  }
-
-  void _precargarItems() {
-    for (final liq in widget.liquidaciones) {
-      final yaCargado = widget.detallesItemsPorLiquidacion.containsKey(liq.id);
-      final cargando = widget.detallesCargandoIds.contains(liq.id);
-      if (!yaCargado && !cargando) {
-        widget.onCargarItems!(liq.id);
-      }
-    }
-  }
-
-  @override
   Widget build(BuildContext context) {
-    if (widget.liquidaciones.isEmpty) {
+    if (liquidaciones.isEmpty) {
       return RefreshIndicator(
-        onRefresh: widget.onRefresh,
+        onRefresh: onRefresh,
         child: ListView(
           children: [
             const SizedBox(height: 140),
@@ -352,7 +307,7 @@ class _ListaLiquidacionesTabState extends State<_ListaLiquidacionesTab> {
               child: Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 24),
                 child: Text(
-                  _mensajeSinDatos(widget.estado),
+                  _mensajeSinDatos(estado),
                   textAlign: TextAlign.center,
                 ),
               ),
@@ -363,22 +318,20 @@ class _ListaLiquidacionesTabState extends State<_ListaLiquidacionesTab> {
     }
 
     return RefreshIndicator(
-      onRefresh: widget.onRefresh,
+      onRefresh: onRefresh,
       child: ListView.separated(
         padding: const EdgeInsets.all(16),
         itemBuilder: (_, index) {
-          final liquidacion = widget.liquidaciones[index];
-          final cargandoDetalle = widget.detallesCargandoIds.contains(liquidacion.id);
+          final liquidacion = liquidaciones[index];
 
           return _LiquidacionCard(
             liquidacion: liquidacion,
-            itemsDetalle: widget.detallesItemsPorLiquidacion[liquidacion.id],
-            cargandoDetalle: cargandoDetalle,
-            onTap: () => widget.onAbrirDetalle(liquidacion),
+            itemsDetalle: detallesItemsPorLiquidacion[liquidacion.id],
+            onTap: () => onAbrirDetalle(liquidacion),
           );
         },
         separatorBuilder: (_, _) => const SizedBox(height: 12),
-        itemCount: widget.liquidaciones.length,
+        itemCount: liquidaciones.length,
       ),
     );
   }
@@ -400,13 +353,11 @@ class _ListaLiquidacionesTabState extends State<_ListaLiquidacionesTab> {
 class _LiquidacionCard extends StatelessWidget {
   final Liquidacion liquidacion;
   final List<ItemLiquidacion>? itemsDetalle;
-  final bool cargandoDetalle;
   final VoidCallback onTap;
 
   const _LiquidacionCard({
     required this.liquidacion,
     required this.itemsDetalle,
-    required this.cargandoDetalle,
     required this.onTap,
   });
 
@@ -447,15 +398,7 @@ class _LiquidacionCard extends StatelessWidget {
               ),
               const SizedBox(height: 8),
               // Items de tipos de servicio
-              if (cargandoDetalle)
-                const Padding(
-                  padding: EdgeInsets.symmetric(vertical: 4),
-                  child: SizedBox(
-                    height: 14,
-                    child: LinearProgressIndicator(),
-                  ),
-                )
-              else if (itemsMostrados.isNotEmpty) ...[
+              if (itemsMostrados.isNotEmpty) ...[
                 Text(
                   'Tipos de servicio asignados:',
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
