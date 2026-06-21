@@ -26,6 +26,8 @@ class CatalogoLoaded extends CatalogoState {
 	final List<Zona> zonas;
 	final List<CategoriaProducto> categorias;
 	final List<Producto> productos;
+	final bool cargandoBasicos;
+	final bool cargandoProductos;
 
 	const CatalogoLoaded({
 		required this.diagnosticos,
@@ -33,10 +35,52 @@ class CatalogoLoaded extends CatalogoState {
 		required this.zonas,
 		required this.categorias,
 		required this.productos,
+		this.cargandoBasicos = false,
+		this.cargandoProductos = false,
 	});
 
+	const CatalogoLoaded.vacio()
+			: diagnosticos = const [],
+				resoluciones = const [],
+				zonas = const [],
+				categorias = const [],
+				productos = const [],
+				cargandoBasicos = false,
+				cargandoProductos = false;
+
+	CatalogoLoaded copyWith({
+		List<CatDiagnostico>? diagnosticos,
+		List<CatResolucion>? resoluciones,
+		List<Zona>? zonas,
+		List<CategoriaProducto>? categorias,
+		List<Producto>? productos,
+		bool? cargandoBasicos,
+		bool? cargandoProductos,
+	}) {
+		return CatalogoLoaded(
+			diagnosticos: diagnosticos ?? this.diagnosticos,
+			resoluciones: resoluciones ?? this.resoluciones,
+			zonas: zonas ?? this.zonas,
+			categorias: categorias ?? this.categorias,
+			productos: productos ?? this.productos,
+			cargandoBasicos: cargandoBasicos ?? this.cargandoBasicos,
+			cargandoProductos: cargandoProductos ?? this.cargandoProductos,
+		);
+	}
+
+	bool get tieneBasicos =>
+			diagnosticos.isNotEmpty || resoluciones.isNotEmpty || zonas.isNotEmpty || categorias.isNotEmpty;
+
 	@override
-	List<Object> get props => [diagnosticos, resoluciones, zonas, categorias, productos];
+	List<Object> get props => [
+		diagnosticos,
+		resoluciones,
+		zonas,
+		categorias,
+		productos,
+		cargandoBasicos,
+		cargandoProductos,
+	];
 }
 
 class CatalogoError extends CatalogoState {

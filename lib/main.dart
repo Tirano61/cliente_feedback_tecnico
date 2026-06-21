@@ -10,7 +10,6 @@ import 'package:cliente_feedback_tecnico/features/liquidaciones/presentation/blo
 import 'package:cliente_feedback_tecnico/features/servicios/presentation/bloc/servicio_bloc.dart';
 import 'package:cliente_feedback_tecnico/features/servicios/presentation/pages/nueva_orden_servicio_page.dart';
 import 'package:cliente_feedback_tecnico/features/catalogos/presentation/bloc/catalogo_bloc.dart';
-import 'package:cliente_feedback_tecnico/features/catalogos/presentation/bloc/catalogo_event.dart';
 
 void main() {
   final deps = AppDependencies.create();
@@ -55,13 +54,7 @@ class App extends StatelessWidget {
           ),
         ),
       ],
-      child: BlocListener<AuthBloc, AuthState>(
-        listener: (context, state) {
-          if (state is AuthAuthenticated) {
-            context.read<CatalogoBloc>().add(const CargarCatalogos());
-          }
-        },
-        child: MaterialApp(
+      child: MaterialApp(
           title: 'Feedback Tecnico',
           debugShowCheckedModeBanner: false,
           theme: ThemeData(
@@ -106,7 +99,6 @@ class App extends StatelessWidget {
             },
           ),
         ),
-      ),
     );
   }
 }

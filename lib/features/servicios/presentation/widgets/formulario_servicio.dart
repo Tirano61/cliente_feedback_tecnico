@@ -51,11 +51,30 @@ class _FormularioServicioState extends State<FormularioServicio> {
 	@override
 	void initState() {
 		super.initState();
-		final catalogoState = context.read<CatalogoBloc>().state;
-		if (catalogoState is! CatalogoLoaded) {
-			context.read<CatalogoBloc>().add(const CargarCatalogos());
-		}
+		_asegurarCatalogosParaPaso(_pasoActivo);
 		context.read<ServicioBloc>().add(const ServicioFormularioReiniciado());
+	}
+
+	void _asegurarCatalogosParaPaso(int paso) {
+		final catalogoBloc = context.read<CatalogoBloc>();
+		if (paso == 1 || paso == 2) {
+			catalogoBloc.add(const CargarCatalogosBasicos());
+		}
+		if (paso == 1 || paso == 2) {
+			catalogoBloc.add(const CargarCatalogosProductos());
+		}
+	}
+
+	void _cambiarPaso(int nuevoPaso) {
+		setState(() {
+			_pasoActivo = nuevoPaso;
+		});
+		_asegurarCatalogosParaPaso(nuevoPaso);
+	}
+
+	void _recargarCatalogosFalla() {
+		context.read<CatalogoBloc>().add(const CargarCatalogosBasicos(forzar: true));
+		context.read<CatalogoBloc>().add(const CargarCatalogosProductos(forzar: true));
 	}
 
 	@override
@@ -692,12 +711,7 @@ class _FormularioServicioState extends State<FormularioServicio> {
 
 				return BlocBuilder<CatalogoBloc, CatalogoState>(
 					builder: (context, catalogoState) {
-						if (catalogoState is CatalogoLoading ||
-								catalogoState is CatalogoInitial) {
-							return const Center(child: CircularProgressIndicator());
-						}
-
-						if (catalogoState is CatalogoError) {
+						if (catalogoState is CatalogoError && (_pasoActivo == 1 || _pasoActivo == 2)) {
 							return Center(
 								child: Column(
 									mainAxisSize: MainAxisSize.min,
@@ -706,7 +720,7 @@ class _FormularioServicioState extends State<FormularioServicio> {
 										const SizedBox(height: 12),
 										ElevatedButton(
 											onPressed: () {
-												context.read<CatalogoBloc>().add(const CargarCatalogos());
+												_asegurarCatalogosParaPaso(_pasoActivo);
 											},
 											child: const Text('Reintentar catalogos'),
 										),
@@ -715,7 +729,9 @@ class _FormularioServicioState extends State<FormularioServicio> {
 							);
 						}
 
-						final catalogos = catalogoState as CatalogoLoaded;
+						final catalogos = catalogoState is CatalogoLoaded
+								? catalogoState
+								: const CatalogoLoaded.vacio();
 
 						final resolucionLabel = _labelResolucion(estadoFormulario.canal);
 						final categoriasIndicadorIds = catalogos.categorias
@@ -744,6 +760,10 @@ class _FormularioServicioState extends State<FormularioServicio> {
 													producto.activo,
 										)
 										.toList();
+
+						final cargandoPasoActual = (_pasoActivo == 1 || _pasoActivo == 2)
+								? (catalogos.cargandoBasicos || catalogos.cargandoProductos)
+								: false;
 
 						return LayoutBuilder(
 							builder: (context, constraints) {
@@ -802,6 +822,10 @@ class _FormularioServicioState extends State<FormularioServicio> {
 													const SizedBox(height: 10),
 													_buildAccionesPasos(context),
 													const SizedBox(height: 12),
+													if (cargandoPasoActual) ...[
+														const LinearProgressIndicator(minHeight: 2),
+														const SizedBox(height: 10),
+													],
 													AnimatedSwitcher(
 														duration: const Duration(milliseconds: 220),
 														child: KeyedSubtree(
@@ -975,9 +999,7 @@ class _FormularioServicioState extends State<FormularioServicio> {
 							label: Text('${index + 1}. ${pasos[index]}'),
 							selected: seleccionado,
 							onSelected: (_) {
-								setState(() {
-									_pasoActivo = index;
-								});
+								_cambiarPaso(index);
 							},
 						),
 					);
@@ -993,11 +1015,7 @@ class _FormularioServicioState extends State<FormularioServicio> {
 				OutlinedButton.icon(
 					onPressed: _pasoActivo == 0
 							? null
-							: () {
-								setState(() {
-									_pasoActivo -= 1;
-								});
-							},
+							: () => _cambiarPaso(_pasoActivo - 1),
 					icon: const Icon(Icons.arrow_back),
 					label: const Text('Anterior'),
 				),
@@ -1007,11 +1025,7 @@ class _FormularioServicioState extends State<FormularioServicio> {
 				FilledButton.icon(
 					onPressed: _pasoActivo == totalPasos - 1
 							? null
-							: () {
-								setState(() {
-									_pasoActivo += 1;
-								});
-							},
+							: () => _cambiarPaso(_pasoActivo + 1),
 					icon: const Icon(Icons.arrow_forward),
 					label: const Text('Siguiente'),
 				),
@@ -1364,9 +1378,22 @@ class _FormularioServicioState extends State<FormularioServicio> {
 		return Column(
 			crossAxisAlignment: CrossAxisAlignment.start,
 			children: [
-				Text(
-					'Partes que mostraban falla',
-					style: Theme.of(context).textTheme.titleSmall?.copyWith(fontSize: 13),
+				Row(
+					children: [
+						Expanded(
+							child: Text(
+								'Partes que mostraban falla',
+								style: Theme.of(context).textTheme.titleSmall?.copyWith(fontSize: 13),
+							),
+						),
+						IconButton(
+							onPressed: catalogos.cargandoBasicos || catalogos.cargandoProductos
+									? null
+									: _recargarCatalogosFalla,
+							tooltip: 'Actualizar catalogos',
+							icon: const Icon(Icons.refresh),
+						),
+					],
 				),
 				const SizedBox(height: 8),
 				SingleChildScrollView(
