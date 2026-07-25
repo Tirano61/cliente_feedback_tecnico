@@ -178,7 +178,6 @@ class ServicioBloc extends Bloc<ServicioEvent, ServicioState> {
 
 		try {
 			final cotizacion = await _obtenerCotizacionActualUseCase.ejecutar();
-			final repuestos = await _buscarRepuestosUseCase.ejecutar('');
 
 			emit(
 				_recalcularFacturacion(
@@ -186,7 +185,7 @@ class ServicioBloc extends Bloc<ServicioEvent, ServicioState> {
 						cargandoFacturacion: false,
 						cotizacionDolarSnapshot: cotizacion.cotizacionDolar,
 						valorKmUsdSnapshot: cotizacion.valorKmUsd,
-						repuestosDisponibles: repuestos,
+						repuestosDisponibles: const [],
 						buscandoRepuestos: false,
 						errorMensaje: null,
 					),
@@ -1166,13 +1165,13 @@ class ServicioBloc extends Bloc<ServicioEvent, ServicioState> {
 			valorPorDefecto: 0,
 		);
 		final factorDescuento = (1 - (descuentoPorcentaje / 100)).clamp(0.0, 1.0);
-		final subtotalGeneralUsd = _redondear2(subtotalBrutoUsd * factorDescuento);
-		final subtotalGeneralArs = _redondear2(subtotalBrutoArs * factorDescuento);
+		final subtotalGeneralUsd = subtotalBrutoUsd;
+		final subtotalGeneralArs = subtotalBrutoArs;
 
 		final totalConIvaArs = _redondear2(
 			subtotalGeneralArs * (1 + (ivaPorcentaje / 100)),
 		);
-		final totalFinalArs = totalConIvaArs;
+		final totalFinalArs = _redondear2(totalConIvaArs * factorDescuento);
 
 		return estado.copyWith(
 			subtotalKmUsd: subtotalKmUsd,

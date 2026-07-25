@@ -1611,10 +1611,8 @@ class _FormularioServicioState extends State<FormularioServicio> {
 		final descuentoPorcentaje = _doubleDesdeTextoLocal(estado.descuentoPorcentaje);
 		final subtotalBrutoUsd =
 				estado.subtotalServicioUsd + estado.subtotalKmUsd + estado.subtotalRepuestosUsd;
-		final subtotalBrutoArs =
-				estado.subtotalServicioArs + estado.subtotalKmArs + estado.subtotalRepuestosArs;
 		final descuentoMontoUsd = subtotalBrutoUsd * (descuentoPorcentaje / 100);
-		final descuentoMontoArs = subtotalBrutoArs * (descuentoPorcentaje / 100);
+		final descuentoMontoArs = estado.totalConIvaArs * (descuentoPorcentaje / 100);
 		final terminoBusquedaRepuesto = _buscarRepuestoController.text.trim();
 		final repuestosMostrados = estado.repuestosDisponibles.take(20).toList();
 
@@ -1629,9 +1627,26 @@ class _FormularioServicioState extends State<FormularioServicio> {
 			child: Column(
 				crossAxisAlignment: CrossAxisAlignment.start,
 				children: [
-					Text(
-						'Facturacion (opcional)',
-						style: Theme.of(context).textTheme.titleSmall,
+					Row(
+						children: [
+							Expanded(
+								child: Text(
+									'Facturacion (opcional)',
+									style: Theme.of(context).textTheme.titleSmall,
+								),
+							),
+							TextButton.icon(
+								onPressed: estado.cargandoFacturacion
+										? null
+										: () {
+											context.read<ServicioBloc>().add(
+													const ServicioFacturacionInicializada(),
+											);
+										},
+								icon: const Icon(Icons.refresh),
+								label: const Text('Actualizar valores'),
+							),
+						],
 					),
 					const SizedBox(height: 8),
 					if (estado.cargandoFacturacion) ...[
