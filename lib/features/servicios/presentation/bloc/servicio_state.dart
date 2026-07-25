@@ -33,6 +33,7 @@ class ServicioFormularioState extends ServicioState {
 	final String equipoAnio;
 	final String partesFallaronTexto;
 	final String km;
+	final String precioServicioUsd;
 	final String sintoma;
 	final List<String> diagnosticoCatIdsSeleccionados;
 	final String diagnosticoDetalle;
@@ -49,6 +50,8 @@ class ServicioFormularioState extends ServicioState {
 	final List<RepuestoSeleccionado> repuestosSeleccionados;
 	final double subtotalKmUsd;
 	final double subtotalKmArs;
+	final double subtotalServicioUsd;
+	final double subtotalServicioArs;
 	final double subtotalRepuestosUsd;
 	final double subtotalRepuestosArs;
 	final double subtotalGeneralUsd;
@@ -83,6 +86,7 @@ class ServicioFormularioState extends ServicioState {
 		this.equipoAnio = '',
 		this.partesFallaronTexto = '',
 		this.km = '',
+		this.precioServicioUsd = '',
 		this.sintoma = '',
 		this.diagnosticoCatIdsSeleccionados = const [],
 		this.diagnosticoDetalle = '',
@@ -99,6 +103,8 @@ class ServicioFormularioState extends ServicioState {
 		this.repuestosSeleccionados = const [],
 		this.subtotalKmUsd = 0,
 		this.subtotalKmArs = 0,
+		this.subtotalServicioUsd = 0,
+		this.subtotalServicioArs = 0,
 		this.subtotalRepuestosUsd = 0,
 		this.subtotalRepuestosArs = 0,
 		this.subtotalGeneralUsd = 0,
@@ -136,6 +142,7 @@ class ServicioFormularioState extends ServicioState {
 		String? equipoAnio,
 		String? partesFallaronTexto,
 		String? km,
+		String? precioServicioUsd,
 		String? sintoma,
 		List<String>? diagnosticoCatIdsSeleccionados,
 		String? diagnosticoDetalle,
@@ -152,6 +159,8 @@ class ServicioFormularioState extends ServicioState {
 		List<RepuestoSeleccionado>? repuestosSeleccionados,
 		double? subtotalKmUsd,
 		double? subtotalKmArs,
+		double? subtotalServicioUsd,
+		double? subtotalServicioArs,
 		double? subtotalRepuestosUsd,
 		double? subtotalRepuestosArs,
 		double? subtotalGeneralUsd,
@@ -194,6 +203,7 @@ class ServicioFormularioState extends ServicioState {
 			equipoAnio: equipoAnio ?? this.equipoAnio,
 			partesFallaronTexto: partesFallaronTexto ?? this.partesFallaronTexto,
 			km: km ?? this.km,
+			precioServicioUsd: precioServicioUsd ?? this.precioServicioUsd,
 			sintoma: sintoma ?? this.sintoma,
 			diagnosticoCatIdsSeleccionados:
 					diagnosticoCatIdsSeleccionados ?? this.diagnosticoCatIdsSeleccionados,
@@ -214,6 +224,8 @@ class ServicioFormularioState extends ServicioState {
 					repuestosSeleccionados ?? this.repuestosSeleccionados,
 			subtotalKmUsd: subtotalKmUsd ?? this.subtotalKmUsd,
 			subtotalKmArs: subtotalKmArs ?? this.subtotalKmArs,
+			subtotalServicioUsd: subtotalServicioUsd ?? this.subtotalServicioUsd,
+			subtotalServicioArs: subtotalServicioArs ?? this.subtotalServicioArs,
 			subtotalRepuestosUsd:
 					subtotalRepuestosUsd ?? this.subtotalRepuestosUsd,
 			subtotalRepuestosArs:
@@ -255,6 +267,7 @@ class ServicioFormularioState extends ServicioState {
 				equipoAnio,
 				partesFallaronTexto,
 				km,
+				precioServicioUsd,
 				sintoma,
 				diagnosticoCatIdsSeleccionados,
 				diagnosticoDetalle,
@@ -271,6 +284,8 @@ class ServicioFormularioState extends ServicioState {
 				repuestosSeleccionados,
 				subtotalKmUsd,
 				subtotalKmArs,
+				subtotalServicioUsd,
+				subtotalServicioArs,
 				subtotalRepuestosUsd,
 				subtotalRepuestosArs,
 				subtotalGeneralUsd,

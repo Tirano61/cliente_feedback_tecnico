@@ -26,6 +26,7 @@ class ServicioFormularioCambiado extends ServicioEvent {
 	final String? equipoAnio;
 	final String? partesFallaronTexto;
 	final String? km;
+	final String? precioServicioUsd;
 	final String? sintoma;
 	final List<String>? diagnosticoCatIdsSeleccionados;
 	final String? diagnosticoDetalle;
@@ -44,6 +45,7 @@ class ServicioFormularioCambiado extends ServicioEvent {
 		this.equipoAnio,
 		this.partesFallaronTexto,
 		this.km,
+		this.precioServicioUsd,
 		this.sintoma,
 		this.diagnosticoCatIdsSeleccionados,
 		this.diagnosticoDetalle,
@@ -64,6 +66,7 @@ class ServicioFormularioCambiado extends ServicioEvent {
 				equipoAnio,
 				partesFallaronTexto,
 				km,
+				precioServicioUsd,
 				sintoma,
 				diagnosticoCatIdsSeleccionados,
 				diagnosticoDetalle,
