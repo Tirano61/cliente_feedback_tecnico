@@ -147,6 +147,7 @@ class ServicioBloc extends Bloc<ServicioEvent, ServicioState> {
 				equipoAnio: event.equipoAnio,
 				partesFallaronTexto: event.partesFallaronTexto,
 				km: event.km,
+				precioServicioUsd: event.precioServicioUsd,
 				sintoma: event.sintoma,
 				diagnosticoCatIdsSeleccionados: event.diagnosticoCatIdsSeleccionados,
 				diagnosticoDetalle: event.diagnosticoDetalle,
@@ -994,6 +995,18 @@ class ServicioBloc extends Bloc<ServicioEvent, ServicioState> {
 		if (km < 0) {
 			return 'Completa los kilometros con un valor numerico valido.';
 		}
+		final precioServicioUsd = _doubleDesdeTexto(
+			estado.precioServicioUsd,
+			valorPorDefecto: 0,
+		);
+		final hayFacturacionAdicional =
+				km > 0 || estado.repuestosSeleccionados.isNotEmpty;
+		if (precioServicioUsd < 0) {
+			return 'Completa el precio del servicio con un valor numerico valido.';
+		}
+		if (hayFacturacionAdicional && precioServicioUsd <= 0) {
+			return 'Ingresa el precio del servicio para incluir el item mano de obra en la facturacion.';
+		}
 		if (estado.sintoma.trim().isEmpty) {
 			return 'Completa el sintoma reportado.';
 		}
@@ -1019,8 +1032,15 @@ class ServicioBloc extends Bloc<ServicioEvent, ServicioState> {
 			estadoRecalculado.productosFallaSeleccionados,
 		);
 		final kmCantidad = _doubleDesdeTexto(estadoRecalculado.km, valorPorDefecto: 0);
+		final precioServicioUsd = _doubleDesdeTexto(
+			estadoRecalculado.precioServicioUsd,
+			valorPorDefecto: 0,
+		);
 		final facturacionItems = _construirItemsFacturacion(estadoRecalculado, kmCantidad);
-		final incluyeFacturacion = kmCantidad > 0 || estadoRecalculado.repuestosSeleccionados.isNotEmpty;
+		final incluyeFacturacion =
+				precioServicioUsd > 0 ||
+				kmCantidad > 0 ||
+				estadoRecalculado.repuestosSeleccionados.isNotEmpty;
 		final partesFallaron = productosFalla
 				.map((item) => item.parteFallo)
 				.where((item) => item.isNotEmpty)
@@ -1115,11 +1135,17 @@ class ServicioBloc extends Bloc<ServicioEvent, ServicioState> {
 
 	ServicioFormularioState _recalcularFacturacion(ServicioFormularioState estado) {
 		final kmCantidad = _doubleDesdeTexto(estado.km, valorPorDefecto: 0);
+		final precioServicioUsd = _doubleDesdeTexto(
+			estado.precioServicioUsd,
+			valorPorDefecto: 0,
+		);
 		final cotizacion = estado.cotizacionDolarSnapshot;
 		final valorKmUsd = estado.valorKmUsdSnapshot;
 
 		final subtotalKmUsd = _redondear2(kmCantidad * valorKmUsd);
 		final subtotalKmArs = _redondear2(subtotalKmUsd * cotizacion);
+		final subtotalServicioUsd = _redondear2(precioServicioUsd);
+		final subtotalServicioArs = _redondear2(subtotalServicioUsd * cotizacion);
 		final subtotalRepuestosUsd = _redondear2(
 			estado.repuestosSeleccionados.fold(
 				0,
@@ -1127,8 +1153,12 @@ class ServicioBloc extends Bloc<ServicioEvent, ServicioState> {
 			),
 		);
 		final subtotalRepuestosArs = _redondear2(subtotalRepuestosUsd * cotizacion);
-		final subtotalBrutoUsd = _redondear2(subtotalKmUsd + subtotalRepuestosUsd);
-		final subtotalBrutoArs = _redondear2(subtotalKmArs + subtotalRepuestosArs);
+		final subtotalBrutoUsd = _redondear2(
+			subtotalServicioUsd + subtotalKmUsd + subtotalRepuestosUsd,
+		);
+		final subtotalBrutoArs = _redondear2(
+			subtotalServicioArs + subtotalKmArs + subtotalRepuestosArs,
+		);
 
 		final ivaPorcentaje = _doubleDesdeTexto(estado.ivaPorcentaje, valorPorDefecto: 21);
 		final descuentoPorcentaje = _doubleDesdeTexto(
@@ -1147,6 +1177,8 @@ class ServicioBloc extends Bloc<ServicioEvent, ServicioState> {
 		return estado.copyWith(
 			subtotalKmUsd: subtotalKmUsd,
 			subtotalKmArs: subtotalKmArs,
+			subtotalServicioUsd: subtotalServicioUsd,
+			subtotalServicioArs: subtotalServicioArs,
 			subtotalRepuestosUsd: subtotalRepuestosUsd,
 			subtotalRepuestosArs: subtotalRepuestosArs,
 			subtotalGeneralUsd: subtotalGeneralUsd,
@@ -1161,6 +1193,28 @@ class ServicioBloc extends Bloc<ServicioEvent, ServicioState> {
 		double kmCantidad,
 	) {
 		final items = <FacturacionItem>[];
+		final precioServicioUsd = _doubleDesdeTexto(
+			estado.precioServicioUsd,
+			valorPorDefecto: 0,
+		);
+
+		if (precioServicioUsd > 0) {
+			final precioServicioArs = _redondear2(
+				precioServicioUsd * estado.cotizacionDolarSnapshot,
+			);
+			items.add(
+				FacturacionItem(
+					tipoItem: 'mano_obra',
+					referenciaId: null,
+					descripcion: 'Servicio tecnico',
+					cantidad: 1,
+					precioUnitarioUsd: precioServicioUsd,
+					precioUnitarioArs: precioServicioArs,
+					subtotalUsd: precioServicioUsd,
+					subtotalArs: precioServicioArs,
+				),
+			);
+		}
 
 		if (kmCantidad > 0) {
 			final precioKmArs = _redondear2(estado.valorKmUsdSnapshot * estado.cotizacionDolarSnapshot);

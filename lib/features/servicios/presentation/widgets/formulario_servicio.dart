@@ -32,6 +32,7 @@ class _FormularioServicioState extends State<FormularioServicio> {
 	final TextEditingController _equipoUbicacionController = TextEditingController();
 	final TextEditingController _equipoAnioController = TextEditingController();
 	final TextEditingController _kmController = TextEditingController();
+	final TextEditingController _precioServicioController = TextEditingController();
 	final TextEditingController _buscarRepuestoController = TextEditingController();
 	final TextEditingController _ivaController = TextEditingController(text: '21');
 	final TextEditingController _descuentoController = TextEditingController();
@@ -85,6 +86,7 @@ class _FormularioServicioState extends State<FormularioServicio> {
 		_equipoUbicacionController.dispose();
 		_equipoAnioController.dispose();
 		_kmController.dispose();
+		_precioServicioController.dispose();
 		_buscarRepuestoController.dispose();
 		_ivaController.dispose();
 		_descuentoController.dispose();
@@ -105,6 +107,7 @@ class _FormularioServicioState extends State<FormularioServicio> {
 		_categoriasFallaSeleccionadasIds.clear();
 		_productosFallaSeleccionados.clear();
 		_kmController.clear();
+		_precioServicioController.clear();
 		_buscarRepuestoController.clear();
 		_ivaController.text = '21';
 		_descuentoController.clear();
@@ -696,6 +699,12 @@ class _FormularioServicioState extends State<FormularioServicio> {
 					_descuentoController.text = estadoFormulario.descuentoPorcentaje;
 					_descuentoController.selection = TextSelection.fromPosition(
 						TextPosition(offset: _descuentoController.text.length),
+					);
+				}
+				if (_precioServicioController.text != estadoFormulario.precioServicioUsd) {
+					_precioServicioController.text = estadoFormulario.precioServicioUsd;
+					_precioServicioController.selection = TextSelection.fromPosition(
+						TextPosition(offset: _precioServicioController.text.length),
 					);
 				}
 				final clienteSeleccionado = estadoFormulario.clienteSeleccionado;
@@ -1593,12 +1602,17 @@ class _FormularioServicioState extends State<FormularioServicio> {
 		final mostrarTablaDetalle = anchoPantalla >= 860;
 		final anchosTabla = _resolverAnchosDetalleFacturado(anchoPantalla);
 		final kmCantidad = _doubleDesdeTextoLocal(estado.km);
+		final precioServicioUsd = _doubleDesdeTextoLocal(estado.precioServicioUsd);
+		final hayServicioTecnico = precioServicioUsd > 0;
+		final precioServicioArs = precioServicioUsd * estado.cotizacionDolarSnapshot;
 		final hayViatico = kmCantidad > 0;
 		final subtotalKmUsdCalculado = kmCantidad * estado.valorKmUsdSnapshot;
 		final subtotalKmArsCalculado = subtotalKmUsdCalculado * estado.cotizacionDolarSnapshot;
 		final descuentoPorcentaje = _doubleDesdeTextoLocal(estado.descuentoPorcentaje);
-		final subtotalBrutoUsd = estado.subtotalKmUsd + estado.subtotalRepuestosUsd;
-		final subtotalBrutoArs = estado.subtotalKmArs + estado.subtotalRepuestosArs;
+		final subtotalBrutoUsd =
+				estado.subtotalServicioUsd + estado.subtotalKmUsd + estado.subtotalRepuestosUsd;
+		final subtotalBrutoArs =
+				estado.subtotalServicioArs + estado.subtotalKmArs + estado.subtotalRepuestosArs;
 		final descuentoMontoUsd = subtotalBrutoUsd * (descuentoPorcentaje / 100);
 		final descuentoMontoArs = subtotalBrutoArs * (descuentoPorcentaje / 100);
 		final terminoBusquedaRepuesto = _buscarRepuestoController.text.trim();
@@ -1635,6 +1649,24 @@ class _FormularioServicioState extends State<FormularioServicio> {
 							label: 'Valor km USD (servidor)',
 							value: _formatearMonto(estado.valorKmUsdSnapshot),
 						),
+					),
+					const SizedBox(height: 8),
+					_filaDosCampos(
+						izquierda: TextField(
+							controller: _precioServicioController,
+							keyboardType: const TextInputType.numberWithOptions(decimal: true),
+							style: _estiloTextoCompacto(context),
+							decoration: _decoracionCampoCompacta(
+								context,
+								labelText: 'Precio servicio tecnico (USD)',
+							),
+							onChanged: (valor) {
+								context.read<ServicioBloc>().add(
+										ServicioFormularioCambiado(precioServicioUsd: valor),
+								);
+							},
+						),
+						derecha: const SizedBox.shrink(),
 					),
 					const SizedBox(height: 8),
 					_filaDosCampos(
@@ -1744,6 +1776,9 @@ class _FormularioServicioState extends State<FormularioServicio> {
 						_buildDetalleFacturadoTabla(
 							context: context,
 							estado: estado,
+							hayServicioTecnico: hayServicioTecnico,
+							precioServicioUsd: precioServicioUsd,
+							precioServicioArs: precioServicioArs,
 							hayViatico: hayViatico,
 							kmCantidad: kmCantidad,
 							subtotalKmArsCalculado: subtotalKmArsCalculado,
@@ -1753,6 +1788,9 @@ class _FormularioServicioState extends State<FormularioServicio> {
 						_buildDetalleFacturadoCompacto(
 							context: context,
 							estado: estado,
+							hayServicioTecnico: hayServicioTecnico,
+							precioServicioUsd: precioServicioUsd,
+							precioServicioArs: precioServicioArs,
 							hayViatico: hayViatico,
 							kmCantidad: kmCantidad,
 							subtotalKmArsCalculado: subtotalKmArsCalculado,
@@ -1762,6 +1800,11 @@ class _FormularioServicioState extends State<FormularioServicio> {
 					_buildTablaResumenFacturacion(
 						context: context,
 						filas: [
+							_FilaResumenFacturacion(
+								item: 'Subtotal servicio tecnico',
+								dolares: estado.subtotalServicioUsd,
+								pesos: estado.subtotalServicioArs,
+							),
 							_FilaResumenFacturacion(
 								item: 'Subtotal km',
 								dolares: estado.subtotalKmUsd,
@@ -1808,6 +1851,9 @@ class _FormularioServicioState extends State<FormularioServicio> {
 	Widget _buildDetalleFacturadoTabla({
 		required BuildContext context,
 		required ServicioFormularioState estado,
+		required bool hayServicioTecnico,
+		required double precioServicioUsd,
+		required double precioServicioArs,
 		required bool hayViatico,
 		required double kmCantidad,
 		required double subtotalKmArsCalculado,
@@ -1820,6 +1866,15 @@ class _FormularioServicioState extends State<FormularioServicio> {
 				child: Column(
 					children: [
 						_buildFilaCabeceraDetalleFacturado(context, anchos: anchos),
+						if (hayServicioTecnico)
+							_buildFilaDetalleFacturado(
+								context: context,
+								descripcion: 'Servicio tecnico',
+								cantidad: '1',
+								precioUsd: _formatearMonto(precioServicioUsd),
+								subtotalArs: _formatearMonto(precioServicioArs),
+								anchos: anchos,
+							),
 						if (hayViatico)
 							_buildFilaDetalleFacturado(
 								context: context,
@@ -1849,7 +1904,7 @@ class _FormularioServicioState extends State<FormularioServicio> {
 								anchos: anchos,
 							);
 						}),
-						if (!hayViatico && estado.repuestosSeleccionados.isEmpty)
+						if (!hayServicioTecnico && !hayViatico && estado.repuestosSeleccionados.isEmpty)
 							Container(
 								width: anchos.anchoTotal,
 								padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
@@ -1874,11 +1929,14 @@ class _FormularioServicioState extends State<FormularioServicio> {
 	Widget _buildDetalleFacturadoCompacto({
 		required BuildContext context,
 		required ServicioFormularioState estado,
+		required bool hayServicioTecnico,
+		required double precioServicioUsd,
+		required double precioServicioArs,
 		required bool hayViatico,
 		required double kmCantidad,
 		required double subtotalKmArsCalculado,
 	}) {
-		if (!hayViatico && estado.repuestosSeleccionados.isEmpty) {
+		if (!hayServicioTecnico && !hayViatico && estado.repuestosSeleccionados.isEmpty) {
 			return Container(
 				width: double.infinity,
 				padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
@@ -1895,6 +1953,14 @@ class _FormularioServicioState extends State<FormularioServicio> {
 
 		return Column(
 			children: [
+				if (hayServicioTecnico)
+					_buildTarjetaDetalleFacturado(
+						context: context,
+						descripcion: 'Servicio tecnico',
+						cantidad: '1',
+						precioUsd: _formatearMonto(precioServicioUsd),
+						subtotalArs: _formatearMonto(precioServicioArs),
+					),
 				if (hayViatico)
 					_buildTarjetaDetalleFacturado(
 						context: context,

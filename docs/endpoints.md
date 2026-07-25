@@ -19,6 +19,141 @@ Authorization: Bearer <token>
 | POST | `/auth/register` |
 | POST | `/auth/login` |
 
+## Auth privado
+
+| Metodo | Endpoint | Rol |
+|---|---|---|
+| GET | `/auth/tecnicos?page=&limit=&q=&activos=` | admin-tecnico, admin |
+| POST | `/auth/tecnicos` | admin-tecnico, admin |
+| GET | `/auth/tecnicos/:id` | admin-tecnico, admin |
+| PATCH | `/auth/tecnicos/:id` | admin-tecnico, admin |
+| PATCH | `/auth/tecnicos/:id/estado` | admin-tecnico, admin |
+
+### GET /auth/tecnicos (selector de técnicos)
+
+Query params:
+
+- `page` (opcional, default `1`)
+- `limit` (opcional, default `20`, max `100`)
+- `q` (opcional, busca por `fullName` o `email`)
+- `activos` (opcional, default `true`; enviar `false` para incluir inactivos)
+
+Ejemplo:
+
+`GET /auth/tecnicos?page=1&limit=20&q=juan&activos=true`
+
+Respuesta ejemplo:
+
+```json
+{
+  "data": [
+    {
+      "id": "{{tecnicoId}}",
+      "fullName": "Juan Perez",
+      "email": "juan@example.com",
+      "isActive": true
+    }
+  ],
+  "meta": {
+    "page": 1,
+    "limit": 20,
+    "total": 1,
+    "totalPages": 1
+  }
+}
+```
+
+### POST /auth/tecnicos
+
+Payload:
+
+```json
+{
+  "email": "tecnico.nuevo@example.com",
+  "password": "ClaveSegura123!",
+  "fullName": "Tecnico Nuevo",
+  "isActive": true
+}
+```
+
+Notas:
+
+- Crea un usuario con rol `tecnico`.
+- `isActive` es opcional (default `true`).
+
+Respuesta ejemplo:
+
+```json
+{
+  "id": "{{tecnicoId}}",
+  "fullName": "Tecnico Nuevo",
+  "email": "tecnico.nuevo@example.com",
+  "isActive": true,
+  "roles": ["tecnico"]
+}
+```
+
+### GET /auth/tecnicos/:id
+
+Respuesta ejemplo:
+
+```json
+{
+  "id": "{{tecnicoId}}",
+  "fullName": "Juan Perez",
+  "email": "juan@example.com",
+  "isActive": true,
+  "roles": ["tecnico"],
+  "created_at": "2026-07-11T10:00:00.000Z",
+  "updated_at": "2026-07-11T10:00:00.000Z"
+}
+```
+
+### PATCH /auth/tecnicos/:id
+
+Payload (al menos un campo):
+
+```json
+{
+  "fullName": "Juan Perez Actualizado",
+  "email": "juan.perez@example.com"
+}
+```
+
+Respuesta ejemplo:
+
+```json
+{
+  "id": "{{tecnicoId}}",
+  "fullName": "Juan Perez Actualizado",
+  "email": "juan.perez@example.com",
+  "isActive": true,
+  "roles": ["tecnico"]
+}
+```
+
+### PATCH /auth/tecnicos/:id/estado
+
+Payload:
+
+```json
+{
+  "isActive": false
+}
+```
+
+Respuesta ejemplo:
+
+```json
+{
+  "id": "{{tecnicoId}}",
+  "fullName": "Juan Perez",
+  "email": "juan@example.com",
+  "isActive": false,
+  "roles": ["tecnico"]
+}
+```
+
 ## Servicios
 
 | Metodo | Endpoint | Rol |
@@ -73,6 +208,16 @@ Authorization: Bearer <token>
     "version": 1
   },
   "facturacionItems": [
+    {
+      "tipoItem": "mano_obra",
+      "referenciaId": null,
+      "descripcion": "Servicio tecnico",
+      "cantidad": 1,
+      "precioUnitarioUsd": 80,
+      "precioUnitarioArs": 89640,
+      "subtotalUsd": 80,
+      "subtotalArs": 89640
+    },
     {
       "tipoItem": "viatico",
       "referenciaId": null,
@@ -161,6 +306,16 @@ Authorization: Bearer <token>
   },
   "facturacionItems": [
     {
+      "tipoItem": "mano_obra",
+      "referenciaId": null,
+      "descripcion": "Servicio tecnico",
+      "cantidad": 1,
+      "precioUnitarioUsd": 80,
+      "precioUnitarioArs": 89640,
+      "subtotalUsd": 80,
+      "subtotalArs": 89640
+    },
+    {
       "tipoItem": "viatico",
       "referenciaId": null,
       "descripcion": "Viatico por km",
@@ -196,6 +351,9 @@ Notas:
 - La app puede generar el PDF inmediatamente con esta respuesta, sin una segunda llamada.
 - `facturacion.cotizacionDolarSnapshot` se define en backend con la ultima cotizacion disponible (no es necesario enviarla en el request).
 - `facturacion.valorKmUsdSnapshot` se define en backend con la ultima tarifa de km activa (no es necesario enviarla en el request).
+- `facturacionItems` debe incluir al menos un item con `tipoItem = mano_obra` para representar el cobro del servicio al cliente.
+- `facturacion.subtotalGeneralUsd/Ars` deben coincidir con la suma de subtotales de `facturacionItems`.
+- `facturacion.totalConIvaArs` y `facturacion.totalFinalArs` deben ser consistentes con IVA y descuento.
 - `servicio.cliente` incluye los datos completos del cliente para generar PDF sin llamadas extra.
 - `servicio.lugarProvinciaNombre` incluye el nombre de la zona/provincia para mostrar en PDF.
 - `idempotencyKey` viaja en el body de `POST /servicios`.
@@ -267,6 +425,8 @@ Notas:
 
 - El backend calcula `pdfHashSha256` automaticamente a partir del archivo recibido.
 - El backend sube el PDF a Cloudinary y persiste `pdfUrl` con la URL remota del archivo.
+- Las nuevas subidas se publican con entrega habilitada en Cloudinary. Si un archivo viejo aparece como `Blocked for delivery`, hay que cambiar su access control a publico o re-subirlo.
+- Si Cloudinary responde `show_original_customer_untrusted` / `Customer is marked as untrusted`, la cuenta/entorno requiere habilitacion por un administrador o soporte de Cloudinary.
 - En ordenes `campo`, se puede subir PDF sin firma (por ejemplo, cliente ausente); en ese caso la orden no pasa a `firmada`.
 - Cuando hay firma en `campo`, `firmaClienteNombre` puede ser del cliente o de un empleado/responsable presente.
 - En ordenes `remoto` y `fabrica`, se puede subir el PDF sin firma; si llega data de firma, el backend la rechaza.
@@ -277,10 +437,50 @@ Notas:
 
 | Metodo | Endpoint | Rol |
 |---|---|---|
+| GET | `/clientes?page=&limit=` | tecnico, admin-tecnico, admin |
 | GET | `/clientes/buscar?q=` | tecnico, admin-tecnico, admin |
 | GET | `/clientes/:id` | tecnico, admin-tecnico, admin |
 | POST | `/clientes` | tecnico, admin-tecnico |
 | PATCH | `/clientes/:id` | admin-tecnico |
+
+### GET /clientes (listado paginado)
+
+Query params:
+
+- `page` (opcional, default `1`)
+- `limit` (opcional, default `20`)
+
+Ejemplo:
+
+`GET /clientes?page=1&limit=20`
+
+Respuesta ejemplo:
+
+```json
+{
+  "data": [
+    {
+      "id": "{{clienteId}}",
+      "cuit": "20304050607",
+      "nombre": "Agro SRL",
+      "contacto": "Juan Perez",
+      "telefono": "+54 9 11 5555-0001",
+      "localidad": "Pergamino"
+    }
+  ],
+  "meta": {
+    "page": 1,
+    "limit": 20,
+    "total": 1,
+    "totalPages": 1
+  }
+}
+```
+
+Notas:
+
+- Endpoint pensado para listado general en web admin-tecnico.
+- `GET /clientes/buscar?q=` se mantiene para autocompletes/busquedas rapidas.
 
 ## Catalogos
 
@@ -312,10 +512,51 @@ Notas:
 | Metodo | Endpoint | Rol |
 |---|---|---|
 | GET | `/repuestos?q=` | tecnico, admin-tecnico, admin |
+| GET | `/repuestos/listado?page=&limit=&q=&activo=` | admin-tecnico, admin |
 | POST | `/repuestos` | admin-tecnico |
 | PATCH | `/repuestos/:id` | admin-tecnico |
 | POST | `/servicios/:id/repuestos` | tecnico, admin-tecnico, admin |
 | GET | `/servicios/:id/repuestos` | tecnico, admin-tecnico, admin |
+
+### GET /repuestos/listado (admin paginado)
+
+Query params:
+
+- `page` (opcional, default `1`)
+- `limit` (opcional, default `20`)
+- `q` (opcional, busca por codigo o nombre)
+- `activo` (opcional, `true` o `false`; si se omite trae activos e inactivos)
+
+Ejemplo:
+
+`GET /repuestos/listado?page=1&limit=20&q=celda&activo=true`
+
+Respuesta ejemplo:
+
+```json
+{
+  "data": [
+    {
+      "id": "{{repuestoId}}",
+      "codigo": "05-01-CZAP-20000",
+      "nombre": "Celda CZAP 20000",
+      "precioUsd": 120.75,
+      "activo": true
+    }
+  ],
+  "meta": {
+    "page": 1,
+    "limit": 20,
+    "total": 1,
+    "totalPages": 1
+  }
+}
+```
+
+Notas:
+
+- Endpoint pensado para grillas de administracion en web admin-tecnico.
+- `GET /repuestos?q=` se mantiene como busqueda rapida (maximo 10 activos), util para autocompletes.
 
 ### Payload POST /servicios/:id/repuestos
 
@@ -378,6 +619,15 @@ Notas:
 | POST | `/liquidaciones` | admin-tecnico |
 | GET | `/liquidaciones/mias` | tecnico |
 | GET | `/liquidaciones` | admin-tecnico |
+| GET | `/liquidaciones/para-pago` | admin-tecnico |
+| GET | `/liquidaciones/resumen-pago/preview` | admin-tecnico |
+| PATCH | `/liquidaciones/resumen-pago/confirmar` | admin-tecnico |
+| GET | `/liquidaciones/resumenes-pago` | admin-tecnico |
+| GET | `/liquidaciones/resumenes-pago/ultimo` | admin-tecnico |
+| GET | `/liquidaciones/resumenes-pago/:id` | admin-tecnico |
+| PATCH | `/liquidaciones/marcar-pagadas` | admin-tecnico |
+| GET | `/liquidaciones/pendientes` | admin-tecnico |
+| GET | `/liquidaciones/:id/items` | admin-tecnico |
 | PATCH | `/liquidaciones/:id` | admin-tecnico |
 | PATCH | `/liquidaciones/:id/aprobar` | admin-tecnico |
 | POST | `/liquidaciones/:id/items` | admin-tecnico |
@@ -409,6 +659,298 @@ Tambien soporta camelCase:
 ```json
 { "tipo_servicio_id": "{{tipoServicioId}}" }
 ```
+
+`GET /liquidaciones` (admin):
+
+```text
+/liquidaciones?aprobado=false&page=1&limit=20
+```
+
+Tambien soporta filtro por estado:
+
+```text
+/liquidaciones?estado=aprobada&page=1&limit=20
+```
+
+Tambien soporta filtro por estado de pago:
+
+```text
+/liquidaciones?liquidadaPago=false&page=1&limit=20
+```
+
+Notas:
+
+- `tecnicoId` es opcional en query.
+- `estado` es opcional: `pendiente | aprobada | reabierta | todas`.
+- `liquidadaPago` es opcional: `true | false`.
+- Cada item del listado incluye `tecnicoId`, `tecnicoNombre` y `tecnicoEmail` para facilitar filtros/seleccion en UI.
+- Cuando `admin-tecnico` edita una liquidacion (`PATCH /liquidaciones/:id`, `POST /liquidaciones/:id/items`, `DELETE /liquidaciones/:id/items/:itemId`), queda aprobada automaticamente al finalizar la operacion.
+- `PATCH /liquidaciones/:id/reabrir` registra motivo/historial de reapertura para auditoria, pero no cambia el estado de aprobacion.
+- Si `liquidadaPago = true`, la liquidacion ya fue pasada para pago y no se puede editar.
+
+`GET /liquidaciones/para-pago` (admin):
+
+```text
+/liquidaciones/para-pago?page=1&limit=20
+```
+
+Notas:
+
+- Devuelve solo liquidaciones aprobadas (`aprobado=true`) y no liquidadas para pago (`liquidadaPago=false`).
+- Sirve como fuente para armar el lote de pago desde la web admin.
+
+`PATCH /liquidaciones/marcar-pagadas`:
+
+```json
+{
+  "liquidacionIds": [
+    "{{liquidacionId1}}",
+    "{{liquidacionId2}}"
+  ]
+}
+```
+
+Notas:
+
+- Marca en lote las liquidaciones seleccionadas como `liquidadaPago=true`.
+- Solo permite liquidaciones aprobadas, no liquidadas previamente y con al menos un item (`tipo_servicio`) asignado.
+- Una vez marcadas, ya no se pueden volver a editar ni volver a seleccionar para otro lote de pago.
+
+`GET /liquidaciones/resumen-pago/preview`:
+
+```text
+/liquidaciones/resumen-pago/preview?tecnicoId={{tecnicoId}}&desde=2026-07-01&hasta=2026-07-31
+```
+
+Notas:
+
+- Genera el resumen por tecnico y rango de fechas.
+- La elegibilidad exige: aprobada, no liquidada para pago, fechaAprobacion dentro del rango y con items de servicio.
+
+Respuesta ejemplo:
+
+```json
+{
+  "filtro": {
+    "tecnicoId": "{{tecnicoId}}",
+    "desde": "2026-07-01T00:00:00.000Z",
+    "hasta": "2026-07-31T23:59:59.999Z"
+  },
+  "data": [
+    {
+      "id": "{{liquidacionId1}}",
+      "fechaAprobacion": "2026-07-10T14:20:00.000Z",
+      "servicioId": "{{servicioId1}}",
+      "subtotalSalidaUsd": 80,
+      "subtotalItemsUsd": 120.5,
+      "totalLiquidacionUsd": 200.5
+    }
+  ],
+  "meta": {
+    "totalLiquidaciones": 1,
+    "totalResumenUsd": 200.5
+  }
+}
+```
+
+`PATCH /liquidaciones/resumen-pago/confirmar`:
+
+```json
+{
+  "tecnicoId": "{{tecnicoId}}",
+  "desde": "2026-07-01",
+  "hasta": "2026-07-31",
+  "liquidacionIds": [
+    "{{liquidacionId1}}",
+    "{{liquidacionId2}}"
+  ]
+}
+```
+
+Notas:
+
+- Revalida elegibilidad con tecnico + rango + estado antes de confirmar.
+- Marca las seleccionadas como pasadas a pago (`liquidadaPago=true`) y devuelve resumen + confirmacion.
+- Persiste cabecera y detalle del resumen para historial/auditoria.
+
+Respuesta ejemplo:
+
+```json
+{
+  "filtro": {
+    "tecnicoId": "{{tecnicoId}}",
+    "desde": "2026-07-01T00:00:00.000Z",
+    "hasta": "2026-07-31T23:59:59.999Z"
+  },
+  "data": [
+    {
+      "id": "{{liquidacionId1}}",
+      "fechaAprobacion": "2026-07-10T14:20:00.000Z",
+      "servicioId": "{{servicioId1}}",
+      "subtotalSalidaUsd": 80,
+      "subtotalItemsUsd": 120.5,
+      "totalLiquidacionUsd": 200.5
+    }
+  ],
+  "meta": {
+    "totalLiquidaciones": 1,
+    "totalResumenUsd": 200.5
+  },
+  "confirmacion": {
+    "updated": 1,
+    "fechaLiquidadaPago": "2026-07-31T18:45:00.000Z"
+  }
+}
+```
+
+`GET /liquidaciones/resumenes-pago`:
+
+```text
+/liquidaciones/resumenes-pago?tecnicoId={{tecnicoId}}&page=1&limit=20
+```
+
+Notas:
+
+- Lista el historial de resumenes confirmados.
+- Soporta filtros opcionales por `tecnicoId`, `desde`, `hasta` (fecha de creacion del resumen).
+
+Respuesta ejemplo:
+
+```json
+{
+  "data": [
+    {
+      "id": "{{resumenPagoId}}",
+      "tecnicoId": "{{tecnicoId}}",
+      "tecnicoNombre": "Juan Perez",
+      "desde": "2026-07-01T00:00:00.000Z",
+      "hasta": "2026-07-31T23:59:59.999Z",
+      "totalLiquidaciones": 2,
+      "totalUsdSnapshot": 401,
+      "liquidacionIds": ["{{liquidacionId1}}", "{{liquidacionId2}}"],
+      "createdById": "{{adminId}}",
+      "createdByNombre": "Admin Tecnico",
+      "createdAt": "2026-07-31T18:45:00.000Z"
+    }
+  ],
+  "meta": {
+    "page": 1,
+    "limit": 20,
+    "total": 1,
+    "totalPages": 1
+  }
+}
+```
+
+`GET /liquidaciones/resumenes-pago/ultimo`:
+
+```text
+/liquidaciones/resumenes-pago/ultimo?tecnicoId={{tecnicoId}}
+```
+
+Notas:
+
+- Devuelve el ultimo resumen confirmado para el tecnico.
+- Si no hay historial, responde `ultimoResumen: null`.
+
+Respuesta ejemplo:
+
+```json
+{
+  "ultimoResumen": {
+    "id": "{{resumenPagoId}}",
+    "desde": "2026-07-01T00:00:00.000Z",
+    "hasta": "2026-07-31T23:59:59.999Z",
+    "totalLiquidaciones": 2,
+    "totalUsdSnapshot": 401,
+    "createdAt": "2026-07-31T18:45:00.000Z"
+  }
+}
+```
+
+`GET /liquidaciones/resumenes-pago/:id`:
+
+- Devuelve cabecera + detalle completo del resumen (liquidaciones incluidas y snapshots de montos).
+
+Respuesta ejemplo:
+
+```json
+{
+  "id": "{{resumenPagoId}}",
+  "tecnico": {
+    "id": "{{tecnicoId}}",
+    "nombre": "Juan Perez",
+    "email": "juan@example.com"
+  },
+  "periodo": {
+    "desde": "2026-07-01T00:00:00.000Z",
+    "hasta": "2026-07-31T23:59:59.999Z"
+  },
+  "resumen": {
+    "totalLiquidaciones": 2,
+    "totalUsdSnapshot": 401
+  },
+  "createdBy": {
+    "id": "{{adminId}}",
+    "nombre": "Admin Tecnico",
+    "email": "admin@example.com"
+  },
+  "createdAt": "2026-07-31T18:45:00.000Z",
+  "detalles": [
+    {
+      "id": "{{resumenDetalleId1}}",
+      "liquidacionId": "{{liquidacionId1}}",
+      "servicioId": "{{servicioId1}}",
+      "fechaAprobacionSnapshot": "2026-07-10T14:20:00.000Z",
+      "subtotalSalidaUsdSnapshot": 80,
+      "subtotalItemsUsdSnapshot": 120.5,
+      "totalLiquidacionUsdSnapshot": 200.5
+    }
+  ]
+}
+```
+
+`GET /liquidaciones/pendientes` (servicios campo sin liquidacion):
+
+```text
+/liquidaciones/pendientes?page=1&limit=20
+```
+
+Notas:
+
+- Lista servicios con `canal=campo` que todavia no tienen liquidacion.
+- Soporta `tecnicoId` opcional en query.
+- Cada item incluye `tecnicoId`, `tecnicoNombre` y `tecnicoEmail`.
+
+`GET /liquidaciones/:id/items`:
+
+```json
+{
+  "liquidacionId": "{{liquidacionId}}",
+  "items": [
+    {
+      "id": "{{itemId}}",
+      "tipoServicioId": "{{tipoServicioId}}",
+      "tipoServicioNombre": "Instalacion",
+      "precioUsdSnapshot": 120.5,
+      "aprobado": false,
+      "fechaAprobacion": null,
+      "createdAt": "2026-04-04T10:00:00.000Z"
+    }
+  ],
+  "meta": {
+    "totalItems": 1,
+    "aprobados": 0,
+    "pendientes": 1,
+    "subtotalUsdTotal": 120.5
+  }
+}
+```
+
+Notas:
+
+- Este endpoint permite obtener `itemId` desde UI para aprobar/eliminar items sin ingreso manual.
+- Si la liquidacion existe pero no tiene items, devuelve `items: []` y `meta.totalItems = 0`.
 
 ## Analytics (feedback)
 
