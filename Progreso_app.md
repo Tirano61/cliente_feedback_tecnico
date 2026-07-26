@@ -5,6 +5,7 @@
 - Vista de todas las liquidaciones aprobadas con los items y los precios
 - Separacion de la orden en tabs, carga de datos por cada uso en cada tab.
 - Falta agregar a la facturacion el precio del servicio realizado.
+- Acabo de hacer un orden pero el tecnico no la ve en liquidaciones pendientes, si la ve como orden de seervicio enviada.
 
 
 ## Para hacer
