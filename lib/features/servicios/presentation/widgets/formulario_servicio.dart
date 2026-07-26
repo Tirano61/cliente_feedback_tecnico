@@ -1615,6 +1615,16 @@ class _FormularioServicioState extends State<FormularioServicio> {
 		final descuentoMontoArs = estado.totalConIvaArs * (descuentoPorcentaje / 100);
 		final terminoBusquedaRepuesto = _buscarRepuestoController.text.trim();
 		final repuestosMostrados = estado.repuestosDisponibles.take(20).toList();
+		final idsRepuestoUnicos = <String>{};
+		final repuestosParaSeleccion = repuestosMostrados
+				.where(
+					(repuesto) =>
+						!estado.repuestosSeleccionados.any(
+							(item) => item.repuesto.id == repuesto.id,
+						) &&
+						idsRepuestoUnicos.add(repuesto.id),
+				)
+				.toList();
 
 		return Container(
 			width: double.infinity,
@@ -1745,32 +1755,48 @@ class _FormularioServicioState extends State<FormularioServicio> {
 					),
 					if (terminoBusquedaRepuesto.isNotEmpty && repuestosMostrados.isNotEmpty) ...[
 						const SizedBox(height: 8),
-						SingleChildScrollView(
-							scrollDirection: Axis.horizontal,
-							child: Row(
-								children: repuestosMostrados.map((repuesto) {
-									final yaAgregado = estado.repuestosSeleccionados.any(
-										(item) => item.repuesto.id == repuesto.id,
-									);
-									return Padding(
-										padding: const EdgeInsets.only(right: 8),
-										child: ActionChip(
-											label: Text(
-												'${repuesto.codigo} - ${repuesto.nombre} (${_formatearMonto(repuesto.precioUsd)} USD)',
-												style: _estiloTextoCompacto(context),
+						if (repuestosParaSeleccion.isNotEmpty)
+							DropdownButtonFormField<String>(
+								key: ValueKey(
+									'repuestos-${repuestosParaSeleccion.map((item) => item.id).join('|')}',
+								),
+								isExpanded: true,
+								initialValue: null,
+								decoration: _decoracionCampoCompacta(
+									context,
+									labelText: 'Seleccionar repuesto encontrado',
+								),
+								items: repuestosParaSeleccion
+										.map(
+											(repuesto) => DropdownMenuItem<String>(
+												value: repuesto.id,
+												child: Text(
+													'${repuesto.codigo} - ${repuesto.nombre} (${_formatearMonto(repuesto.precioUsd)} USD)',
+													style: _estiloTextoCompacto(context),
+													overflow: TextOverflow.ellipsis,
+													maxLines: 1,
+												),
 											),
-											onPressed: yaAgregado
-													? null
-													: () {
-														context.read<ServicioBloc>().add(
-																ServicioRepuestoAgregado(repuesto: repuesto),
-														);
-													},
-										),
+										)
+										.toList(),
+								onChanged: (repuestoId) {
+									if (repuestoId == null) {
+										return;
+									}
+									final repuesto = repuestosParaSeleccion.firstWhere(
+										(item) => item.id == repuestoId,
 									);
-								}).toList(),
+									context.read<ServicioBloc>().add(
+											ServicioRepuestoAgregado(repuesto: repuesto),
+									);
+									setState(() {});
+								},
+							)
+						else
+							Text(
+								'Todos los repuestos encontrados ya fueron agregados.',
+								style: _estiloTextoCompacto(context),
 							),
-						),
 					],
 					if (terminoBusquedaRepuesto.isNotEmpty &&
 							!estado.buscandoRepuestos &&
