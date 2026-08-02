@@ -664,6 +664,8 @@ class _TarjetaServicio extends StatelessWidget {
 		final fecha = fechaOrden == null ? 'Sin fecha informada' : _formatearFecha(fechaOrden);
 		final tienePdf = _tieneDocumentoSubido(servicio) || pdfConfirmadoServidor;
 		final nombreFirmante = (servicio.documento?.firmaClienteNombre ?? '').trim();
+		final nombreCliente = _resolverNombreCliente(servicio);
+		final kmTexto = servicio.km > 0 ? '${servicio.km}' : 'No informado';
 
 		return Card(
 			shape: RoundedRectangleBorder(
@@ -718,7 +720,15 @@ class _TarjetaServicio extends StatelessWidget {
 						),
 						const SizedBox(height: 6),
 						Text(
-							'Modelo: ${servicio.equipoModelo} | Serie: ${servicio.equipoNroSerie} | Km: ${servicio.km}',
+							'Cliente: $nombreCliente',
+							style: TextStyle(
+								color: Theme.of(context).colorScheme.onSurfaceVariant,
+								fontSize: 12,
+							),
+						),
+						const SizedBox(height: 6),
+						Text(
+							'Modelo: ${servicio.equipoModelo} | Serie: ${servicio.equipoNroSerie} | Km: $kmTexto',
 							style: TextStyle(
 								color: Theme.of(context).colorScheme.onSurfaceVariant,
 								fontSize: 12,
@@ -799,13 +809,6 @@ class _TarjetaServicio extends StatelessWidget {
 	}
 
 	_EstadoServicioVisual _resolverEstadoVisual(Servicio servicio) {
-		if (servicio.aprobado) {
-			return const _EstadoServicioVisual(
-				color: Colors.green,
-				texto: 'Aprobado',
-				icono: Icons.verified,
-			);
-		}
 		if (servicio.resuelto) {
 			return const _EstadoServicioVisual(
 				color: Colors.blue,
@@ -815,9 +818,23 @@ class _TarjetaServicio extends StatelessWidget {
 		}
 		return const _EstadoServicioVisual(
 			color: Colors.orange,
-			texto: 'Pendiente de aprobacion',
+			texto: 'En proceso',
 			icono: Icons.pending_actions,
 		);
+	}
+
+	String _resolverNombreCliente(Servicio servicio) {
+		final nombre = (servicio.clienteNombre ?? '').trim();
+		if (nombre.isNotEmpty) {
+			return nombre;
+		}
+
+		final contacto = (servicio.clienteContacto ?? '').trim();
+		if (contacto.isNotEmpty) {
+			return contacto;
+		}
+
+		return 'Sin nombre informado';
 	}
 
 	String _formatearFecha(DateTime fecha) {
