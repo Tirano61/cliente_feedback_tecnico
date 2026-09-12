@@ -2,6 +2,7 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 class SecureStorage {
 	static const String _tokenKey = 'jwt_token';
+	static const String _usuarioKey = 'usuario_sesion';
 	final FlutterSecureStorage _storage;
 
 	SecureStorage({FlutterSecureStorage? storage})
@@ -17,6 +18,18 @@ class SecureStorage {
 
 	Future<void> borrarToken() {
 		return _storage.delete(key: _tokenKey);
+	}
+
+	Future<void> guardarUsuario(String usuarioJson) {
+		return _storage.write(key: _usuarioKey, value: usuarioJson);
+	}
+
+	Future<String?> obtenerUsuario() {
+		return _storage.read(key: _usuarioKey);
+	}
+
+	Future<void> borrarUsuario() {
+		return _storage.delete(key: _usuarioKey);
 	}
 
 	Future<void> guardarValor({required String key, required String value}) {
