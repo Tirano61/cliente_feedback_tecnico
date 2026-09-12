@@ -3,26 +3,37 @@ import 'package:cliente_feedback_tecnico/features/auth/domain/entities/usuario.d
 class UsuarioDto extends Usuario {
 	const UsuarioDto({
 		required super.id,
-		required super.nombre,
+		required super.fullName,
 		required super.email,
-		required super.rol,
+		required super.roles,
 	});
 
 	factory UsuarioDto.fromJson(Map<String, dynamic> json) {
 		return UsuarioDto(
 			id: json['id']?.toString() ?? '',
-			nombre: json['nombre']?.toString() ?? '',
+			fullName: json['fullName']?.toString() ?? '',
 			email: json['email']?.toString() ?? '',
-			rol: json['rol']?.toString() ?? 'tecnico',
+			roles: _rolesDesdeJson(json['roles']),
 		);
 	}
 
 	Map<String, dynamic> toJson() {
 		return {
 			'id': id,
-			'nombre': nombre,
+			'fullName': fullName,
 			'email': email,
-			'rol': rol,
+			'roles': roles,
 		};
+	}
+
+	static List<String> _rolesDesdeJson(dynamic valor) {
+		if (valor is! List) {
+			return const [];
+		}
+
+		return valor
+				.map((rol) => rol?.toString() ?? '')
+				.where((rol) => rol.isNotEmpty)
+				.toList();
 	}
 }
