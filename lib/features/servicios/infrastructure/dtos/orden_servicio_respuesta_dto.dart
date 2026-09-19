@@ -77,9 +77,7 @@ class OrdenServicioRespuestaDto {
 				'sintoma': servicio.sintoma,
 				'diagnosticoDetalle': servicio.diagnosticoDetalle,
 				'diagnosticoCatId': servicio.diagnosticoCatIds,
-				'resolucionId': servicio.resolucionId.trim().isEmpty
-						? const <String>[]
-						: [servicio.resolucionId],
+				'resolucionId': servicio.resolucionIds,
 				'observaciones': servicio.observaciones,
 				'productosFalla': servicio.productosFalla
 						.map(

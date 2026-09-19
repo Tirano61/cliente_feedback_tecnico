@@ -20,19 +20,23 @@ class Servicio extends Equatable {
 	final String? clienteTelefono;
 	final String? clienteLocalidad;
 	final String? clienteContacto;
-	final String lugarProvinciaId;
+	/// Solo viaja en `canal = campo`: en remoto y fabrica el backend resuelve
+	/// el lugar y estos campos quedan en null.
+	final String? lugarProvinciaId;
 	final String? lugarProvinciaNombre;
-	final String lugarDetalle;
+	final String? lugarDetalle;
 	final String equipoNroSerie;
 	final String equipoModelo;
 	final String equipoUbicacion;
 	final int equipoAnio;
 	final List<String> partesFallaron;
-	final int km;
+
+	/// Solo viaja en `canal = campo`.
+	final int? km;
 	final String sintoma;
 	final String diagnosticoDetalle;
 	final List<String> diagnosticoCatIds;
-	final String resolucionId;
+	final List<String> resolucionIds;
 	final String? observaciones;
 	final List<ProductoFalla> productosFalla;
 	final Facturacion? facturacion;
@@ -57,19 +61,19 @@ class Servicio extends Equatable {
 		this.clienteTelefono,
 		this.clienteLocalidad,
 		this.clienteContacto,
-		required this.lugarProvinciaId,
+		this.lugarProvinciaId,
 		this.lugarProvinciaNombre,
-		required this.lugarDetalle,
+		this.lugarDetalle,
 		required this.equipoNroSerie,
 		required this.equipoModelo,
 		required this.equipoUbicacion,
 		required this.equipoAnio,
 		required this.partesFallaron,
-		required this.km,
+		this.km,
 		required this.sintoma,
 		required this.diagnosticoDetalle,
 		required this.diagnosticoCatIds,
-		required this.resolucionId,
+		required this.resolucionIds,
 		this.observaciones,
 		this.productosFalla = const [],
 		this.facturacion,
@@ -111,7 +115,7 @@ class Servicio extends Equatable {
 				sintoma,
 				diagnosticoDetalle,
 				diagnosticoCatIds,
-				resolucionId,
+				resolucionIds,
 				observaciones,
 				productosFalla,
 				facturacion,

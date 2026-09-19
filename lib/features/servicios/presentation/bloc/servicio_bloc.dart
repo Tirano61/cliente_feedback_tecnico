@@ -35,6 +35,7 @@ class ServicioBloc extends Bloc<ServicioEvent, ServicioState> {
 		'app_movil',
 		'app_pc',
 		'tablet',
+		'web',
 		'otro',
 	};
 	static const Uuid _uuid = Uuid();
@@ -159,6 +160,7 @@ class ServicioBloc extends Bloc<ServicioEvent, ServicioState> {
 
 		emit(
 			_recalcularFacturacion(
+				_aplicarReglasDeCanal(
 				actual.copyWith(
 				fechaHoraServicio: fechaHoraServicio,
 				timezoneIana: timezoneIana,
@@ -177,11 +179,12 @@ class ServicioBloc extends Bloc<ServicioEvent, ServicioState> {
 				sintoma: event.sintoma,
 				diagnosticoCatIdsSeleccionados: event.diagnosticoCatIdsSeleccionados,
 				diagnosticoDetalle: event.diagnosticoDetalle,
-				resolucionId: event.resolucionId,
+				resolucionIdsSeleccionados: event.resolucionIdsSeleccionados,
 				observaciones: event.observaciones,
 				productosFallaSeleccionados: event.productosFallaSeleccionados,
 				errorMensaje: null,
 				exitoMensaje: null,
+				),
 				),
 			),
 		);
@@ -1246,6 +1249,22 @@ class ServicioBloc extends Bloc<ServicioEvent, ServicioState> {
 				(texto.contains('canal') || texto.contains('remoto') || texto.contains('fabrica'));
 	}
 
+	/// Provincia, lugar de atencion y km solo existen en `canal = campo`. Al
+	/// pasar a remoto o fabrica se limpian para no arrastrar datos cargados
+	/// antes del cambio de canal: el backend resuelve el lugar y el payload
+	/// viaja sin esas claves.
+	ServicioFormularioState _aplicarReglasDeCanal(ServicioFormularioState estado) {
+		if (estado.requiereDatosDeCampo) {
+			return estado;
+		}
+
+		return estado.copyWith(
+			lugarProvinciaId: '',
+			lugarDetalle: '',
+			km: '',
+		);
+	}
+
 	String? _validarFormulario(ServicioFormularioState estado) {
 		if (estado.canal == null) {
 			return 'Selecciona el canal del servicio.';
@@ -1253,11 +1272,13 @@ class ServicioBloc extends Bloc<ServicioEvent, ServicioState> {
 		if (estado.clienteId.trim().isEmpty) {
 			return 'Debes seleccionar un cliente.';
 		}
-		if (estado.lugarProvinciaId.trim().isEmpty) {
-			return 'Selecciona la provincia/zona del servicio.';
-		}
-		if (estado.lugarDetalle.trim().isEmpty) {
-			return 'Completa el detalle del lugar.';
+		if (estado.requiereDatosDeCampo) {
+			if (estado.lugarProvinciaId.trim().isEmpty) {
+				return 'Selecciona la provincia/zona del servicio.';
+			}
+			if (estado.lugarDetalle.trim().isEmpty) {
+				return 'Completa el detalle del lugar.';
+			}
 		}
 		if (estado.equipoNroSerie.trim().isEmpty) {
 			return 'Completa el numero de serie del equipo.';
@@ -1274,6 +1295,9 @@ class ServicioBloc extends Bloc<ServicioEvent, ServicioState> {
 		}
 		if (_partesFallaronDesdeTexto(estado.partesFallaronTexto).isEmpty) {
 			return 'Indica al menos una parte que fallo.';
+		}
+		if (estado.requiereDatosDeCampo && estado.km.trim().isEmpty) {
+			return 'Completa los kilometros recorridos.';
 		}
 		final km = _doubleDesdeTexto(estado.km, valorPorDefecto: 0);
 		if (km < 0) {
@@ -1300,8 +1324,8 @@ class ServicioBloc extends Bloc<ServicioEvent, ServicioState> {
 		if (estado.diagnosticoCatIdsSeleccionados.isEmpty) {
 			return 'Selecciona al menos una categoria de diagnostico.';
 		}
-		if (estado.resolucionId.trim().isEmpty) {
-			return 'Selecciona una resolucion.';
+		if (estado.resolucionIdsSeleccionados.isEmpty) {
+			return 'Selecciona al menos una resolucion.';
 		}
 		if (_productosFallaNormalizados(estado.productosFallaSeleccionados).isEmpty) {
 			return 'Selecciona al menos un producto en Partes que mostraban falla.';
@@ -1331,6 +1355,8 @@ class ServicioBloc extends Bloc<ServicioEvent, ServicioState> {
 				.toSet()
 				.toList();
 
+		final esCampo = estadoRecalculado.requiereDatosDeCampo;
+
 		return Servicio(
 			id: '',
 			idempotencyKey: estadoRecalculado.idempotencyKey.trim(),
@@ -1346,18 +1372,18 @@ class ServicioBloc extends Bloc<ServicioEvent, ServicioState> {
 			clienteTelefono: _textoClienteOpcional(clienteSeleccionado?.telefono),
 			clienteLocalidad: _textoClienteOpcional(clienteSeleccionado?.localidad),
 			clienteContacto: _textoClienteOpcional(clienteSeleccionado?.contacto),
-			lugarProvinciaId: estadoRecalculado.lugarProvinciaId.trim(),
-			lugarDetalle: estadoRecalculado.lugarDetalle.trim(),
+			lugarProvinciaId: esCampo ? estadoRecalculado.lugarProvinciaId.trim() : null,
+			lugarDetalle: esCampo ? estadoRecalculado.lugarDetalle.trim() : null,
 			equipoNroSerie: estadoRecalculado.equipoNroSerie.trim(),
 			equipoModelo: estadoRecalculado.equipoModelo.trim(),
 			equipoUbicacion: estadoRecalculado.equipoUbicacion.trim(),
 			equipoAnio: int.parse(estadoRecalculado.equipoAnio.trim()),
 			partesFallaron: partesFallaron,
-			km: kmCantidad.round(),
+			km: esCampo ? kmCantidad.round() : null,
 			sintoma: estadoRecalculado.sintoma.trim(),
 			diagnosticoDetalle: estadoRecalculado.diagnosticoDetalle.trim(),
 			diagnosticoCatIds: estadoRecalculado.diagnosticoCatIdsSeleccionados,
-			resolucionId: estadoRecalculado.resolucionId.trim(),
+			resolucionIds: estadoRecalculado.resolucionIdsSeleccionados,
 			observaciones: estadoRecalculado.observaciones.trim().isEmpty
 					? null
 					: estadoRecalculado.observaciones.trim(),
@@ -1594,10 +1620,13 @@ class ServicioBloc extends Bloc<ServicioEvent, ServicioState> {
 		if (valor.contains('movil') || valor.contains('mobile') || valor.contains('celular')) {
 			return 'app_movil';
 		}
+		if (valor.contains('web')) {
+			return 'web';
+		}
 		if (valor.contains('app') && valor.contains('pc')) {
 			return 'app_pc';
 		}
-		if (valor.contains('pc') || valor.contains('web') || valor.contains('escritorio')) {
+		if (valor.contains('pc') || valor.contains('escritorio')) {
 			return 'app_pc';
 		}
 		if (valor.contains('tablet')) {

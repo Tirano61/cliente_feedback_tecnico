@@ -17,19 +17,19 @@ class ServicioDto {
 	final String? clienteTelefono;
 	final String? clienteLocalidad;
 	final String? clienteContacto;
-	final String lugarProvinciaId;
+	final String? lugarProvinciaId;
 	final String? lugarProvinciaNombre;
-	final String lugarDetalle;
+	final String? lugarDetalle;
 	final String equipoNroSerie;
 	final String equipoModelo;
 	final String equipoUbicacion;
 	final int equipoAnio;
 	final List<String> partesFallaron;
-	final int km;
+	final int? km;
 	final String sintoma;
 	final String diagnosticoDetalle;
 	final List<String> diagnosticoCatIds;
-	final String resolucionId;
+	final List<String> resolucionIds;
 	final String? observaciones;
 	final List<ProductoFalla> productosFalla;
 	final Facturacion? facturacion;
@@ -54,19 +54,19 @@ class ServicioDto {
 		this.clienteTelefono,
 		this.clienteLocalidad,
 		this.clienteContacto,
-		required this.lugarProvinciaId,
+		this.lugarProvinciaId,
 		this.lugarProvinciaNombre,
-		required this.lugarDetalle,
+		this.lugarDetalle,
 		required this.equipoNroSerie,
 		required this.equipoModelo,
 		required this.equipoUbicacion,
 		required this.equipoAnio,
 		required this.partesFallaron,
-		required this.km,
+		this.km,
 		required this.sintoma,
 		required this.diagnosticoDetalle,
 		required this.diagnosticoCatIds,
-		required this.resolucionId,
+		required this.resolucionIds,
 		this.observaciones,
 		this.productosFalla = const [],
 		this.facturacion,
@@ -126,19 +126,18 @@ class ServicioDto {
 			clienteContacto:
 					clienteJson?['contacto']?.toString() ??
 					servicioJson['clienteContacto']?.toString(),
-			lugarProvinciaId:
-					servicioJson['lugarProvinciaId']?.toString() ??
-					servicioJson['lugar_provincia_id']?.toString() ??
-					servicioJson['zona_id']?.toString() ??
-					'',
+			lugarProvinciaId: _textoOpcional(
+				servicioJson['lugarProvinciaId'] ??
+					servicioJson['lugar_provincia_id'] ??
+					servicioJson['zona_id'],
+			),
 			lugarProvinciaNombre:
 					servicioJson['lugarProvinciaNombre']?.toString() ??
 					servicioJson['lugar_provincia_nombre']?.toString() ??
 					servicioJson['zonaNombre']?.toString(),
-			lugarDetalle:
-					servicioJson['lugarDetalle']?.toString() ??
-					servicioJson['lugar_detalle']?.toString() ??
-					'',
+			lugarDetalle: _textoOpcional(
+				servicioJson['lugarDetalle'] ?? servicioJson['lugar_detalle'],
+			),
 			equipoNroSerie:
 					servicioJson['equipoNroSerie']?.toString() ??
 					servicioJson['equipo_nro_serie']?.toString() ??
@@ -154,7 +153,7 @@ class ServicioDto {
 			equipoAnio: _intDesdeDynamic(servicioJson['equipoAnio'] ?? servicioJson['equipo_anio']),
 			partesFallaron:
 					_listaString(servicioJson['partesFallaron'] ?? servicioJson['partes_fallaron']),
-			km: _intDesdeDynamic(servicioJson['km']),
+			km: _intOpcionalDesdeDynamic(servicioJson['km']),
 			sintoma: servicioJson['sintoma']?.toString() ?? '',
 			diagnosticoDetalle:
 					servicioJson['diagnosticoDetalle']?.toString() ??
@@ -163,7 +162,7 @@ class ServicioDto {
 			diagnosticoCatIds: _listaString(
 				servicioJson['diagnosticoCatId'] ?? servicioJson['diagnostico_cat_id'],
 			),
-			resolucionId: _primerValorListaOString(
+			resolucionIds: _listaString(
 				servicioJson['resolucionId'] ?? servicioJson['resolucion_id'],
 			),
 			observaciones: servicioJson['observaciones']?.toString(),
@@ -237,20 +236,31 @@ class ServicioDto {
 		final body = <String, dynamic>{
 			'canal': canal.name,
 			'clienteId': clienteId,
-			'lugarProvinciaId': lugarProvinciaId,
-			'lugarDetalle': lugarDetalle,
 			'equipoNroSerie': equipoNroSerie,
 			'equipoModelo': equipoModelo,
 			'equipoUbicacion': equipoUbicacion,
 			'equipoAnio': equipoAnio,
 			'partesFallaron': partesFallaron,
-			'km': km,
 			'sintoma': sintoma,
 			'diagnosticoDetalle': diagnosticoDetalle,
 			'diagnosticoCatId': diagnosticoCatIds,
-			'resolucionId': resolucionId.trim().isEmpty ? const <String>[] : [resolucionId],
+			'resolucionId': resolucionIds,
 			'productosFalla': _productosFallaJsonParaEnvio(),
 		};
+
+		// Provincia, lugar y km son exclusivos de `canal = campo`: en remoto y
+		// fabrica el backend completa el lugar y no espera estas claves.
+		final lugarProvinciaIdNormalizado = lugarProvinciaId?.trim();
+		if (lugarProvinciaIdNormalizado != null && lugarProvinciaIdNormalizado.isNotEmpty) {
+			body['lugarProvinciaId'] = lugarProvinciaIdNormalizado;
+		}
+		final lugarDetalleNormalizado = lugarDetalle?.trim();
+		if (lugarDetalleNormalizado != null && lugarDetalleNormalizado.isNotEmpty) {
+			body['lugarDetalle'] = lugarDetalleNormalizado;
+		}
+		if (km != null) {
+			body['km'] = km;
+		}
 
 		if (idempotencyKey != null && idempotencyKey!.trim().isNotEmpty) {
 			body['idempotencyKey'] = idempotencyKey;
@@ -339,7 +349,7 @@ class ServicioDto {
 			sintoma: sintoma,
 			diagnosticoDetalle: diagnosticoDetalle,
 			diagnosticoCatIds: diagnosticoCatIds,
-			resolucionId: resolucionId,
+			resolucionIds: resolucionIds,
 			observaciones: observaciones,
 			productosFalla: productosFalla,
 			facturacion: facturacion,
@@ -378,7 +388,7 @@ class ServicioDto {
 			sintoma: servicio.sintoma,
 			diagnosticoDetalle: servicio.diagnosticoDetalle,
 			diagnosticoCatIds: servicio.diagnosticoCatIds,
-			resolucionId: servicio.resolucionId,
+			resolucionIds: servicio.resolucionIds,
 			observaciones: servicio.observaciones,
 			productosFalla: servicio.productosFalla,
 			facturacion: servicio.facturacion,
@@ -522,12 +532,12 @@ class ServicioDto {
 				.toList();
 	}
 
-	static String _primerValorListaOString(dynamic valor) {
-		final lista = _listaString(valor);
-		if (lista.isEmpty) {
-			return '';
+	static String? _textoOpcional(dynamic valor) {
+		if (valor == null) {
+			return null;
 		}
-		return lista.first;
+		final texto = valor.toString().trim();
+		return texto.isEmpty ? null : texto;
 	}
 
 	static bool _aprobadoDesdeJson(Map<String, dynamic> json) {

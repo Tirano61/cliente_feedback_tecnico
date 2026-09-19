@@ -31,7 +31,7 @@ class ServicioFormularioCambiado extends ServicioEvent {
 	final String? sintoma;
 	final List<String>? diagnosticoCatIdsSeleccionados;
 	final String? diagnosticoDetalle;
-	final String? resolucionId;
+	final List<String>? resolucionIdsSeleccionados;
 	final String? observaciones;
 
 	const ServicioFormularioCambiado({
@@ -50,7 +50,7 @@ class ServicioFormularioCambiado extends ServicioEvent {
 		this.sintoma,
 		this.diagnosticoCatIdsSeleccionados,
 		this.diagnosticoDetalle,
-		this.resolucionId,
+		this.resolucionIdsSeleccionados,
 		this.observaciones,
 	});
 
@@ -71,7 +71,7 @@ class ServicioFormularioCambiado extends ServicioEvent {
 				sintoma,
 				diagnosticoCatIdsSeleccionados,
 				diagnosticoDetalle,
-				resolucionId,
+				resolucionIdsSeleccionados,
 				observaciones,
 			];
 }

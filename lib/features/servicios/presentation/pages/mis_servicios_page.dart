@@ -314,7 +314,8 @@ class _TarjetaServicio extends StatelessWidget {
 		final fecha = fechaOrden == null ? 'Sin fecha informada' : _formatearFecha(fechaOrden);
 		final nombreFirmante = (servicio.documento?.firmaClienteNombre ?? '').trim();
 		final nombreCliente = _resolverNombreCliente(servicio);
-		final kmTexto = servicio.km > 0 ? '${servicio.km}' : 'No informado';
+		final km = servicio.km;
+		final kmTexto = km != null && km > 0 ? '$km' : 'No informado';
 
 		return Card(
 			shape: RoundedRectangleBorder(
