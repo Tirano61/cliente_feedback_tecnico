@@ -1,6 +1,8 @@
 import 'package:cliente_feedback_tecnico/core/api/api_client.dart';
 import 'package:cliente_feedback_tecnico/core/auth/secure_storage.dart';
+import 'package:cliente_feedback_tecnico/features/auth/application/cerrar_sesion_use_case.dart';
 import 'package:cliente_feedback_tecnico/features/auth/application/login_use_case.dart';
+import 'package:cliente_feedback_tecnico/features/auth/application/restaurar_sesion_use_case.dart';
 import 'package:cliente_feedback_tecnico/features/auth/domain/repositories/i_auth_repository.dart';
 import 'package:cliente_feedback_tecnico/features/auth/infrastructure/repositories/auth_repository_impl.dart';
 import 'package:cliente_feedback_tecnico/features/servicios/application/buscar_clientes_use_case.dart';
@@ -36,6 +38,8 @@ class AppDependencies {
 	final ILiquidacionRepository liquidacionRepository;
 
 	final LoginUseCase loginUseCase;
+	final RestaurarSesionUseCase restaurarSesionUseCase;
+	final CerrarSesionUseCase cerrarSesionUseCase;
 	final ObtenerCatalogosUseCase obtenerCatalogosUseCase;
 	final CargarServicioUseCase cargarServicioUseCase;
 	final ObtenerMisServiciosUseCase obtenerMisServiciosUseCase;
@@ -59,6 +63,8 @@ class AppDependencies {
 		required this.servicioRepository,
 		required this.liquidacionRepository,
 		required this.loginUseCase,
+		required this.restaurarSesionUseCase,
+		required this.cerrarSesionUseCase,
 		required this.obtenerCatalogosUseCase,
 		required this.cargarServicioUseCase,
 		required this.obtenerMisServiciosUseCase,
@@ -93,6 +99,8 @@ class AppDependencies {
 			servicioRepository: servicioRepository,
 			liquidacionRepository: liquidacionRepository,
 			loginUseCase: LoginUseCase(authRepository),
+			restaurarSesionUseCase: RestaurarSesionUseCase(authRepository),
+			cerrarSesionUseCase: CerrarSesionUseCase(authRepository),
 			obtenerCatalogosUseCase: ObtenerCatalogosUseCase(catalogoRepository),
 			cargarServicioUseCase: CargarServicioUseCase(servicioRepository),
 			obtenerMisServiciosUseCase:

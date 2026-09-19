@@ -24,3 +24,8 @@ class LoginSubmitted extends AuthEvent {
 class LogoutRequested extends AuthEvent {
 	const LogoutRequested();
 }
+
+/// El backend rechazo el token con 401: hay que limpiar y volver al login.
+class SesionExpiradaDetectada extends AuthEvent {
+	const SesionExpiradaDetectada();
+}
