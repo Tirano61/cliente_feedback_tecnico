@@ -26,7 +26,13 @@ class AuthAuthenticated extends AuthState {
 }
 
 class AuthUnauthenticated extends AuthState {
-	const AuthUnauthenticated();
+	/// Motivo para mostrarle al tecnico, por ejemplo cuando expiro la sesion.
+	final String? mensaje;
+
+	const AuthUnauthenticated({this.mensaje});
+
+	@override
+	List<Object?> get props => [mensaje];
 }
 
 class AuthError extends AuthState {

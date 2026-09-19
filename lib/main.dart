@@ -19,6 +19,10 @@ void main() {
 class App extends StatelessWidget {
   final AppDependencies deps;
   static const Color _azulOscuro = Color(0xFF0B2A4A);
+  static final GlobalKey<NavigatorState> _navigatorKey =
+      GlobalKey<NavigatorState>();
+  static final GlobalKey<ScaffoldMessengerState> _messengerKey =
+      GlobalKey<ScaffoldMessengerState>();
 
   const App({required this.deps, super.key});
 
@@ -27,7 +31,12 @@ class App extends StatelessWidget {
     return MultiBlocProvider(
       providers: [
         BlocProvider(
-          create: (_) => AuthBloc(deps.loginUseCase)..add(const AppStarted()),
+          create: (_) => AuthBloc(
+            deps.loginUseCase,
+            deps.restaurarSesionUseCase,
+            deps.cerrarSesionUseCase,
+            sesionExpirada: deps.apiClient.sesionExpirada,
+          )..add(const AppStarted()),
         ),
         BlocProvider(
           create: (_) => CatalogoBloc(deps.obtenerCatalogosUseCase),
@@ -57,6 +66,8 @@ class App extends StatelessWidget {
       child: MaterialApp(
           title: 'Feedback Tecnico',
           debugShowCheckedModeBanner: false,
+          navigatorKey: _navigatorKey,
+          scaffoldMessengerKey: _messengerKey,
           theme: ThemeData(
             useMaterial3: true,
             colorScheme: ColorScheme.fromSeed(
@@ -85,9 +96,26 @@ class App extends StatelessWidget {
               foregroundColor: Colors.white,
             ),
           ),
-          home: BlocBuilder<AuthBloc, AuthState>(
+          home: BlocConsumer<AuthBloc, AuthState>(
+            listenWhen: (previous, current) => current is AuthUnauthenticated,
+            listener: (context, state) {
+              if (state is! AuthUnauthenticated) {
+                return;
+              }
+
+              // Al cerrar sesion la app vuelve al login: hay que soltar las
+              // pantallas apiladas encima (mis servicios, liquidaciones).
+              _navigatorKey.currentState?.popUntil((route) => route.isFirst);
+
+              final mensaje = state.mensaje;
+              if (mensaje != null && mensaje.isNotEmpty) {
+                _messengerKey.currentState
+                  ?..hideCurrentSnackBar()
+                  ..showSnackBar(SnackBar(content: Text(mensaje)));
+              }
+            },
             builder: (context, state) {
-              if (state is AuthLoading) {
+              if (state is AuthInitial || state is AuthLoading) {
                 return const Scaffold(
                   body: Center(child: CircularProgressIndicator()),
                 );

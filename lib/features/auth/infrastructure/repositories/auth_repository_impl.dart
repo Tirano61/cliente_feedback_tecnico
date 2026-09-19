@@ -2,11 +2,13 @@ import 'dart:convert';
 
 import 'package:cliente_feedback_tecnico/core/api/api_client.dart';
 import 'package:cliente_feedback_tecnico/core/api/api_constants.dart';
+import 'package:cliente_feedback_tecnico/core/auth/jwt_helper.dart';
 import 'package:cliente_feedback_tecnico/core/auth/secure_storage.dart';
 import 'package:cliente_feedback_tecnico/core/error/failures.dart';
 import 'package:cliente_feedback_tecnico/features/auth/domain/entities/usuario.dart';
 import 'package:cliente_feedback_tecnico/features/auth/domain/repositories/i_auth_repository.dart';
 import 'package:cliente_feedback_tecnico/features/auth/infrastructure/dtos/login_response_dto.dart';
+import 'package:cliente_feedback_tecnico/features/auth/infrastructure/dtos/usuario_dto.dart';
 
 class AuthRepositoryImpl implements IAuthRepository {
 	final ApiClient _apiClient;
@@ -72,7 +74,46 @@ class AuthRepositoryImpl implements IAuthRepository {
 	}
 
 	@override
+	Future<Usuario?> obtenerSesionGuardada() async {
+		final token = await _secureStorage.obtenerToken();
+		final usuarioJson = await _secureStorage.obtenerUsuario();
+
+		if (token == null ||
+				token.isEmpty ||
+				usuarioJson == null ||
+				usuarioJson.isEmpty) {
+			await logout();
+			return null;
+		}
+
+		if (JwtHelper.estaVencido(token)) {
+			await logout();
+			return null;
+		}
+
+		try {
+			final dynamic json = jsonDecode(usuarioJson);
+			if (json is! Map<String, dynamic>) {
+				await logout();
+				return null;
+			}
+
+			final usuario = UsuarioDto.fromJson(json);
+			if (usuario.id.isEmpty || usuario.email.isEmpty) {
+				await logout();
+				return null;
+			}
+
+			return usuario;
+		} catch (_) {
+			await logout();
+			return null;
+		}
+	}
+
+	@override
 	Future<void> logout() async {
-		return;
+		await _secureStorage.borrarToken();
+		await _secureStorage.borrarUsuario();
 	}
 }
