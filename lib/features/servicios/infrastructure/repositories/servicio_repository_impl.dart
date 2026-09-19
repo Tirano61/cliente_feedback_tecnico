@@ -246,6 +246,66 @@ class ServicioRepositoryImpl implements IServicioRepository {
 	}
 
 	@override
+	Future<String?> obtenerEnlacePdfDocumento(String servicioId) async {
+		final id = servicioId.trim();
+		if (id.isEmpty) {
+			throw const ServerException(
+				'Servicio invalido para obtener el enlace del PDF.',
+			);
+		}
+
+		final response = await apiClient.get(ApiConstants.servicioDocumento(id));
+
+		// 400/404 = la orden todavia no tiene documento: no es un error a mostrar.
+		if (response.statusCode == 400 || response.statusCode == 404) {
+			return null;
+		}
+
+		if (response.statusCode != 200) {
+			final mensajeBackend = _extraerMensajeError(response.body);
+			throw ServerException(
+				mensajeBackend ??
+						'No se pudo obtener el enlace PDF (HTTP ${response.statusCode}).',
+				statusCode: response.statusCode,
+			);
+		}
+
+		final documento = _extraerDocumentoDesdePayload(
+			_decodeJsonSeguro(response.body),
+		);
+
+		return _normalizarUrlPdf(_extraerPdfUrlDesdeDocumento(documento));
+	}
+
+	@override
+	Future<Uint8List?> descargarPdfDocumento(String servicioId) async {
+		final id = servicioId.trim();
+		if (id.isEmpty) {
+			throw const ServerException('Servicio invalido para descargar el PDF.');
+		}
+
+		final response = await apiClient.get(
+			ApiConstants.servicioDocumentoPdf(id),
+		);
+
+		// 400/404 = la orden todavia no tiene PDF: no es un error a mostrar.
+		if (response.statusCode == 400 || response.statusCode == 404) {
+			return null;
+		}
+
+		if (response.statusCode != 200 || response.bodyBytes.isEmpty) {
+			final mensajeBackend = _extraerMensajeError(response.body);
+			throw ServerException(
+				mensajeBackend ??
+						'No se pudo descargar el PDF de la orden (HTTP ${response.statusCode}).',
+				statusCode: response.statusCode,
+			);
+		}
+
+		return Uint8List.fromList(response.bodyBytes);
+	}
+
+	@override
 	Future<void> encolarDocumentoPendiente(SolicitudDocumentoFirmado solicitud) async {
 		final pendientes = await obtenerDocumentosPendientes();
 		final actualizados = pendientes
@@ -288,6 +348,106 @@ class ServicioRepositoryImpl implements IServicioRepository {
 				.where((item) => item.servicioId != servicioId)
 				.toList();
 		await _guardarColaPendientes(actualizados);
+	}
+
+	/// El backend devolvio el documento de distintas formas segun la version:
+	/// plano, dentro de `data` o dentro de `servicio`.
+	Map<String, dynamic>? _extraerDocumentoDesdePayload(dynamic payload) {
+		if (payload is! Map<String, dynamic>) {
+			return null;
+		}
+
+		final documentoDirecto = payload['documento'];
+		if (documentoDirecto is Map<String, dynamic>) {
+			return documentoDirecto;
+		}
+
+		final data = payload['data'];
+		if (data is Map<String, dynamic>) {
+			final documentoData = data['documento'];
+			if (documentoData is Map<String, dynamic>) {
+				return documentoData;
+			}
+		}
+
+		final servicioPayload = payload['servicio'];
+		if (servicioPayload is Map<String, dynamic>) {
+			final documentoServicio = servicioPayload['documento'];
+			if (documentoServicio is Map<String, dynamic>) {
+				return documentoServicio;
+			}
+		}
+
+		return null;
+	}
+
+	String? _extraerPdfUrlDesdeDocumento(Map<String, dynamic>? documento) {
+		if (documento == null) {
+			return null;
+		}
+
+		for (final clave in const [
+			'pdfUrl',
+			'pdf_url',
+			'pdfPublicUrl',
+			'pdf_public_url',
+			'url',
+			'secure_url',
+		]) {
+			final valor = documento[clave];
+			if (valor == null) {
+				continue;
+			}
+			final texto = valor.toString().trim();
+			if (texto.isNotEmpty) {
+				return texto;
+			}
+		}
+
+		final pdf = documento['pdf'];
+		if (pdf is Map<String, dynamic>) {
+			for (final clave in const ['url', 'secure_url', 'pdfUrl', 'pdf_url']) {
+				final valor = pdf[clave];
+				if (valor == null) {
+					continue;
+				}
+				final texto = valor.toString().trim();
+				if (texto.isNotEmpty) {
+					return texto;
+				}
+			}
+		}
+
+		return null;
+	}
+
+	/// El backend puede devolver la url relativa; la vista necesita una absoluta.
+	String? _normalizarUrlPdf(String? bruto) {
+		final valor = (bruto ?? '').trim();
+		if (valor.isEmpty) {
+			return null;
+		}
+
+		final uriBase = Uri.parse(ApiConstants.baseUrl);
+		final origen = '${uriBase.scheme}://${uriBase.authority}';
+		final prefijoApi = uriBase.path.endsWith('/')
+				? uriBase.path.substring(0, uriBase.path.length - 1)
+				: uriBase.path;
+
+		if (valor.startsWith('http://') || valor.startsWith('https://')) {
+			return valor;
+		}
+		if (valor.startsWith('//')) {
+			return '${uriBase.scheme}:$valor';
+		}
+		if (valor.startsWith('/api/')) {
+			return '$origen$valor';
+		}
+		if (valor.startsWith('/servicios/')) {
+			return '$origen$prefijoApi$valor';
+		}
+
+		return uriBase.resolve(valor).toString();
 	}
 
 	List<dynamic> _extraerLista(dynamic json) {

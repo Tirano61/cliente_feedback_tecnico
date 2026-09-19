@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:cliente_feedback_tecnico/features/servicios/domain/entities/cliente.dart';
 import 'package:cliente_feedback_tecnico/features/servicios/domain/entities/cotizacion_actual.dart';
 import 'package:cliente_feedback_tecnico/features/servicios/domain/entities/orden_servicio_respuesta.dart';
@@ -22,11 +24,17 @@ abstract class IServicioRepository {
 		SolicitudDocumentoFirmado solicitud,
 	);
 
+	/// Enlace publico del PDF de la orden, ya absoluto y listo para compartir.
+	/// Devuelve null cuando la orden todavia no tiene documento cargado.
+	Future<String?> obtenerEnlacePdfDocumento(String servicioId);
+
+	/// Bytes del PDF de la orden para abrirlo o guardarlo.
+	/// Devuelve null cuando la orden todavia no tiene PDF disponible.
+	Future<Uint8List?> descargarPdfDocumento(String servicioId);
+
 	Future<void> encolarDocumentoPendiente(SolicitudDocumentoFirmado solicitud);
 
 	Future<List<SolicitudDocumentoFirmado>> obtenerDocumentosPendientes();
 
 	Future<void> quitarDocumentoPendiente(String servicioId);
 }
-
-

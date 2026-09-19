@@ -6,10 +6,12 @@ import 'package:cliente_feedback_tecnico/features/servicios/application/buscar_c
 import 'package:cliente_feedback_tecnico/features/servicios/application/buscar_repuestos_use_case.dart';
 import 'package:cliente_feedback_tecnico/features/servicios/application/cargar_servicio_use_case.dart';
 import 'package:cliente_feedback_tecnico/features/servicios/application/crear_cliente_rapido_use_case.dart';
+import 'package:cliente_feedback_tecnico/features/servicios/application/descargar_pdf_documento_use_case.dart';
 import 'package:cliente_feedback_tecnico/features/servicios/application/encolar_documento_pendiente_use_case.dart';
 import 'package:cliente_feedback_tecnico/features/servicios/application/generar_pdf_orden_servicio_use_case.dart';
 import 'package:cliente_feedback_tecnico/features/servicios/application/obtener_cotizacion_actual_use_case.dart';
 import 'package:cliente_feedback_tecnico/features/servicios/application/obtener_documentos_pendientes_use_case.dart';
+import 'package:cliente_feedback_tecnico/features/servicios/application/obtener_enlace_pdf_documento_use_case.dart';
 import 'package:cliente_feedback_tecnico/features/servicios/application/obtener_mis_servicios_use_case.dart';
 import 'package:cliente_feedback_tecnico/features/servicios/application/quitar_documento_pendiente_use_case.dart';
 import 'package:cliente_feedback_tecnico/features/servicios/application/subir_documento_firmado_use_case.dart';
@@ -20,6 +22,7 @@ import 'package:cliente_feedback_tecnico/features/servicios/domain/entities/poli
 import 'package:cliente_feedback_tecnico/features/servicios/domain/entities/producto_falla.dart';
 import 'package:cliente_feedback_tecnico/features/servicios/domain/entities/servicio.dart';
 import 'package:cliente_feedback_tecnico/features/servicios/domain/entities/solicitud_documento_firmado.dart';
+import 'package:cliente_feedback_tecnico/features/servicios/presentation/bloc/filtro_estado_servicio.dart';
 import 'package:cliente_feedback_tecnico/features/servicios/presentation/bloc/servicio_event.dart';
 import 'package:cliente_feedback_tecnico/features/servicios/presentation/bloc/servicio_state.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -35,6 +38,9 @@ class ServicioBloc extends Bloc<ServicioEvent, ServicioState> {
 		'otro',
 	};
 	static const Uuid _uuid = Uuid();
+
+	/// Tope de consultas de documento por carga del listado de mis servicios.
+	static const int _maximoVerificacionesPdf = 20;
 	static final RegExp _uuidRegex = RegExp(
 		r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$',
 	);
@@ -50,7 +56,16 @@ class ServicioBloc extends Bloc<ServicioEvent, ServicioState> {
 	final EncolarDocumentoPendienteUseCase _encolarDocumentoPendienteUseCase;
 	final ObtenerDocumentosPendientesUseCase _obtenerDocumentosPendientesUseCase;
 	final QuitarDocumentoPendienteUseCase _quitarDocumentoPendienteUseCase;
+	final ObtenerEnlacePdfDocumentoUseCase _obtenerEnlacePdfDocumentoUseCase;
+	final DescargarPdfDocumentoUseCase _descargarPdfDocumentoUseCase;
 	final List<SolicitudDocumentoFirmado> _documentosPendientes = <SolicitudDocumentoFirmado>[];
+
+	/// Ordenes cuyo PDF confirmo el backend aunque el listado no lo traiga.
+	final Set<String> _serviciosConPdfConfirmado = <String>{};
+
+	/// Ordenes ya consultadas en esta carga del listado, para no repetir el GET.
+	final Set<String> _serviciosPdfVerificados = <String>{};
+	int _secuenciaEfectoPdf = 0;
 
 	ServicioBloc(
 		this._cargarServicioUseCase,
@@ -64,6 +79,8 @@ class ServicioBloc extends Bloc<ServicioEvent, ServicioState> {
 		this._encolarDocumentoPendienteUseCase,
 		this._obtenerDocumentosPendientesUseCase,
 		this._quitarDocumentoPendienteUseCase,
+		this._obtenerEnlacePdfDocumentoUseCase,
+		this._descargarPdfDocumentoUseCase,
 	) : super(_crearEstadoFormularioInicial()) {
 		on<ServicioFormularioCambiado>(_onServicioFormularioCambiado);
 		on<ServicioBuscarClienteSolicitado>(_onServicioBuscarClienteSolicitado);
@@ -82,6 +99,15 @@ class ServicioBloc extends Bloc<ServicioEvent, ServicioState> {
 		);
 		on<ServicioDocumentoSubirAhoraSolicitado>(_onServicioDocumentoSubirAhoraSolicitado);
 		on<MisServiciosSolicitados>(_onMisServiciosSolicitados);
+		on<MisServiciosDisponibilidadPdfSolicitada>(
+			_onMisServiciosDisponibilidadPdfSolicitada,
+		);
+		on<MisServiciosFiltroEstadoCambiado>(_onMisServiciosFiltroEstadoCambiado);
+		on<MisServiciosBusquedaCambiada>(_onMisServiciosBusquedaCambiada);
+		on<ServicioDocumentoPdfVerSolicitado>(_onServicioDocumentoPdfVerSolicitado);
+		on<ServicioDocumentoEnlacePdfCopiarSolicitado>(
+			_onServicioDocumentoEnlacePdfCopiarSolicitado,
+		);
 		on<ServicioFormularioReiniciado>(_onServicioFormularioReiniciado);
 	}
 
@@ -739,8 +765,9 @@ class ServicioBloc extends Bloc<ServicioEvent, ServicioState> {
 				}
 			}
 
-			emit(
-				actual.copyWith(
+			_emitirEnMisServicios(
+				emit,
+				(vigente) => vigente.copyWith(
 					reintentandoPendientes: false,
 					documentosPendientes: _documentosPendientes.length,
 					mensajePendientes: _documentosPendientes.isEmpty
@@ -799,20 +826,241 @@ class ServicioBloc extends Bloc<ServicioEvent, ServicioState> {
 		MisServiciosSolicitados event,
 		Emitter<ServicioState> emit,
 	) async {
+		// El filtro y la busqueda son del tecnico, no del backend: recargar el
+		// listado no tiene que borrarle lo que estaba mirando.
+		final anterior = state is MisServiciosLoaded
+				? state as MisServiciosLoaded
+				: null;
+
 		emit(const MisServiciosLoading());
 		try {
 			await _cargarPendientesDesdeStorage();
 			final servicios = await _obtenerMisServiciosUseCase.ejecutar();
+
+			// Recargar habilita volver a preguntar por el PDF de cada orden.
+			_serviciosPdfVerificados.clear();
+
 			emit(
 				MisServiciosLoaded(
 					servicios: servicios,
+					serviciosConPdfConfirmado: Set<String>.from(_serviciosConPdfConfirmado),
+					filtroEstado: anterior?.filtroEstado ?? FiltroEstadoServicio.todos,
+					busqueda: anterior?.busqueda ?? '',
 					documentosPendientes: _documentosPendientes.length,
 				),
 			);
+			add(const MisServiciosDisponibilidadPdfSolicitada());
 		} on ServerException catch (e) {
 			emit(ServicioError(mensaje: e.mensaje));
 		} catch (_) {
 			emit(const ServicioError(mensaje: 'No se pudieron cargar los servicios.'));
+		}
+	}
+
+	/// El listado de GET /servicios/mios no siempre trae el documento, asi que
+	/// para las ordenes sin documento se consulta GET /servicios/:id/documento.
+	Future<void> _onMisServiciosDisponibilidadPdfSolicitada(
+		MisServiciosDisponibilidadPdfSolicitada event,
+		Emitter<ServicioState> emit,
+	) async {
+		if (state is! MisServiciosLoaded) {
+			return;
+		}
+
+		final candidatos = <String>[];
+		for (final servicio in (state as MisServiciosLoaded).servicios) {
+			final servicioId = servicio.id.trim();
+			if (servicioId.isEmpty) {
+				continue;
+			}
+			if (_serviciosPdfVerificados.contains(servicioId)) {
+				continue;
+			}
+			if (servicio.tieneDocumentoCargado) {
+				continue;
+			}
+
+			candidatos.add(servicioId);
+			if (candidatos.length == _maximoVerificacionesPdf) {
+				break;
+			}
+		}
+
+		if (candidatos.isEmpty) {
+			return;
+		}
+
+		await Future.wait(
+			candidatos.map((servicioId) async {
+				try {
+					final enlace = await _obtenerEnlacePdfDocumentoUseCase.ejecutar(
+						servicioId,
+					);
+					if ((enlace ?? '').trim().isNotEmpty) {
+						_serviciosConPdfConfirmado.add(servicioId);
+					}
+				} catch (_) {
+					// Error puntual: se reintenta al recargar el listado. Si fue un 401
+					// el ApiClient ya aviso que la sesion expiro.
+				} finally {
+					_serviciosPdfVerificados.add(servicioId);
+				}
+			}),
+		);
+
+		_emitirEnMisServicios(
+			emit,
+			(vigente) => vigente.copyWith(
+				serviciosConPdfConfirmado: Set<String>.from(_serviciosConPdfConfirmado),
+			),
+		);
+	}
+
+	void _onMisServiciosFiltroEstadoCambiado(
+		MisServiciosFiltroEstadoCambiado event,
+		Emitter<ServicioState> emit,
+	) {
+		if (state is! MisServiciosLoaded) {
+			return;
+		}
+
+		emit((state as MisServiciosLoaded).copyWith(filtroEstado: event.filtro));
+	}
+
+	void _onMisServiciosBusquedaCambiada(
+		MisServiciosBusquedaCambiada event,
+		Emitter<ServicioState> emit,
+	) {
+		if (state is! MisServiciosLoaded) {
+			return;
+		}
+
+		emit((state as MisServiciosLoaded).copyWith(busqueda: event.texto));
+	}
+
+	Future<void> _onServicioDocumentoPdfVerSolicitado(
+		ServicioDocumentoPdfVerSolicitado event,
+		Emitter<ServicioState> emit,
+	) async {
+		if (state is! MisServiciosLoaded) {
+			return;
+		}
+
+		final actual = state as MisServiciosLoaded;
+		final servicioId = event.servicio.id.trim();
+		if (servicioId.isEmpty) {
+			emit(
+				actual.copyWith(
+					mensajePendientes: 'Servicio invalido para abrir PDF.',
+				),
+			);
+			return;
+		}
+
+		if (actual.servicioIdDescargandoPdf != null) {
+			return;
+		}
+
+		emit(
+			actual.copyWith(
+				servicioIdDescargandoPdf: servicioId,
+				limpiarMensajePendientes: true,
+			),
+		);
+
+		try {
+			final pdfBytes = await _descargarPdfDocumentoUseCase.ejecutar(servicioId);
+
+			if (pdfBytes == null) {
+				_cerrarFlujoPdfMisServicios(
+					emit,
+					mensaje: 'Esta orden aun no tiene PDF disponible.',
+				);
+				return;
+			}
+
+			_emitirEnMisServicios(
+				emit,
+				(vigente) => vigente.copyWith(
+					limpiarServicioIdDescargandoPdf: true,
+					pdfParaAbrir: PdfOrdenParaAbrir(
+						token: _proximoTokenEfectoPdf(),
+						servicioId: servicioId,
+						nombreArchivo: 'orden_servicio_$servicioId.pdf',
+						bytes: pdfBytes,
+					),
+				),
+			);
+		} on ServerException catch (e) {
+			_cerrarFlujoPdfMisServicios(emit, mensaje: e.mensaje);
+		} catch (_) {
+			_cerrarFlujoPdfMisServicios(
+				emit,
+				mensaje: 'Error al abrir el PDF. Intenta nuevamente.',
+			);
+		}
+	}
+
+	Future<void> _onServicioDocumentoEnlacePdfCopiarSolicitado(
+		ServicioDocumentoEnlacePdfCopiarSolicitado event,
+		Emitter<ServicioState> emit,
+	) async {
+		if (state is! MisServiciosLoaded) {
+			return;
+		}
+
+		final actual = state as MisServiciosLoaded;
+		final servicioId = event.servicio.id.trim();
+		if (servicioId.isEmpty) {
+			emit(
+				actual.copyWith(
+					mensajePendientes: 'Servicio invalido para obtener enlace PDF.',
+				),
+			);
+			return;
+		}
+
+		if (actual.servicioIdCopiandoEnlacePdf != null) {
+			return;
+		}
+
+		emit(
+			actual.copyWith(
+				servicioIdCopiandoEnlacePdf: servicioId,
+				limpiarMensajePendientes: true,
+			),
+		);
+
+		try {
+			final enlace = await _obtenerEnlacePdfDocumentoUseCase.ejecutar(servicioId);
+
+			if ((enlace ?? '').trim().isEmpty) {
+				_cerrarFlujoPdfMisServicios(
+					emit,
+					mensaje: 'Esta orden aun no tiene enlace PDF.',
+				);
+				return;
+			}
+
+			_emitirEnMisServicios(
+				emit,
+				(vigente) => vigente.copyWith(
+					limpiarServicioIdCopiandoEnlacePdf: true,
+					enlacePdfParaCopiar: EnlacePdfParaCopiar(
+						token: _proximoTokenEfectoPdf(),
+						servicioId: servicioId,
+						enlace: enlace!.trim(),
+					),
+					mensajePendientes: 'Enlace del PDF copiado. Ya podes compartirlo.',
+				),
+			);
+		} on ServerException catch (e) {
+			_cerrarFlujoPdfMisServicios(emit, mensaje: e.mensaje);
+		} catch (_) {
+			_cerrarFlujoPdfMisServicios(
+				emit,
+				mensaje: 'Error al obtener enlace PDF. Intenta nuevamente.',
+			);
 		}
 	}
 
@@ -867,8 +1115,9 @@ class ServicioBloc extends Bloc<ServicioEvent, ServicioState> {
 		try {
 			pdfBytes = await _generarPdfOrdenServicioUseCase.ejecutar(ordenGenerada);
 		} catch (_) {
-			emit(
-				actual.copyWith(
+			_emitirEnMisServicios(
+				emit,
+				(vigente) => vigente.copyWith(
 					limpiarServicioIdSubiendoPdf: true,
 					mensajePendientes:
 						'No se pudo generar el PDF de la orden $servicioId.',
@@ -888,14 +1137,14 @@ class ServicioBloc extends Bloc<ServicioEvent, ServicioState> {
 		try {
 			final ordenActualizada = await _subirDocumentoFirmadoUseCase.ejecutar(solicitud);
 			await _cargarPendientesDesdeStorage();
-			final serviciosActualizados = actual.servicios
-					.map(
-						(item) => item.id == servicioId ? ordenActualizada.servicio : item,
-					)
-					.toList();
-			emit(
-				actual.copyWith(
-					servicios: serviciosActualizados,
+			_emitirEnMisServicios(
+				emit,
+				(vigente) => vigente.copyWith(
+					servicios: vigente.servicios
+							.map(
+								(item) => item.id == servicioId ? ordenActualizada.servicio : item,
+							)
+							.toList(),
 					documentosPendientes: _documentosPendientes.length,
 					limpiarServicioIdSubiendoPdf: true,
 					mensajePendientes:
@@ -904,8 +1153,9 @@ class ServicioBloc extends Bloc<ServicioEvent, ServicioState> {
 			);
 		} on ServerException catch (e) {
 			await _encolarDocumentoPendiente(solicitud);
-			emit(
-				actual.copyWith(
+			_emitirEnMisServicios(
+				emit,
+				(vigente) => vigente.copyWith(
 					documentosPendientes: _documentosPendientes.length,
 					limpiarServicioIdSubiendoPdf: true,
 					mensajePendientes:
@@ -914,8 +1164,9 @@ class ServicioBloc extends Bloc<ServicioEvent, ServicioState> {
 			);
 		} catch (_) {
 			await _encolarDocumentoPendiente(solicitud);
-			emit(
-				actual.copyWith(
+			_emitirEnMisServicios(
+				emit,
+				(vigente) => vigente.copyWith(
 					documentosPendientes: _documentosPendientes.length,
 					limpiarServicioIdSubiendoPdf: true,
 					mensajePendientes:
@@ -923,6 +1174,40 @@ class ServicioBloc extends Bloc<ServicioEvent, ServicioState> {
 				),
 			);
 		}
+	}
+
+	/// Emite sobre el estado vigente del listado y no sobre la copia capturada
+	/// antes de los awaits: mientras corre un flujo de PDF puede haber
+	/// terminado la verificacion de disponibilidad y no hay que pisarla.
+	void _emitirEnMisServicios(
+		Emitter<ServicioState> emit,
+		MisServiciosLoaded Function(MisServiciosLoaded vigente) construir,
+	) {
+		if (emit.isDone || state is! MisServiciosLoaded) {
+			return;
+		}
+
+		emit(construir(state as MisServiciosLoaded));
+	}
+
+	/// Cierra un flujo de PDF del listado: apaga los indicadores y deja el aviso.
+	void _cerrarFlujoPdfMisServicios(
+		Emitter<ServicioState> emit, {
+		required String mensaje,
+	}) {
+		_emitirEnMisServicios(
+			emit,
+			(vigente) => vigente.copyWith(
+				limpiarServicioIdDescargandoPdf: true,
+				limpiarServicioIdCopiandoEnlacePdf: true,
+				mensajePendientes: mensaje,
+			),
+		);
+	}
+
+	int _proximoTokenEfectoPdf() {
+		_secuenciaEfectoPdf += 1;
+		return _secuenciaEfectoPdf;
 	}
 
 	Future<void> _onServicioFormularioReiniciado(
