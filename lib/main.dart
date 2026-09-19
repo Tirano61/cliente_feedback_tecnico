@@ -54,6 +54,8 @@ class App extends StatelessWidget {
             deps.encolarDocumentoPendienteUseCase,
             deps.obtenerDocumentosPendientesUseCase,
             deps.quitarDocumentoPendienteUseCase,
+            deps.obtenerEnlacePdfDocumentoUseCase,
+            deps.descargarPdfDocumentoUseCase,
           ),
         ),
         BlocProvider(

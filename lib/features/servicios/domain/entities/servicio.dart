@@ -81,6 +81,10 @@ class Servicio extends Equatable {
 		this.aprobado = false,
 	});
 
+	/// true cuando el listado ya trae el documento cargado: sirve para no
+	/// preguntarle al backend por el PDF de una orden que ya lo tiene.
+	bool get tieneDocumentoCargado => documento?.tieneContenidoCargado ?? false;
+
 	@override
 	List<Object?> get props => [
 				id,

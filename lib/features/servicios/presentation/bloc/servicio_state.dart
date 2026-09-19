@@ -5,6 +5,7 @@ import 'package:cliente_feedback_tecnico/features/servicios/domain/entities/orde
 import 'package:cliente_feedback_tecnico/features/servicios/domain/entities/producto_falla.dart';
 import 'package:cliente_feedback_tecnico/features/servicios/domain/entities/repuesto.dart';
 import 'package:cliente_feedback_tecnico/features/servicios/domain/entities/servicio.dart';
+import 'package:cliente_feedback_tecnico/features/servicios/presentation/bloc/filtro_estado_servicio.dart';
 import 'package:equatable/equatable.dart';
 
 abstract class ServicioState extends Equatable {
@@ -332,36 +333,133 @@ class MisServiciosLoaded extends ServicioState {
 	static const Object _sinCambioMensajePendientes = Object();
 
 	final List<Servicio> servicios;
+
+	/// Ordenes que el backend confirmo que ya tienen PDF aunque el listado de
+	/// GET /servicios/mios no lo traiga.
+	final Set<String> serviciosConPdfConfirmado;
+	final FiltroEstadoServicio filtroEstado;
+	final String busqueda;
 	final int documentosPendientes;
 	final bool reintentandoPendientes;
 	final String? servicioIdSubiendoPdf;
+	final String? servicioIdDescargandoPdf;
+	final String? servicioIdCopiandoEnlacePdf;
+
+	/// Efecto puntual: la vista abre o guarda estos bytes con el visor del SO.
+	final PdfOrdenParaAbrir? pdfParaAbrir;
+
+	/// Efecto puntual: la vista copia este enlace al portapapeles.
+	final EnlacePdfParaCopiar? enlacePdfParaCopiar;
 	final String? mensajePendientes;
 
 	const MisServiciosLoaded({
 		required this.servicios,
+		this.serviciosConPdfConfirmado = const <String>{},
+		this.filtroEstado = FiltroEstadoServicio.todos,
+		this.busqueda = '',
 		this.documentosPendientes = 0,
 		this.reintentandoPendientes = false,
 		this.servicioIdSubiendoPdf,
+		this.servicioIdDescargandoPdf,
+		this.servicioIdCopiandoEnlacePdf,
+		this.pdfParaAbrir,
+		this.enlacePdfParaCopiar,
 		this.mensajePendientes,
 	});
 
+	/// Listado ya filtrado por estado y texto, y ordenado del mas nuevo al mas
+	/// viejo. La vista solo lo renderiza.
+	List<Servicio> get serviciosFiltrados {
+		final texto = busqueda.trim().toLowerCase();
+
+		final filtrados = servicios.where((servicio) {
+			final coincideEstado = switch (filtroEstado) {
+				FiltroEstadoServicio.aprobados => servicio.aprobado,
+				FiltroEstadoServicio.pendientes => !servicio.aprobado,
+				FiltroEstadoServicio.todos => true,
+			};
+
+			if (!coincideEstado) {
+				return false;
+			}
+
+			if (texto.isEmpty) {
+				return true;
+			}
+
+			return servicio.sintoma.toLowerCase().contains(texto) ||
+					servicio.equipoModelo.toLowerCase().contains(texto) ||
+					servicio.equipoNroSerie.toLowerCase().contains(texto) ||
+					servicio.id.toLowerCase().contains(texto);
+		}).toList();
+
+		filtrados.sort((a, b) {
+			final fechaA = a.fechaHoraServicio ?? a.fecha;
+			final fechaB = b.fechaHoraServicio ?? b.fecha;
+			if (fechaA == null && fechaB == null) {
+				return 0;
+			}
+			if (fechaA == null) {
+				return 1;
+			}
+			if (fechaB == null) {
+				return -1;
+			}
+			return fechaB.compareTo(fechaA);
+		});
+
+		return filtrados;
+	}
+
+	/// La orden tiene PDF si el listado ya lo trae o si el backend lo confirmo.
+	bool tienePdfDisponible(Servicio servicio) {
+		return servicio.tieneDocumentoCargado ||
+				serviciosConPdfConfirmado.contains(servicio.id.trim());
+	}
+
 	MisServiciosLoaded copyWith({
 		List<Servicio>? servicios,
+		Set<String>? serviciosConPdfConfirmado,
+		FiltroEstadoServicio? filtroEstado,
+		String? busqueda,
 		int? documentosPendientes,
 		bool? reintentandoPendientes,
 		String? servicioIdSubiendoPdf,
 		bool limpiarServicioIdSubiendoPdf = false,
+		String? servicioIdDescargandoPdf,
+		bool limpiarServicioIdDescargandoPdf = false,
+		String? servicioIdCopiandoEnlacePdf,
+		bool limpiarServicioIdCopiandoEnlacePdf = false,
+		PdfOrdenParaAbrir? pdfParaAbrir,
+		bool limpiarPdfParaAbrir = false,
+		EnlacePdfParaCopiar? enlacePdfParaCopiar,
+		bool limpiarEnlacePdfParaCopiar = false,
 		Object? mensajePendientes = _sinCambioMensajePendientes,
 		bool limpiarMensajePendientes = false,
 	}) {
 		return MisServiciosLoaded(
 			servicios: servicios ?? this.servicios,
+			serviciosConPdfConfirmado:
+					serviciosConPdfConfirmado ?? this.serviciosConPdfConfirmado,
+			filtroEstado: filtroEstado ?? this.filtroEstado,
+			busqueda: busqueda ?? this.busqueda,
 			documentosPendientes: documentosPendientes ?? this.documentosPendientes,
 			reintentandoPendientes:
 					reintentandoPendientes ?? this.reintentandoPendientes,
 			servicioIdSubiendoPdf: limpiarServicioIdSubiendoPdf
 					? null
 					: (servicioIdSubiendoPdf ?? this.servicioIdSubiendoPdf),
+			servicioIdDescargandoPdf: limpiarServicioIdDescargandoPdf
+					? null
+					: (servicioIdDescargandoPdf ?? this.servicioIdDescargandoPdf),
+			servicioIdCopiandoEnlacePdf: limpiarServicioIdCopiandoEnlacePdf
+					? null
+					: (servicioIdCopiandoEnlacePdf ?? this.servicioIdCopiandoEnlacePdf),
+			pdfParaAbrir:
+					limpiarPdfParaAbrir ? null : (pdfParaAbrir ?? this.pdfParaAbrir),
+			enlacePdfParaCopiar: limpiarEnlacePdfParaCopiar
+					? null
+					: (enlacePdfParaCopiar ?? this.enlacePdfParaCopiar),
 			mensajePendientes: limpiarMensajePendientes
 					? null
 					: (mensajePendientes == _sinCambioMensajePendientes
@@ -373,11 +471,55 @@ class MisServiciosLoaded extends ServicioState {
 	@override
 	List<Object?> get props => [
 				servicios,
+				serviciosConPdfConfirmado,
+				filtroEstado,
+				busqueda,
 				documentosPendientes,
 				reintentandoPendientes,
 				servicioIdSubiendoPdf,
+				servicioIdDescargandoPdf,
+				servicioIdCopiandoEnlacePdf,
+				pdfParaAbrir,
+				enlacePdfParaCopiar,
 				mensajePendientes,
 			];
+}
+
+/// Pedido de apertura del PDF de una orden.
+///
+/// El `token` cambia en cada pedido para que el BlocListener de la vista sepa
+/// distinguir un pedido nuevo de un estado que cambio por otro motivo.
+class PdfOrdenParaAbrir extends Equatable {
+	final int token;
+	final String servicioId;
+	final String nombreArchivo;
+	final Uint8List bytes;
+
+	const PdfOrdenParaAbrir({
+		required this.token,
+		required this.servicioId,
+		required this.nombreArchivo,
+		required this.bytes,
+	});
+
+	@override
+	List<Object?> get props => [token, servicioId, nombreArchivo, bytes];
+}
+
+/// Pedido de copia al portapapeles del enlace del PDF de una orden.
+class EnlacePdfParaCopiar extends Equatable {
+	final int token;
+	final String servicioId;
+	final String enlace;
+
+	const EnlacePdfParaCopiar({
+		required this.token,
+		required this.servicioId,
+		required this.enlace,
+	});
+
+	@override
+	List<Object?> get props => [token, servicioId, enlace];
 }
 
 class RepuestoSeleccionado extends Equatable {

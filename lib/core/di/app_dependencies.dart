@@ -9,10 +9,12 @@ import 'package:cliente_feedback_tecnico/features/servicios/application/buscar_c
 import 'package:cliente_feedback_tecnico/features/servicios/application/buscar_repuestos_use_case.dart';
 import 'package:cliente_feedback_tecnico/features/servicios/application/cargar_servicio_use_case.dart';
 import 'package:cliente_feedback_tecnico/features/servicios/application/crear_cliente_rapido_use_case.dart';
+import 'package:cliente_feedback_tecnico/features/servicios/application/descargar_pdf_documento_use_case.dart';
 import 'package:cliente_feedback_tecnico/features/servicios/application/encolar_documento_pendiente_use_case.dart';
 import 'package:cliente_feedback_tecnico/features/servicios/application/generar_pdf_orden_servicio_use_case.dart';
 import 'package:cliente_feedback_tecnico/features/servicios/application/obtener_cotizacion_actual_use_case.dart';
 import 'package:cliente_feedback_tecnico/features/servicios/application/obtener_documentos_pendientes_use_case.dart';
+import 'package:cliente_feedback_tecnico/features/servicios/application/obtener_enlace_pdf_documento_use_case.dart';
 import 'package:cliente_feedback_tecnico/features/servicios/application/obtener_mis_servicios_use_case.dart';
 import 'package:cliente_feedback_tecnico/features/servicios/application/quitar_documento_pendiente_use_case.dart';
 import 'package:cliente_feedback_tecnico/features/servicios/application/subir_documento_firmado_use_case.dart';
@@ -52,6 +54,8 @@ class AppDependencies {
 	final EncolarDocumentoPendienteUseCase encolarDocumentoPendienteUseCase;
 	final ObtenerDocumentosPendientesUseCase obtenerDocumentosPendientesUseCase;
 	final QuitarDocumentoPendienteUseCase quitarDocumentoPendienteUseCase;
+	final ObtenerEnlacePdfDocumentoUseCase obtenerEnlacePdfDocumentoUseCase;
+	final DescargarPdfDocumentoUseCase descargarPdfDocumentoUseCase;
 	final ObtenerMisLiquidacionesUseCase obtenerMisLiquidacionesUseCase;
 	final ObtenerItemsLiquidacionUseCase obtenerItemsLiquidacionUseCase;
 
@@ -77,6 +81,8 @@ class AppDependencies {
 		required this.encolarDocumentoPendienteUseCase,
 		required this.obtenerDocumentosPendientesUseCase,
 		required this.quitarDocumentoPendienteUseCase,
+		required this.obtenerEnlacePdfDocumentoUseCase,
+		required this.descargarPdfDocumentoUseCase,
 		required this.obtenerMisLiquidacionesUseCase,
 		required this.obtenerItemsLiquidacionUseCase,
 	});
@@ -120,6 +126,10 @@ class AppDependencies {
 					ObtenerDocumentosPendientesUseCase(servicioRepository),
 			quitarDocumentoPendienteUseCase:
 					QuitarDocumentoPendienteUseCase(servicioRepository),
+			obtenerEnlacePdfDocumentoUseCase:
+					ObtenerEnlacePdfDocumentoUseCase(servicioRepository),
+			descargarPdfDocumentoUseCase:
+					DescargarPdfDocumentoUseCase(servicioRepository),
 			obtenerMisLiquidacionesUseCase:
 					ObtenerMisLiquidacionesUseCase(liquidacionRepository),
 			obtenerItemsLiquidacionUseCase:

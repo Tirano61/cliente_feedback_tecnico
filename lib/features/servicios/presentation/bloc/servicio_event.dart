@@ -5,6 +5,7 @@ import 'package:cliente_feedback_tecnico/features/servicios/domain/entities/orde
 import 'package:cliente_feedback_tecnico/features/servicios/domain/entities/producto_falla.dart';
 import 'package:cliente_feedback_tecnico/features/servicios/domain/entities/repuesto.dart';
 import 'package:cliente_feedback_tecnico/features/servicios/domain/entities/servicio.dart';
+import 'package:cliente_feedback_tecnico/features/servicios/presentation/bloc/filtro_estado_servicio.dart';
 import 'package:equatable/equatable.dart';
 
 abstract class ServicioEvent extends Equatable {
@@ -225,3 +226,45 @@ class ServicioDocumentoSubirAhoraSolicitado extends ServicioEvent {
 }
 
 
+
+/// Pregunta al backend, orden por orden, si ya existe el PDF del documento.
+/// Lo dispara el propio bloc despues de cargar el listado.
+class MisServiciosDisponibilidadPdfSolicitada extends ServicioEvent {
+	const MisServiciosDisponibilidadPdfSolicitada();
+}
+
+class MisServiciosFiltroEstadoCambiado extends ServicioEvent {
+	final FiltroEstadoServicio filtro;
+
+	const MisServiciosFiltroEstadoCambiado({required this.filtro});
+
+	@override
+	List<Object?> get props => [filtro];
+}
+
+class MisServiciosBusquedaCambiada extends ServicioEvent {
+	final String texto;
+
+	const MisServiciosBusquedaCambiada({required this.texto});
+
+	@override
+	List<Object?> get props => [texto];
+}
+
+class ServicioDocumentoPdfVerSolicitado extends ServicioEvent {
+	final Servicio servicio;
+
+	const ServicioDocumentoPdfVerSolicitado({required this.servicio});
+
+	@override
+	List<Object?> get props => [servicio];
+}
+
+class ServicioDocumentoEnlacePdfCopiarSolicitado extends ServicioEvent {
+	final Servicio servicio;
+
+	const ServicioDocumentoEnlacePdfCopiarSolicitado({required this.servicio});
+
+	@override
+	List<Object?> get props => [servicio];
+}
