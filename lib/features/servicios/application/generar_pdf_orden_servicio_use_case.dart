@@ -36,7 +36,7 @@ class GenerarPdfOrdenServicioUseCase {
 					final telefonoCliente = _textoSeguroOpcional(servicio.clienteTelefono);
 					final localidadCliente = _textoSeguroOpcional(servicio.clienteLocalidad);
 					final contactoCliente = _textoSeguroOpcional(servicio.clienteContacto);
-					final provinciaServicio = _textoSeguro(
+					final provinciaServicio = _textoSeguroOpcional(
 						servicio.lugarProvinciaNombre ?? servicio.lugarProvinciaId,
 					);
 
@@ -72,12 +72,12 @@ class GenerarPdfOrdenServicioUseCase {
 							style: pw.TextStyle(fontSize: 13, fontWeight: pw.FontWeight.bold),
 						),
 						pw.SizedBox(height: 4),
-						pw.Bullet(text: 'Lugar: ${_textoSeguro(servicio.lugarDetalle)}'),
+						pw.Bullet(text: 'Lugar: ${_textoSeguroOpcional(servicio.lugarDetalle)}'),
 						pw.Bullet(text: 'Modelo: ${_textoSeguro(servicio.equipoModelo)}'),
 						pw.Bullet(text: 'Serie: ${_textoSeguro(servicio.equipoNroSerie)}'),
 						pw.Bullet(text: 'Ubicacion: ${_textoSeguro(servicio.equipoUbicacion)}'),
 						pw.Bullet(text: 'Anio: ${servicio.equipoAnio}'),
-						pw.Bullet(text: 'Km: ${servicio.km}'),
+						if (servicio.km != null) pw.Bullet(text: 'Km: ${servicio.km}'),
 						pw.Bullet(text: 'Sintoma: ${_textoSeguro(servicio.sintoma)}'),
 						pw.Bullet(text: 'Diagnostico: ${_textoSeguro(servicio.diagnosticoDetalle)}'),
 						if (servicio.observaciones != null && servicio.observaciones!.trim().isNotEmpty)

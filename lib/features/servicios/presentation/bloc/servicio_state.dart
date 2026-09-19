@@ -38,7 +38,7 @@ class ServicioFormularioState extends ServicioState {
 	final String sintoma;
 	final List<String> diagnosticoCatIdsSeleccionados;
 	final String diagnosticoDetalle;
-	final String resolucionId;
+	final List<String> resolucionIdsSeleccionados;
 	final String observaciones;
 	final List<ProductoFalla> productosFallaSeleccionados;
 	final bool cargandoFacturacion;
@@ -91,7 +91,7 @@ class ServicioFormularioState extends ServicioState {
 		this.sintoma = '',
 		this.diagnosticoCatIdsSeleccionados = const [],
 		this.diagnosticoDetalle = '',
-		this.resolucionId = '',
+		this.resolucionIdsSeleccionados = const [],
 		this.observaciones = '',
 		this.productosFallaSeleccionados = const [],
 		this.cargandoFacturacion = false,
@@ -126,6 +126,10 @@ class ServicioFormularioState extends ServicioState {
 		this.exitoMensaje,
 	});
 
+	/// Provincia, lugar de atencion y km solo aplican en `canal = campo`: en
+	/// remoto y fabrica el backend completa el lugar y esos campos viajan null.
+	bool get requiereDatosDeCampo => canal == Canal.campo;
+
 	ServicioFormularioState copyWith({
 		String? idempotencyKey,
 		DateTime? fechaHoraServicio,
@@ -147,7 +151,7 @@ class ServicioFormularioState extends ServicioState {
 		String? sintoma,
 		List<String>? diagnosticoCatIdsSeleccionados,
 		String? diagnosticoDetalle,
-		String? resolucionId,
+		List<String>? resolucionIdsSeleccionados,
 		String? observaciones,
 		List<ProductoFalla>? productosFallaSeleccionados,
 		bool? cargandoFacturacion,
@@ -209,7 +213,8 @@ class ServicioFormularioState extends ServicioState {
 			diagnosticoCatIdsSeleccionados:
 					diagnosticoCatIdsSeleccionados ?? this.diagnosticoCatIdsSeleccionados,
 			diagnosticoDetalle: diagnosticoDetalle ?? this.diagnosticoDetalle,
-			resolucionId: resolucionId ?? this.resolucionId,
+			resolucionIdsSeleccionados:
+					resolucionIdsSeleccionados ?? this.resolucionIdsSeleccionados,
 			observaciones: observaciones ?? this.observaciones,
 			productosFallaSeleccionados:
 					productosFallaSeleccionados ?? this.productosFallaSeleccionados,
@@ -272,7 +277,7 @@ class ServicioFormularioState extends ServicioState {
 				sintoma,
 				diagnosticoCatIdsSeleccionados,
 				diagnosticoDetalle,
-				resolucionId,
+				resolucionIdsSeleccionados,
 				observaciones,
 				productosFallaSeleccionados,
 				cargandoFacturacion,

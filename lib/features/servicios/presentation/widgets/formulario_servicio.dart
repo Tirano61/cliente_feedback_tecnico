@@ -968,6 +968,10 @@ class _FormularioServicioState extends State<FormularioServicio> {
 									label: Text(canal.name),
 									selected: estadoFormulario.canal == canal,
 									onSelected: (_) {
+										if (canal != Canal.campo) {
+											_lugarDetalleController.clear();
+											_kmController.clear();
+										}
 										context.read<ServicioBloc>().add(
 												ServicioFormularioCambiado(canal: canal),
 										);
@@ -1249,22 +1253,24 @@ class _FormularioServicioState extends State<FormularioServicio> {
 						cliente: estadoFormulario.clienteSeleccionado!,
 					),
 				],
-				const SizedBox(height: 16),
-				_filaDosCampos(
-					izquierda: _dropdownZonas(context, catalogos, estadoFormulario),
-					derecha: TextField(
-						controller: _lugarDetalleController,
-						decoration: _decoracionCampoCompacta(
-							context,
-							labelText: _labelLugarDetalle(estadoFormulario.canal),
+				if (estadoFormulario.requiereDatosDeCampo) ...[
+					const SizedBox(height: 16),
+					_filaDosCampos(
+						izquierda: _dropdownZonas(context, catalogos, estadoFormulario),
+						derecha: TextField(
+							controller: _lugarDetalleController,
+							decoration: _decoracionCampoCompacta(
+								context,
+								labelText: _labelLugarDetalle(estadoFormulario.canal),
+							),
+							onChanged: (valor) {
+								context.read<ServicioBloc>().add(
+										ServicioFormularioCambiado(lugarDetalle: valor),
+								);
+							},
 						),
-						onChanged: (valor) {
-							context.read<ServicioBloc>().add(
-									ServicioFormularioCambiado(lugarDetalle: valor),
-							);
-						},
 					),
-				),
+				],
 				const SizedBox(height: 12),
 				Text(
 					'Equipo modelo y numero de serie',
@@ -1570,19 +1576,30 @@ class _FormularioServicioState extends State<FormularioServicio> {
 						children: catalogos.resoluciones
 								.where((resolucion) => resolucion.activo)
 								.map((resolucion) {
+									final seleccionada = estadoFormulario.resolucionIdsSeleccionados
+											.contains(resolucion.id);
 									return Padding(
 										padding: const EdgeInsets.only(right: 8),
-										child: ChoiceChip(
+										child: FilterChip(
 											label: Text(
 												resolucion.nombre,
 												style: _estiloTextoCompacto(context),
 											),
 											visualDensity: VisualDensity.compact,
 											materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-											selected: estadoFormulario.resolucionId == resolucion.id,
-											onSelected: (_) {
+											selected: seleccionada,
+											onSelected: (seleccionar) {
+												final seleccionadas =
+														estadoFormulario.resolucionIdsSeleccionados.toSet();
+												if (seleccionar) {
+													seleccionadas.add(resolucion.id);
+												} else {
+													seleccionadas.remove(resolucion.id);
+												}
 												context.read<ServicioBloc>().add(
-														ServicioFormularioCambiado(resolucionId: resolucion.id),
+														ServicioFormularioCambiado(
+															resolucionIdsSeleccionados: seleccionadas.toList(),
+														),
 												);
 											},
 										),
@@ -1693,33 +1710,35 @@ class _FormularioServicioState extends State<FormularioServicio> {
 						),
 						derecha: const SizedBox.shrink(),
 					),
-					const SizedBox(height: 8),
-					_filaDosCampos(
-						izquierda: Align(
-							alignment: Alignment.centerLeft,
-							child: Padding(
-								padding: const EdgeInsets.only(top: 10),
-								child: Text(
-									'Calculo km: ${_formatearCantidad(kmCantidad)} x ${_formatearMonto(estado.valorKmUsdSnapshot)} USD = ${_formatearMonto(subtotalKmUsdCalculado)} USD / ${_formatearMonto(subtotalKmArsCalculado)} ARS',
-									style: _estiloTextoCompacto(context),
+					if (estado.requiereDatosDeCampo) ...[
+						const SizedBox(height: 8),
+						_filaDosCampos(
+							izquierda: Align(
+								alignment: Alignment.centerLeft,
+								child: Padding(
+									padding: const EdgeInsets.only(top: 10),
+									child: Text(
+										'Calculo km: ${_formatearCantidad(kmCantidad)} x ${_formatearMonto(estado.valorKmUsdSnapshot)} USD = ${_formatearMonto(subtotalKmUsdCalculado)} USD / ${_formatearMonto(subtotalKmArsCalculado)} ARS',
+										style: _estiloTextoCompacto(context),
+									),
 								),
 							),
-						),
-						derecha: TextField(
-							controller: _kmController,
-							keyboardType: const TextInputType.numberWithOptions(decimal: true),
-							style: _estiloTextoCompacto(context),
-							decoration: _decoracionCampoCompacta(
-								context,
-								labelText: 'Kilometros (km)',
+							derecha: TextField(
+								controller: _kmController,
+								keyboardType: const TextInputType.numberWithOptions(decimal: true),
+								style: _estiloTextoCompacto(context),
+								decoration: _decoracionCampoCompacta(
+									context,
+									labelText: 'Kilometros (km)',
+								),
+								onChanged: (valor) {
+									context.read<ServicioBloc>().add(
+											ServicioFormularioCambiado(km: valor),
+									);
+								},
 							),
-							onChanged: (valor) {
-								context.read<ServicioBloc>().add(
-										ServicioFormularioCambiado(km: valor),
-								);
-							},
 						),
-					),
+					],
 					const SizedBox(height: 10),
 					TextField(
 						controller: _buscarRepuestoController,
@@ -2780,10 +2799,13 @@ class _FormularioServicioState extends State<FormularioServicio> {
 		if (valor.contains('movil') || valor.contains('mobile') || valor.contains('celular')) {
 			return 'app_movil';
 		}
+		if (valor.contains('web')) {
+			return 'web';
+		}
 		if (valor.contains('app') && valor.contains('pc')) {
 			return 'app_pc';
 		}
-		if (valor.contains('pc') || valor.contains('web') || valor.contains('escritorio')) {
+		if (valor.contains('pc') || valor.contains('escritorio')) {
 			return 'app_pc';
 		}
 		if (valor.contains('tablet')) {
