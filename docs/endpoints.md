@@ -76,13 +76,39 @@ Query params:
 - `page` (opcional, default `1`)
 - `limit` (opcional, default `20`, max `100`)
 - `q` (opcional, busca por `fullName` o `email`)
-- `activos` (opcional, default `true`; enviar `false` para incluir inactivos)
+- `activos` (opcional, `true`, `false` o `todos`)
 
-Ejemplo:
+`activos` sigue la misma convencion que el param `activo` de `/zonas`,
+`/categorias-producto` y `/productos` (ver [Query param `activo`](#query-param-activo-zonas-categorias-producto-productos)).
+Ojo con el nombre: aca es plural (`activos`), en los otros tres es singular.
 
-`GET /auth/tecnicos?page=1&limit=20&q=juan&activos=true`
+| Valor | Devuelve |
+|---|---|
+| sin el param | solo los activos |
+| `true` | solo los activos |
+| `false` | solo los inactivos |
+| `todos` | activos e inactivos |
 
-Respuesta ejemplo:
+Notas:
+
+- Antes `activos` era un booleano y cualquier valor distinto de `false` caia en
+  `true`, asi que la grilla nunca podia traer activos e inactivos juntos. Para
+  eso esta `todos`.
+- Un valor fuera de `true | false | todos` devuelve `400`. El param vacio
+  (`?activos=`) se trata como ausente.
+- El filtro se combina con `q` y con la paginacion: `meta.total` cuenta los
+  tecnicos que pasan el filtro, no el total de la tabla.
+
+Ejemplos:
+
+```http
+GET /auth/tecnicos                                     # solo activos (default)
+GET /auth/tecnicos?page=1&limit=20&q=juan&activos=true # solo activos, explicito
+GET /auth/tecnicos?activos=false                       # solo inactivos
+GET /auth/tecnicos?activos=todos                       # activos e inactivos
+```
+
+Respuesta ejemplo (`GET /auth/tecnicos?activos=todos`):
 
 ```json
 {
@@ -91,13 +117,21 @@ Respuesta ejemplo:
       "id": "{{tecnicoId}}",
       "fullName": "Juan Perez",
       "email": "juan@example.com",
-      "isActive": true
+      "isActive": true,
+      "roles": ["tecnico"]
+    },
+    {
+      "id": "{{tecnicoInactivoId}}",
+      "fullName": "Pedro Gomez",
+      "email": "pedro@example.com",
+      "isActive": false,
+      "roles": ["tecnico"]
     }
   ],
   "meta": {
     "page": 1,
     "limit": 20,
-    "total": 1,
+    "total": 2,
     "totalPages": 1
   }
 }
@@ -208,7 +242,58 @@ Respuesta ejemplo:
 | PATCH | `/servicios/:id/documento` | tecnico, admin-tecnico, admin-desarrollo, admin |
 | POST | `/servicios/:id/documento/firmado` | tecnico, admin-tecnico, admin-desarrollo, admin |
 
-### Payload ejemplo POST /servicios
+### GET /servicios (listado admin con filtros)
+
+Query params (todos opcionales, se combinan con AND):
+
+| Param | Tipo | Filtra por |
+|---|---|---|
+| `page` | entero >= 1 | pagina (default `1`) |
+| `limit` | entero >= 1 | tamaño de pagina (default `20`) |
+| `canal` | `campo \| remoto \| fabrica` | `caso.canal` |
+| `diagnosticoCatId` | uuid | servicios que tengan ese diagnostico entre sus `diagnosticoCatId` |
+| `productoId` | uuid | servicios con ese producto en `productosFalla` |
+| `categoriaProductoId` | uuid | servicios con algun producto de esa categoria |
+| `lugarProvinciaId` | uuid | zona del servicio (`lugarProvinciaId`) |
+| `zonaId` | uuid | alias de `lugarProvinciaId`; si vienen los dos gana `lugarProvinciaId` |
+| `tecnicoId` | uuid | tecnico que cargo el servicio |
+| `resuelto` | `true \| false` | `caso.resuelto` |
+| `desde` | fecha ISO-8601 | `caso.fecha >= desde` (ver abajo) |
+| `hasta` | fecha ISO-8601 | `caso.fecha <= hasta` (ver abajo) |
+| `parteFallo` | string | **se acepta pero hoy no filtra** en este endpoint (si filtra en `/stats/*` y `/export`) |
+
+Cualquier otro query param devuelve `400` (whitelist estricto). Orden: `createdAt DESC`.
+
+#### `desde` / `hasta`: filtran por fecha de carga, no por fecha del servicio
+
+`desde` y `hasta` comparan contra `caso.fecha`, que es **la fecha en que el servicio
+se cargo en el sistema** (la pone la base al insertar). **No** filtran por
+`fechaHoraServicio`, que es cuando el tecnico realizo el servicio.
+
+Son cosas distintas: un servicio hecho el sabado y cargado el lunes tiene
+`fechaHoraServicio` = sabado y `fecha` = lunes. Un filtro `desde=lunes` lo incluye;
+un filtro que termina el domingo lo deja afuera.
+
+Formato: string ISO-8601 (validado con `IsDateString`). Se convierte con
+`new Date(valor)` y se compara contra un `timestamptz`, con ambos extremos inclusivos.
+
+Recomendado: mandar fecha **con hora y offset**, cubriendo el dia completo en hora local:
+
+```text
+GET /servicios?desde=2026-03-01T00:00:00-03:00&hasta=2026-03-31T23:59:59.999-03:00&page=1&limit=20
+```
+
+Ojo con mandar solo la fecha (`hasta=2026-03-31`): se interpreta como
+`2026-03-31T00:00:00Z` (medianoche UTC = 21:00 del dia 30 en Argentina), asi que
+`hasta` deja afuera practicamente todo el dia 31 y `desde` arranca a las 21:00 del
+dia anterior. Si el offset es positivo (`+hh:mm`), codificar el `+` como `%2B` en la URL.
+
+### GET /servicios/mios
+
+Query params: `page` (default `1`) y `limit` (default `20`). Sin otros filtros; siempre
+devuelve solo los servicios del tecnico autenticado, ordenados por `createdAt DESC`.
+
+### Payload ejemplo POST /servicios (canal = campo)
 
 ```json
 {
@@ -288,6 +373,118 @@ Respuesta ejemplo:
   }
 }
 ```
+
+### Payload ejemplo POST /servicios (canal = remoto)
+
+En `canal = remoto` y `canal = fabrica`, las claves `lugarProvinciaId`, `lugarDetalle` y `km` **no son requeridas**: se pueden omitir del body o enviar en `null`. Ambas formas son equivalentes, el backend las normaliza igual.
+
+Body minimo valido (la orden queda en `estadoOrden = abierta`, sin facturacion):
+
+```json
+{
+  "idempotencyKey": "6b1f0c2e-6d21-4f0a-9a3e-7c5f1d2b8e40",
+  "canal": "remoto",
+  "clienteId": "{{clienteId}}",
+  "partesFallaron": ["app_movil"],
+  "sintoma": "La app no sincroniza las pesadas",
+  "diagnosticoDetalle": "Token vencido en el dispositivo",
+  "diagnosticoCatId": ["{{diagnosticoId}}"],
+  "productosFalla": [
+    { "parteFallo": "app_movil", "productoFallaId": "{{productoId}}" }
+  ]
+}
+```
+
+El backend guarda `lugarProvinciaId = null`, `lugarDetalle = "Soporte remoto"` y `km = null`.
+
+### Payload ejemplo POST /servicios (canal = fabrica)
+
+Mismo contrato que `remoto`. Este ejemplo manda las tres claves en `null` para mostrar que es equivalente a omitirlas:
+
+```json
+{
+  "idempotencyKey": "8d7a5e13-42bc-4a90-b3f1-9e02c6d47a55",
+  "canal": "fabrica",
+  "clienteId": "{{clienteId}}",
+  "lugarProvinciaId": null,
+  "lugarDetalle": null,
+  "km": null,
+  "equipoNroSerie": "SN-002",
+  "equipoModelo": "ST455",
+  "partesFallaron": ["indicador"],
+  "sintoma": "No enciende",
+  "diagnosticoDetalle": "Fuente quemada, reparado en banco",
+  "diagnosticoCatId": ["{{diagnosticoId}}"],
+  "resolucionId": ["{{resolucionId}}"],
+  "productosFalla": [
+    { "parteFallo": "indicador", "productoFallaId": "{{productoId}}" }
+  ]
+}
+```
+
+El backend guarda `lugarProvinciaId = null`, `lugarDetalle = "Fábrica"` y `km = null`.
+
+### Payload ejemplo POST /servicios (canal = remoto con facturacion)
+
+Si se envia `facturacion`, el objeto sigue siendo obligatorio completo: `kmCantidad`, `subtotalKmUsd` y `subtotalKmArs` van en `0` y no se carga item `viatico`. La orden queda en `estadoOrden = cerrada`.
+
+```json
+{
+  "idempotencyKey": "1c9e4b77-0a52-4d38-8e61-b34f7a0c9d12",
+  "canal": "remoto",
+  "clienteId": "{{clienteId}}",
+  "partesFallaron": ["app_movil"],
+  "sintoma": "La app no sincroniza las pesadas",
+  "diagnosticoDetalle": "Token vencido en el dispositivo",
+  "diagnosticoCatId": ["{{diagnosticoId}}"],
+  "productosFalla": [
+    { "parteFallo": "app_movil", "productoFallaId": "{{productoId}}" }
+  ],
+  "facturacion": {
+    "kmCantidad": 0,
+    "subtotalKmUsd": 0,
+    "subtotalKmArs": 0,
+    "subtotalGeneralUsd": 80,
+    "subtotalGeneralArs": 89600,
+    "ivaPorcentaje": 21,
+    "totalConIvaArs": 108416,
+    "descuentoPorcentaje": 0,
+    "totalFinalArs": 108416,
+    "version": 1
+  },
+  "facturacionItems": [
+    {
+      "tipoItem": "mano_obra",
+      "referenciaId": null,
+      "descripcion": "Soporte remoto",
+      "cantidad": 1,
+      "precioUnitarioUsd": 80,
+      "precioUnitarioArs": 89600,
+      "subtotalUsd": 80,
+      "subtotalArs": 89600
+    }
+  ]
+}
+```
+
+### Reglas de `lugarProvinciaId`, `lugarDetalle` y `km` por canal
+
+| canal | lugarProvinciaId | lugarDetalle | km |
+|---|---|---|---|
+| `campo` | requerido (uuid de zona) | requerido (texto no vacio) | requerido y mayor a `0` |
+| `remoto` | opcional, se guarda `null` | opcional, se guarda `"Soporte remoto"` | opcional, se guarda `null` |
+| `fabrica` | opcional, se guarda `null` | opcional, se guarda `"Fábrica"` | opcional, se guarda `null` |
+
+- Para `remoto` y `fabrica`, **omitir la clave y mandarla en `null` son equivalentes**: el cliente puede usar cualquiera de las dos formas.
+- Si un cliente envia esas claves con valor en `remoto` o `fabrica`, el backend **las ignora** y guarda los valores normalizados de la tabla. No devuelve error.
+- Para `campo`, si falta alguna de las tres el backend responde `400`:
+  - `lugarProvinciaId es requerido cuando canal = campo`
+  - `lugarDetalle es requerido cuando canal = campo`
+  - `km es requerido cuando canal = campo`
+- `remoto` y `fabrica` **no generan liquidacion** (solo `canal = campo` la genera). Por eso `km` no aplica en esos canales.
+- En `campo`, `km` debe ser mayor a `0`: la liquidacion automatica lo exige.
+- En `remoto` y `fabrica`, enviar datos de firma en `documento` devuelve `400` (`Solo las ordenes de campo pueden registrarse como firmadas`). Mandar esas claves en `null` esta permitido.
+- `productosFalla` debe cubrir exactamente las partes listadas en `partesFallaron` (una entrada por parte, sin repetir).
 
 ### Respuesta ejemplo POST /servicios (orden completa)
 
@@ -535,20 +732,143 @@ Notas:
 | GET | `/cat/resoluciones` | tecnico, admin-tecnico, admin-desarrollo, admin |
 | POST | `/cat/resoluciones` | admin-desarrollo, admin |
 | PATCH | `/cat/resoluciones/:id` | admin-desarrollo, admin |
-| GET | `/zonas` | tecnico, admin-tecnico, admin-desarrollo, admin |
+| GET | `/zonas?activo=` | tecnico, admin-tecnico, admin-desarrollo, admin |
 | POST | `/zonas` | admin-tecnico, admin |
 | PATCH | `/zonas/:id` | admin-tecnico, admin |
+
+### Query param `activo` (zonas, categorias-producto, productos)
+
+Los tres listados aceptan el mismo param opcional `activo`:
+
+| Valor | Devuelve |
+|---|---|
+| sin el param | solo los activos |
+| `true` | solo los activos |
+| `false` | solo los inactivos |
+| `todos` | activos e inactivos |
+
+Reglas:
+
+- El default (sin el param) devuelve **solo activos**. La app del tecnico
+  consume estos endpoints sin el param y solo debe ver opciones vigentes en el
+  formulario, asi que el comportamiento historico no cambia.
+- `activo=false` y `activo=todos` existen para la administracion: antes, al
+  desactivar un item desaparecia del listado y no habia forma de volver a
+  activarlo desde la UI, o sea que la desactivacion quedaba de hecho
+  irreversible.
+- El valor especial es `todos`, siguiendo la convencion de `estado=todas` del
+  modulo liquidacion. Ojo con la letra final: aca es `todos`, y `activo=todas`
+  es invalido.
+- Un valor fuera de `true | false | todos` devuelve `400`. El param vacio
+  (`?activo=`) se trata como ausente.
+- El filtro se combina con los demas params del endpoint (por ejemplo
+  `categoriaId` en `/productos`).
+- `GET /auth/tecnicos` usa este mismo contrato (mismos valores, mismo default,
+  mismo `todos`), pero el param se llama `activos` en plural porque ya existia
+  con ese nombre. Ver [GET /auth/tecnicos](#get-authtecnicos-selector-de-técnicos).
+
+### GET /zonas
+
+Ejemplos:
+
+```http
+GET /zonas                   # solo activas (default, lo que usa la app del tecnico)
+GET /zonas?activo=true       # solo activas
+GET /zonas?activo=false      # solo inactivas
+GET /zonas?activo=todos      # activas e inactivas
+```
+
+Respuesta ejemplo (`GET /zonas?activo=todos`):
+
+```json
+[
+  {
+    "id": "{{zonaId}}",
+    "nombre": "Buenos Aires",
+    "provincia": "Buenos Aires",
+    "activo": true
+  },
+  {
+    "id": "{{zonaInactivaId}}",
+    "nombre": "Cordoba",
+    "provincia": "Cordoba",
+    "activo": false
+  }
+]
+```
 
 ## Productos
 
 | Metodo | Endpoint | Rol |
 |---|---|---|
-| GET | `/categorias-producto` | tecnico, admin-tecnico, admin-desarrollo, admin |
+| GET | `/categorias-producto?activo=` | tecnico, admin-tecnico, admin-desarrollo, admin |
 | POST | `/categorias-producto` | admin-tecnico, admin |
 | PATCH | `/categorias-producto/:id` | admin-tecnico, admin |
-| GET | `/productos?categoriaId=` | tecnico, admin-tecnico, admin-desarrollo, admin |
+| GET | `/productos?categoriaId=&activo=` | tecnico, admin-tecnico, admin-desarrollo, admin |
 | POST | `/productos` | admin-tecnico, admin |
 | PATCH | `/productos/:id` | admin-tecnico, admin |
+
+### GET /categorias-producto
+
+Acepta el mismo param `activo` descripto en Catalogos.
+
+Ejemplos:
+
+```http
+GET /categorias-producto                 # solo activas (default)
+GET /categorias-producto?activo=false    # solo inactivas
+GET /categorias-producto?activo=todos    # activas e inactivas
+```
+
+Respuesta ejemplo (`GET /categorias-producto?activo=todos`):
+
+```json
+[
+  { "id": "{{categoriaId}}", "nombre": "Indicadores", "activo": true },
+  { "id": "{{categoriaInactivaId}}", "nombre": "Celdas", "activo": false }
+]
+```
+
+### GET /productos
+
+Query params:
+
+- `categoriaId` (opcional, uuid)
+- `activo` (opcional, `true`, `false` o `todos`)
+
+Ejemplos:
+
+```http
+GET /productos                                          # solo activos (default)
+GET /productos?activo=false                             # solo inactivos
+GET /productos?activo=todos                             # activos e inactivos
+GET /productos?categoriaId={{categoriaId}}&activo=todos # de esa categoria, activos e inactivos
+```
+
+Respuesta ejemplo (`GET /productos?activo=todos`):
+
+```json
+[
+  {
+    "id": "{{productoId}}",
+    "nombre": "ST455",
+    "version": "v2",
+    "activo": true,
+    "categoria": { "id": "{{categoriaId}}", "nombre": "Indicadores", "activo": true }
+  },
+  {
+    "id": "{{productoInactivoId}}",
+    "nombre": "ST457",
+    "version": null,
+    "activo": false,
+    "categoria": { "id": "{{categoriaId}}", "nombre": "Indicadores", "activo": true }
+  }
+]
+```
+
+Nota: `activo` filtra por el estado del producto, no por el de su categoria.
+Un producto activo de una categoria desactivada sigue saliendo en
+`GET /productos?activo=true`.
 
 ## Repuestos
 
@@ -600,6 +920,12 @@ Notas:
 
 - Endpoint pensado para grillas de administracion en web admin-tecnico.
 - `GET /repuestos?q=` se mantiene como busqueda rapida (maximo 10 activos), util para autocompletes.
+- Repuestos no necesita el param `activo` en `GET /repuestos?q=`: ese endpoint
+  es el autocomplete del tecnico (siempre activos) y la administracion ya tiene
+  su propio listado. Ojo con la diferencia: en `/repuestos/listado` omitir
+  `activo` trae activos e inactivos, mientras que en `/zonas`,
+  `/categorias-producto` y `/productos` omitirlo trae solo activos, porque esos
+  tres los consume tambien la app del tecnico.
 
 ### Payload POST /servicios/:id/repuestos
 
@@ -735,7 +1061,9 @@ Notas:
 - `GET /liquidaciones/mias?estado=pendiente` lista pendientes reales del tecnico autenticado aunque no tengan items de servicio cargados.
 - Cada item del listado incluye `tecnicoId`, `tecnicoNombre` y `tecnicoEmail` para facilitar filtros/seleccion en UI.
 - Cuando `admin-tecnico` edita una liquidacion (`PATCH /liquidaciones/:id`, `POST /liquidaciones/:id/items`, `DELETE /liquidaciones/:id/items/:itemId`), queda aprobada automaticamente al finalizar la operacion.
-- `PATCH /liquidaciones/:id/reabrir` registra motivo/historial de reapertura para auditoria, pero no cambia el estado de aprobacion.
+- `PATCH /liquidaciones/:id/reabrir` registra motivo/historial de reapertura y ademas deja la liquidacion en `estado=reabierta`, con `aprobado=false` y `fechaAprobacion=null`. Solo se puede reabrir una liquidacion aprobada.
+- Una liquidacion `reabierta` sale del circuito de pago: no aparece en `GET /liquidaciones/para-pago`, no se puede marcar con `PATCH /liquidaciones/marcar-pagadas` y no entra en el resumen de pago hasta que se vuelva a aprobar.
+- Volver a aprobarla (`PATCH /liquidaciones/:id/aprobar`, o cualquier edicion de admin que auto-aprueba) la devuelve a `estado=aprobada` con nueva `fechaAprobacion`, y vuelve a ser elegible para pago.
 - Si `liquidadaPago = true`, la liquidacion ya fue pasada para pago y no se puede editar.
 
 `GET /liquidaciones/para-pago` (admin):
@@ -746,8 +1074,9 @@ Notas:
 
 Notas:
 
-- Devuelve solo liquidaciones aprobadas (`aprobado=true`) y no liquidadas para pago (`liquidadaPago=false`).
+- Devuelve solo liquidaciones aprobadas (`aprobado=true`), no liquidadas para pago (`liquidadaPago=false`) y que no esten en `estado=reabierta`.
 - Sirve como fuente para armar el lote de pago desde la web admin.
+- Soporta `tecnicoId` opcional en query. `aprobado` y `liquidadaPago` se ignoran (el endpoint los fuerza a `true`/`false`).
 
 `PATCH /liquidaciones/marcar-pagadas`:
 
@@ -763,7 +1092,7 @@ Notas:
 Notas:
 
 - Marca en lote las liquidaciones seleccionadas como `liquidadaPago=true`.
-- Solo permite liquidaciones aprobadas, no liquidadas previamente y con al menos un item (`tipo_servicio`) asignado.
+- Solo permite liquidaciones aprobadas, no reabiertas, no liquidadas previamente y con al menos un item (`tipo_servicio`) asignado.
 - Una vez marcadas, ya no se pueden volver a editar ni volver a seleccionar para otro lote de pago.
 
 `GET /liquidaciones/resumen-pago/preview`:
@@ -775,7 +1104,7 @@ Notas:
 Notas:
 
 - Genera el resumen por tecnico y rango de fechas.
-- La elegibilidad exige: aprobada, no liquidada para pago, fechaAprobacion dentro del rango y con items de servicio.
+- La elegibilidad exige: aprobada, no reabierta, no liquidada para pago, fechaAprobacion dentro del rango y con items de servicio.
 
 Respuesta ejemplo:
 
@@ -1013,3 +1342,23 @@ Notas:
 | GET | `/stats/por-periodo` | admin-desarrollo, admin |
 | GET | `/stats/resolucion` | admin-desarrollo, admin |
 | GET | `/export` | admin-desarrollo, admin |
+
+### Filtros de `/stats/*` y `/export`
+
+Todos aceptan los mismos query params opcionales que `GET /servicios` (mismo DTO),
+y `desde`/`hasta` tienen **la misma semantica**: filtran por `caso.fecha` (fecha de
+carga), no por `fechaHoraServicio`. Ver [`desde` / `hasta`](#desde--hasta-filtran-por-fecha-de-carga-no-por-fecha-del-servicio).
+`/stats/por-periodo` tambien agrupa por mes de `caso.fecha`.
+
+| Param | Notas |
+|---|---|
+| `canal`, `diagnosticoCatId`, `productoId`, `categoriaProductoId`, `tecnicoId`, `resuelto`, `desde`, `hasta` | igual que en `GET /servicios` |
+| `zonaId` | filtra por zona del servicio |
+| `parteFallo` | servicios cuyo `partesFallaron` contiene ese valor (`indicador`, `celda`, ...) |
+| `lugarProvinciaId` | **se acepta pero hoy no filtra** en analytics (usar `zonaId`) |
+| `format` | solo `/export`: `json` (default) o `csv` |
+
+```text
+GET /stats/por-canal?desde=2026-03-01T00:00:00-03:00&hasta=2026-03-31T23:59:59.999-03:00
+GET /export?format=csv&resuelto=false&parteFallo=celda
+```
