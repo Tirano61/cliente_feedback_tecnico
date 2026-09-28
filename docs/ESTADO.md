@@ -1,13 +1,20 @@
 # Estado del proyecto — App Flutter Técnico
 
 > Documento generado a partir de una revisión del código fuente real del repo
-> (`lib/`, `test/`, `pubspec.yaml`, `docs/`) el **27/09/2026**, sobre la rama
-> `alinearContratoServicios` (último commit `6c96b58`), contra la arquitectura
-> declarada en [CLAUDE.md](../CLAUDE.md) y el contrato de
-> [docs/endpoints.md](endpoints.md) — incluidos los cambios todavía sin commitear
-> de ese archivo (reglas por canal de `lugarProvinciaId`/`lugarDetalle`/`km`).
-> Reemplaza al relevamiento del 12/09/2026: cada punto se volvió a verificar
-> contra el código, no se arrastró del documento anterior.
+> (`lib/`, `test/`, `pubspec.yaml`, `docs/`) el **27/09/2026**, sobre `main`
+> (último commit `bae6233`), contra la arquitectura declarada en
+> [CLAUDE.md](../CLAUDE.md) y el contrato **al día** del backend:
+> [docs/endpoints.md](endpoints.md) y
+> [docs/backend_feedback_postman_collection.json](backend_feedback_postman_collection.json)
+> ahora son symlinks a `backend_feedback/docs/`. Donde el contrato y el código
+> del backend no coinciden, se miró también el código del backend
+> (`src/liquidacion/`, `src/servicios/`).
+>
+> Reemplaza al relevamiento anterior del mismo día (commit `846f1e4`). Entre ese
+> relevamiento y éste **no cambió ningún archivo de `lib/` ni de `test/`**:
+> cambió el contrato. Cada punto se volvió a verificar contra el código; los
+> hallazgos nuevos salen de contrastarlo con el contrato actualizado y de
+> revisar la paginación de los listados.
 
 ---
 
@@ -26,22 +33,30 @@ está implementado de punta a punta contra un backend real
 (`https://backend-feedback-11c2.onrender.com/api/v1`), con idempotencia, cola
 offline de documentos pendientes y manejo de errores tipado.
 
-Desde el relevamiento anterior se cerraron los puntos que más afectaban el uso
-diario y el cumplimiento del contrato:
+Siguen resueltos, y verificados contra el código, los puntos que el relevamiento
+original marcaba como críticos: restauración de sesión al arrancar, logout real,
+cierre de sesión global ante 401, `mis_servicios_page.dart` sin HTTP directo,
+`resolucionId` como array, parte `web` y reglas por canal en vista, validación y
+payload.
 
-- la sesión **se restaura al arrancar** y el **logout es real** (botón en la UI,
-  borra token y usuario);
-- un **401 en cualquier llamada** cierra la sesión globalmente;
-- `mis_servicios_page.dart` **ya no hace HTTP directo**;
-- `resolucionId` es **array**, existe la parte **`web`** y las **reglas por
-  canal** (zona/lugar/km sólo en `campo`) se aplican en la vista, la validación
-  y el payload;
-- hay **51 tests reales** cubriendo auth, sesión, PDF de mis servicios y el
-  contrato del payload.
+**Hallazgos nuevos de este relevamiento:**
 
-Lo que falta es edición/detalle de órdenes, algunos desvíos finos del contrato
-(`km` entero, `km = 0` en campo), verificación de rol, tema compartido, CI y la
-deuda técnica del formulario.
+- **Los dos listados del técnico muestran sólo los 20 registros más recientes.**
+  "Mis servicios" llama a `GET /servicios/mios` sin `page`/`limit` y descarta la
+  paginación; "Liquidaciones" pide siempre `page=1&limit=20`. Con más de 20
+  órdenes o liquidaciones, el resto no aparece, y los filtros, contadores y el
+  total aprobado se calculan sobre esa primera página (§3.1, §3.2).
+- El **fallback sin paginación** de liquidaciones, que esquivaba el 400 que daba
+  el backend con `page`/`limit`, quedó muerto: el backend ya acepta esos params.
+  Ese bug **no** era la causa de que la pantalla no pagine (§3.2).
+- Los symlinks del contrato apuntan a una **ruta absoluta** de esta máquina y
+  conviven con una copia vieja del postman (§7.7).
+- El PDF **descarga la fuente de Google Fonts en cada arranque**: sin conexión
+  cae a Helvetica sin soporte Unicode (§7.5).
+
+Fuera de liquidaciones, el contrato actualizado no trajo cambios para este repo:
+los demás cambios de `endpoints.md` son de endpoints de administración/analytics
+(`GET /servicios` con `servicioDesde`/`servicioHasta`, `/stats/*`, `/export`).
 
 Tamaño actual: **79 archivos Dart, ~11.900 líneas** en `lib/` y **11 archivos,
 ~1.500 líneas** en `test/`. `flutter test`: **51 tests, todos pasan**.
@@ -55,21 +70,21 @@ Tamaño actual: **79 archivos Dart, ~11.900 líneas** en `lib/` y **11 archivos,
 
 | Pieza | Archivo | Estado |
 |---|---|---|
-| Cliente HTTP con JWT | [lib/core/api/api_client.dart](../lib/core/api/api_client.dart) | Completo: `get`, `post`, `patch`, `postMultipart`, header `Authorization: Bearer` inyectado desde storage. **Nuevo:** stream `sesionExpirada` que emite ante cualquier 401 fuera de `/auth/login` ([api_client.dart:80-88](../lib/core/api/api_client.dart#L80)) |
-| Lectura de JWT | [lib/core/auth/jwt_helper.dart](../lib/core/auth/jwt_helper.dart) | **Nuevo.** Decodifica el claim `exp` sin dependencias externas; un token ilegible se trata como vencido, con margen de 30 s |
+| Cliente HTTP con JWT | [lib/core/api/api_client.dart](../lib/core/api/api_client.dart) | Completo: `get`, `post`, `patch`, `postMultipart`, header `Authorization: Bearer` inyectado desde storage. Stream `sesionExpirada` que emite ante cualquier 401 fuera de `/auth/login` ([api_client.dart:80-88](../lib/core/api/api_client.dart#L80)) |
+| Lectura de JWT | [lib/core/auth/jwt_helper.dart](../lib/core/auth/jwt_helper.dart) | Decodifica el claim `exp` sin dependencias externas; un token ilegible se trata como vencido, con margen de 30 s |
 | Constantes de endpoints | [lib/core/api/api_constants.dart](../lib/core/api/api_constants.dart) | Completo, con helpers por id (`servicioDocumentoPdf`, `liquidacionItems`, …) |
-| Storage seguro | [lib/core/auth/secure_storage.dart](../lib/core/auth/secure_storage.dart) | Token, **usuario de la sesión** (nuevo) y clave/valor genérico para la cola offline |
+| Storage seguro | [lib/core/auth/secure_storage.dart](../lib/core/auth/secure_storage.dart) | Token, usuario de la sesión y clave/valor genérico para la cola offline |
 | Excepciones tipadas | [lib/core/error/failures.dart](../lib/core/error/failures.dart) | `ServerException`, `AuthException`, `NetworkException` — sin dartz/Either |
-| Inyección de dependencias | [lib/core/di/app_dependencies.dart](../lib/core/di/app_dependencies.dart) | 4 repositorios + **19 use cases** en `AppDependencies.create()`, sin get_it |
+| Inyección de dependencias | [lib/core/di/app_dependencies.dart](../lib/core/di/app_dependencies.dart) | 4 repositorios + 19 use cases en `AppDependencies.create()`, sin get_it |
 | Bootstrap de BLoCs | [lib/main.dart](../lib/main.dart) | `MultiBlocProvider` con `AuthBloc` (recibe el stream `sesionExpirada`), `CatalogoBloc`, `ServicioBloc`, `LiquidacionesBloc`. Routing con `BlocConsumer<AuthBloc>` que al desloguear hace `popUntil(isFirst)` y muestra el motivo en un `SnackBar` ([main.dart:101-130](../lib/main.dart#L101)) |
 
 ### 2.2 Auth (`lib/features/auth/`)
 
-- `POST /auth/login` con el shape nuevo (`access_token` + `user`):
+- `POST /auth/login` con el shape del contrato (`access_token` + `user`):
   [login_response_dto.dart](../lib/features/auth/infrastructure/dtos/login_response_dto.dart).
-  Si falta cualquiera de los dos, falla y **no guarda sesión**
+  Si falta cualquiera de los dos, falla y no guarda sesión
   ([auth_repository_impl.dart:34-45](../lib/features/auth/infrastructure/repositories/auth_repository_impl.dart#L34)).
-  Se persisten token **y** usuario.
+  Se persisten token y usuario.
 - **Restauración de sesión** — `RestaurarSesionUseCase` →
   `obtenerSesionGuardada()`
   ([auth_repository_impl.dart:77-112](../lib/features/auth/infrastructure/repositories/auth_repository_impl.dart#L77)):
@@ -82,17 +97,19 @@ Tamaño actual: **79 archivos Dart, ~11.900 líneas** en `lib/` y **11 archivos,
   despacha `SesionExpiradaDetectada`; ignora 401 tardíos si ya no hay sesión
   ([auth_bloc.dart:75-90](../lib/features/auth/presentation/bloc/auth_bloc.dart#L75)).
 - [login_page.dart](../lib/features/auth/presentation/pages/login_page.dart):
-  sin cambios, sin lógica de negocio en la vista.
+  sin lógica de negocio en la vista.
 
 ### 2.3 Catálogos (`lib/features/catalogos/`)
 
-Sin cambios desde el relevamiento anterior. Los 5 catálogos del formulario se
-consumen y parsean (`/cat/diagnosticos`, `/cat/resoluciones`, `/zonas`,
-`/categorias-producto`, `/productos?categoriaId=`) en
+Los 5 catálogos del formulario se consumen y parsean (`/cat/diagnosticos`,
+`/cat/resoluciones`, `/zonas`, `/categorias-producto`, `/productos?categoriaId=`)
+en
 [catalogo_repository_impl.dart](../lib/features/catalogos/infrastructure/repositories/catalogo_repository_impl.dart),
 con carga perezosa y caché en
 [catalogo_bloc.dart](../lib/features/catalogos/presentation/bloc/catalogo_bloc.dart)
-(`forzar: true` para recargar).
+(`forzar: true` para recargar). El param `activo` que agregó el contrato a
+`/zonas`, `/categorias-producto` y `/productos` tiene como default "sólo
+activos", que es lo que el formulario necesita: no hace falta mandarlo.
 
 ### 2.4 Servicios — el núcleo de la app (`lib/features/servicios/`)
 
@@ -100,8 +117,8 @@ con carga perezosa y caché en
 5 pasos navegables por chips: `Tipo · Datos · Falla · Facturación · Observaciones`.
 
 - **Canal**: chips de selección única.
-- **Reglas por canal aplicadas** (nuevo): zona y lugar sólo se muestran en
-  `campo` ([formulario_servicio.dart:1256](../lib/features/servicios/presentation/widgets/formulario_servicio.dart#L1256)),
+- **Reglas por canal**: zona y lugar sólo se muestran en `campo`
+  ([formulario_servicio.dart:1256](../lib/features/servicios/presentation/widgets/formulario_servicio.dart#L1256)),
   igual que el campo km ([formulario_servicio.dart:1713](../lib/features/servicios/presentation/widgets/formulario_servicio.dart#L1713));
   al cambiar a remoto/fábrica el BLoC limpia esos valores
   (`_aplicarReglasDeCanal`, [servicio_bloc.dart:1256](../lib/features/servicios/presentation/bloc/servicio_bloc.dart#L1256)),
@@ -112,10 +129,10 @@ con carga perezosa y caché en
   URL-encodeado), tarjeta de resumen y alta rápida (`POST /clientes`) con
   mensaje específico si el CUIT ya existe.
 - **Equipo**: modelo desde el catálogo de indicadores + serie, ubicación, año.
-- **Falla/diagnóstico/resolución**: categorías de diagnóstico **y resoluciones**
-  en selección múltiple ([formulario_servicio.dart:1579-1601](../lib/features/servicios/presentation/widgets/formulario_servicio.dart#L1579)),
-  productos que fallaron por parte, label de resolución según canal.
-  `web` es una parte válida ([servicio_bloc.dart:32-40](../lib/features/servicios/presentation/bloc/servicio_bloc.dart#L32)).
+- **Falla/diagnóstico/resolución**: categorías de diagnóstico y resoluciones en
+  selección múltiple ([formulario_servicio.dart:1579-1601](../lib/features/servicios/presentation/widgets/formulario_servicio.dart#L1579)),
+  productos que fallaron por parte, label de resolución según canal. `web` es
+  una parte válida ([servicio_bloc.dart:32-40](../lib/features/servicios/presentation/bloc/servicio_bloc.dart#L32)).
 - **Repuestos**: búsqueda (`GET /repuestos?q=`) y selección en combo, con cantidad.
 - **Facturación**: `GET /cotizacion` + `GET /tarifa-km` con "Actualizar valores";
   subtotales, IVA y descuento en vivo; en remoto/fábrica no se factura viático.
@@ -143,27 +160,33 @@ reintento sin firma si el backend la rechaza.
 incluido) se persiste en secure storage bajo `servicios_documentos_pendientes_v1`
 y se reintenta desde el formulario o desde "Mis servicios".
 
-**Mis servicios** — [mis_servicios_page.dart](../lib/features/servicios/presentation/pages/mis_servicios_page.dart) (586 líneas, antes 943):
+**Mis servicios** — [mis_servicios_page.dart](../lib/features/servicios/presentation/pages/mis_servicios_page.dart) (586 líneas):
 
-- **Sin HTTP en la vista** (nuevo): sólo importa el BLoC, sus eventos/estados y
-  `printing`. La verificación de PDF, la descarga y el enlace pasan por
+- Sin HTTP en la vista: sólo importa el BLoC, sus eventos/estados y `printing`.
+  La verificación de PDF, la descarga y el enlace pasan por
   `ObtenerEnlacePdfDocumentoUseCase` / `DescargarPdfDocumentoUseCase` →
   `ServicioRepositoryImpl` → `ApiClient`
   ([servicio_repository_impl.dart:250-300](../lib/features/servicios/infrastructure/repositories/servicio_repository_impl.dart#L250)).
-- Filtro por estado y búsqueda ahora los resuelve el BLoC
+- Filtro por estado y búsqueda resueltos en el BLoC
   (`MisServiciosFiltroEstadoCambiado`, `MisServiciosBusquedaCambiada`).
 - Verificación de PDF limitada a 20 consultas por carga
   (`_maximoVerificacionesPdf`) y omitida si el listado ya trae el documento.
 - Cubierto por [mis_servicios_pdf_test.dart](../test/features/servicios/mis_servicios_pdf_test.dart)
   (disponibilidad, ver, copiar enlace, 401, Bearer).
+- **Sin paginación**: ver §3.1.
 
 ### 2.5 Liquidaciones (`lib/features/liquidaciones/`)
 
-Sin cambios funcionales. `GET /liquidaciones/mias` con fallback sin paginación,
-`GET /liquidaciones/:id/items` con carga incremental, 3 tabs
-(Pendientes / Aprobadas / Reabiertas) en
-[liquidaciones_screen.dart](../lib/features/liquidaciones/presentation/pages/liquidaciones_screen.dart),
-recarga al entrar a la pantalla.
+- `GET /liquidaciones/mias?estado=todas&page=1&limit=20`
+  ([liquidacion_remote_data_source.dart:12-21](../lib/features/liquidaciones/infrastructure/datasources/liquidacion_remote_data_source.dart#L12)),
+  parseo de `{ data, meta }` en
+  [liquidacion_dto.dart:246](../lib/features/liquidaciones/infrastructure/dtos/liquidacion_dto.dart#L246).
+- `GET /liquidaciones/:id/items` para refrescar los items de una liquidación
+  desde el detalle.
+- 3 tabs (Pendientes / Aprobadas / Reabiertas) en
+  [liquidaciones_screen.dart](../lib/features/liquidaciones/presentation/pages/liquidaciones_screen.dart),
+  recarga al entrar a la pantalla y pull-to-refresh.
+- **Sólo muestra la primera página**: ver §3.2.
 
 ### 2.6 Tests (`test/`)
 
@@ -178,7 +201,8 @@ recarga al entrar a la pantalla.
 | [payload_servicio_contrato_test.dart](../test/features/servicios/payload_servicio_contrato_test.dart) | Arrays del contrato, parte `web`, reglas por canal |
 
 Usan fakes escritos a mano (`test/support/`) y `http/testing`, sin `bloc_test`
-ni `mocktail`.
+ni `mocktail`. Ningún test cubre liquidaciones ni la paginación de ningún
+listado.
 
 ---
 
@@ -187,51 +211,95 @@ ni `mocktail`.
 Sigue sin haber `TODO`, `FIXME` ni mocks en `lib/`. Lo que está a medias lo
 está por omisión:
 
-1. **`km` sigue siendo `int`.** `Servicio.km` es `int?`
+1. **"Mis servicios" trunca a los 20 más recientes** *(nuevo)*.
+   `obtenerMisServicios()` hace `GET /servicios/mios` sin query params
+   ([servicio_repository_impl.dart:59-76](../lib/features/servicios/infrastructure/repositories/servicio_repository_impl.dart#L59)),
+   el backend aplica `page=1&limit=20` por defecto
+   (`servicios.controller.ts:35-47`) y la app se queda con la lista de `data`
+   y descarta `meta`. No hay "cargar más" ni scroll infinito. El filtro por
+   estado y la búsqueda del BLoC operan sólo sobre esas 20 órdenes: un técnico
+   con historial no puede encontrar una orden vieja, ni reintentar/ver su PDF
+   desde el listado.
+
+2. **Liquidaciones trunca a la primera página** *(nuevo; revisado por el cambio
+   de `page`/`limit`)*.
+   - `LiquidacionesBloc._cargarLiquidaciones` llama a
+     `_obtenerMisLiquidacionesUseCase.ejecutar()` sin argumentos
+     ([liquidaciones_bloc.dart:37-45](../lib/features/liquidaciones/presentation/bloc/liquidaciones_bloc.dart#L37)),
+     o sea `estado=todas&page=1&limit=20` siempre. No existe evento de página
+     siguiente y `meta` (con `total`/`totalPages`) se guarda en el estado pero
+     nadie lo lee.
+   - Las tres pestañas, los contadores y el **"total aprobadas" en USD** se
+     calculan en la vista filtrando esas 20
+     ([liquidaciones_screen.dart:63-79](../lib/features/liquidaciones/presentation/pages/liquidaciones_screen.dart#L63)).
+     Con más de 20 liquidaciones el total mostrado es menor que el real y las
+     pestañas de estados viejos (típicamente "Aprobadas") quedan incompletas o
+     vacías.
+   - **Relación con el bug del backend**: hasta ahora `GET /liquidaciones/mias`
+     con `page`/`limit` devolvía 400 (`property page should not exist`). La app
+     lo esquivaba reintentando sin esos params
+     ([liquidacion_repository_impl.dart:25-29 y 92-116](../lib/features/liquidaciones/infrastructure/repositories/liquidacion_repository_impl.dart#L25)),
+     pero sin params el backend aplica igual `page=1&limit=20`: con o sin
+     fallback la app veía la misma primera página. El bug explica por qué nunca
+     se pudo pedir la página 2 ni probar la paginación, pero **la pantalla no
+     pagina porque el BLoC nunca pide otra página**. El backend ya declara
+     `page` y `limit` en `QueryMisLiquidacionesDto`, así que el fallback no se
+     dispara más (código muerto, §7.3) y paginar ya es posible.
+
+3. **`km` sigue siendo `int`.** `Servicio.km` es `int?`
    ([servicio.dart:35](../lib/features/servicios/domain/entities/servicio.dart#L35))
    y el BLoC redondea (`kmCantidad.round()`,
    [servicio_bloc.dart:1382](../lib/features/servicios/presentation/bloc/servicio_bloc.dart#L1382)),
    mientras el campo acepta decimales y `facturacion.kmCantidad` viaja con el
    valor decimal: con 12,5 km la orden guarda `km = 13` y factura 12,5.
 
-2. **`km = 0` pasa la validación en campo.** `_validarFormulario` sólo exige que
+4. **`km = 0` pasa la validación en campo.** `_validarFormulario` sólo exige que
    el campo no esté vacío y que no sea negativo
    ([servicio_bloc.dart:1299-1305](../lib/features/servicios/presentation/bloc/servicio_bloc.dart#L1299)).
-   El contrato actualizado de [endpoints.md](endpoints.md) dice que en `campo`
-   `km` debe ser **mayor a 0** porque la liquidación automática lo exige: la app
-   deja enviar una orden que el backend va a rechazar con 400.
+   El contrato dice que en `campo` `km` debe ser **mayor a 0** porque la
+   liquidación automática lo exige: la app deja enviar una orden que el backend
+   rechaza con 400.
 
-3. **Rol del usuario sin verificar.** `Usuario.roles` se parsea y se persiste,
-   pero nadie lo consulta: un usuario sin rol `tecnico` entra a la app igual.
-   CLAUDE.md dice que esta app es sólo para `tecnico`.
+5. **Rol del usuario sin verificar.** `Usuario.roles` se parsea y se persiste,
+   pero nadie lo consulta: un usuario sin rol `tecnico` entra a la app igual y
+   después recibe 403 en `POST /servicios`, `/servicios/mios` y
+   `/liquidaciones/mias`. CLAUDE.md dice que esta app es sólo para `tecnico`.
 
-4. **403 tratado distinto según la feature.** El 401 ya es global, pero
-   `LiquidacionRepositoryImpl` sigue traduciendo **401 y 403** a
-   `AuthException` y la pantalla despacha su propio `LogoutRequested`
+6. **403 tratado distinto según la feature.** El 401 es global, pero
+   `LiquidacionRepositoryImpl` traduce **401 y 403** a `AuthException`
+   ([liquidacion_repository_impl.dart:31 y 55](../lib/features/liquidaciones/infrastructure/repositories/liquidacion_repository_impl.dart#L31))
+   y la pantalla despacha su propio `LogoutRequested`
    ([liquidaciones_screen.dart:32-37](../lib/features/liquidaciones/presentation/pages/liquidaciones_screen.dart#L32)).
    Resultado: un 403 desloguea en liquidaciones y en el resto de la app no; y un
    401 en liquidaciones dispara el cierre de sesión por dos caminos.
 
-5. **Cola de pendientes no atada al usuario.** La clave
-   `servicios_documentos_pendientes_v1` es global y `logout()` sólo borra token y
-   usuario: si otro técnico inicia sesión en el mismo dispositivo, ve y reintenta
-   los documentos pendientes del anterior con su propio token.
+7. **Cola de pendientes no atada al usuario.** La clave
+   `servicios_documentos_pendientes_v1` es global
+   ([servicio_repository_impl.dart:29](../lib/features/servicios/infrastructure/repositories/servicio_repository_impl.dart#L29))
+   y `logout()` sólo borra token y usuario: si otro técnico inicia sesión en el
+   mismo dispositivo, ve y reintenta los documentos pendientes del anterior con
+   su propio token.
 
-6. **Equipo obligatorio en todos los canales.** La app exige serie, modelo,
-   ubicación y año para remoto y fábrica; el contrato permite omitir el equipo en
-   remoto (body mínimo de [endpoints.md](endpoints.md)) y CLAUDE.md modela
+8. **Equipo obligatorio en todos los canales.** La app exige serie, modelo,
+   ubicación y año para remoto y fábrica
+   ([servicio_bloc.dart:1283-1295](../lib/features/servicios/presentation/bloc/servicio_bloc.dart#L1283));
+   el contrato permite omitir el equipo en remoto (body mínimo de
+   [endpoints.md](endpoints.md)) y CLAUDE.md modela
    `equipoUbicacion`/`equipoAnio` como opcionales. No rompe nada, pero obliga al
    técnico de soporte remoto a inventar datos.
 
-7. **Pendiente anotado por el autor** en [Progreso_app.md](../Progreso_app.md):
-   "Quitar los filtros en mis servicios aprobados/pendientes". Los filtros siguen
+9. **Pendiente anotado por el autor** en [Progreso_app.md](../Progreso_app.md):
+   "Quitar los filtros en mis servicios aprobados/pendientes". Los filtros
+   siguen
    ([mis_servicios_page.dart:177](../lib/features/servicios/presentation/pages/mis_servicios_page.dart#L177)),
-   ahora movidos al BLoC.
+   resueltos en el BLoC. Conviene decidirlo junto con la paginación (§3.1): con
+   paginación del servidor, un filtro local sólo filtra la página cargada.
 
-8. **Cobertura parcial.** Hay tests reales, pero no cubren `_validarFormulario`,
-   `_recalcularFacturacion`, `LiquidacionDto`, catálogos ni ningún widget;
-   [test/widget_test.dart](../test/widget_test.dart) sigue siendo el smoke test
-   que no importa la app.
+10. **Cobertura parcial.** Hay tests reales, pero no cubren `_validarFormulario`,
+    `_recalcularFacturacion`, liquidaciones (BLoC, repositorio ni
+    `LiquidacionDto`), catálogos, paginación ni ningún widget;
+    [test/widget_test.dart](../test/widget_test.dart) sigue siendo el smoke test
+    que no importa la app.
 
 ---
 
@@ -259,14 +327,19 @@ está por omisión:
 - `/auth/register` — constante sin uso (correcto: el técnico no se
   auto-registra; conviene borrarla).
 
+Los params `page`/`limit` de `GET /servicios/mios` y `GET /liquidaciones/mias`
+están en el contrato pero la app no los usa de forma efectiva (§3.1, §3.2).
+
 ### 4.3 Otras ausencias
 
 - **CI**: `.github/workflows/` no existe; ni `flutter analyze` ni `flutter test`
-  corren automáticamente, aunque ahora hay 51 tests que valdría la pena proteger.
+  corren automáticamente, aunque hay 51 tests que valdría la pena proteger.
 - **Configuración por entorno**: `baseUrl` sigue hardcodeada en
   [api_constants.dart:3](../lib/core/api/api_constants.dart#L3), sin
   `--dart-define` ni flavors (CLAUDE.md documenta `localhost:3000`, el código
   apunta a Render).
+- **Fuente del PDF empaquetada**: no hay `assets/fonts/`; la fuente se baja en
+  runtime (§7.5).
 - **Dependencias de test**: sin `bloc_test` ni `mocktail`; los tests actuales
   usan fakes a mano, que funciona pero escala peor.
 - **README real**: [README.md](../README.md) y la `description` de
@@ -280,7 +353,7 @@ está por omisión:
 cliente_feedback_tecnico/
 ├── CLAUDE.md                       # arquitectura de referencia (titulado "AGENTS.md")
 ├── Progreso_app.md                 # notas de avance del autor
-├── copilot-instructions.md         # casi idéntico al de .github/ (difieren ~130 líneas de diff)
+├── copilot-instructions.md         # difiere del de .github/
 ├── plan_backend.html
 ├── pubspec.yaml
 ├── analysis_options.yaml
@@ -289,11 +362,12 @@ cliente_feedback_tecnico/
 │   ├── instructions/flutter-architecture.instructions.md
 │   └── modernize/java-upgrade/hooks/   # ajeno al proyecto Flutter
 ├── docs/
-│   ├── endpoints.md                          # fuente de verdad de la API (con cambios sin commitear)
-│   ├── backend_feedback.postman_collection.json
+│   ├── endpoints.md                            # SYMLINK → backend_feedback/docs/endpoints.md (sin commitear)
+│   ├── backend_feedback_postman_collection.json # SYMLINK → backend_feedback/docs/postman/… (sin trackear)
+│   ├── backend_feedback.postman_collection.json # copia vieja del 12/09, trackeada, desactualizada
 │   ├── sistema_feedback_arquitectura.md
 │   ├── flutter-tecnico-copilot-handoff.md
-│   └── ESTADO.md                             # este documento
+│   └── ESTADO.md                               # este documento
 ├── test/
 │   ├── core/api/api_client_test.dart                 (62)
 │   ├── core/auth/jwt_helper_test.dart                (50)
@@ -366,46 +440,75 @@ cliente_feedback_tecnico/
 
 En orden de prioridad — de "rompe el uso diario" a "deuda de calidad":
 
-1. **Cerrar los desvíos de `km`.** Pasar `Servicio.km` a `double?` (entidad, DTO
+1. **Paginar liquidaciones.** El backend ya acepta `page`/`limit` en
+   `GET /liquidaciones/mias` (antes daba 400, y por eso la app tenía un fallback
+   sin paginación que igual devolvía sólo la primera página).
+   - Agregar un evento `LiquidacionesPaginaSiguienteSolicitada` al BLoC que use
+     `meta.page`/`meta.totalPages` y acumule resultados; conectarlo al final de
+     la lista de cada pestaña.
+   - Pedir por pestaña con `estado=pendiente|aprobada|reabierta` en lugar de
+     `todas` + filtro en la vista, para que cada pestaña pagine por separado.
+   - Sacar de la vista el cálculo de "total aprobadas": con paginación no se
+     puede sumar en el cliente sin cargar todo. Hay que pedirle al backend un
+     total o dejar claro que es el total de lo cargado.
+   - Borrar `obtenerMisLiquidacionesRawSinPaginacion`,
+     `_debeReintentarSinPaginacion` y `_contieneErrorParametroNoPermitido`.
+   - Test del BLoC con dos páginas.
+
+2. **Paginar "Mis servicios".** Mandar `page`/`limit` a `GET /servicios/mios`,
+   devolver `meta` desde el repositorio y agregar "cargar más" en el BLoC.
+   Decidir qué hacer con el filtro por estado y la búsqueda locales (§3.9): hoy
+   sólo ven la página cargada y el endpoint no acepta otros filtros.
+
+3. **Cerrar los desvíos de `km`.** Pasar `Servicio.km` a `double?` (entidad, DTO
    y PDF) y exigir `km > 0` en `_validarFormulario` cuando el canal es `campo`,
    con un test en `payload_servicio_contrato_test.dart`. Es chico y hoy genera
    400 del backend y datos inconsistentes.
 
-2. **Aislar la cola de pendientes por usuario.** Incluir el id del técnico en la
+4. **Arreglar los symlinks del contrato antes de commitearlos** (§7.7): usar
+   destino relativo (`../../backend_feedback/docs/endpoints.md`), borrar la
+   copia vieja `backend_feedback.postman_collection.json` y decidir cómo lo
+   resuelven los clones en Windows sin `core.symlinks`.
+
+5. **Aislar la cola de pendientes por usuario.** Incluir el id del técnico en la
    clave (o vaciar/descartar la cola al cerrar sesión, avisando si había
    documentos sin subir).
 
-3. **Verificar el rol al loguear y al restaurar.** Si `roles` no incluye
+6. **Verificar el rol al loguear y al restaurar.** Si `roles` no incluye
    `tecnico`, no guardar sesión y mostrar un error claro.
 
-4. **Unificar 401/403.** Quitar la traducción propia de
+7. **Unificar 401/403.** Quitar la traducción propia de
    `LiquidacionRepositoryImpl` y el `LogoutRequested` de la pantalla, dejando el
    401 en manos de `ApiClient`; decidir explícitamente qué hacer con 403.
 
-5. **Relajar el equipo en remoto/fábrica** según el contrato (al menos
+8. **Empaquetar la fuente del PDF** (NotoSans en `assets/fonts/`, cargada con
+   `pw.Font.ttf`) para que la orden se genere igual sin conexión.
+
+9. **Relajar el equipo en remoto/fábrica** según el contrato (al menos
    ubicación y año opcionales, como en CLAUDE.md).
 
-6. **Detalle y edición de órdenes** (`GET /servicios/:id` + `PATCH
-   /servicios/:id`), empezando por el detalle desde "Mis servicios".
+10. **Detalle y edición de órdenes** (`GET /servicios/:id` + `PATCH
+    /servicios/:id`), empezando por el detalle desde "Mis servicios".
 
-7. **CI** (`.github/workflows/flutter.yml`) con `flutter analyze` + `flutter
-   test` en cada PR: los 51 tests ya justifican el workflow.
+11. **CI** (`.github/workflows/flutter.yml`) con `flutter analyze` + `flutter
+    test` en cada PR.
 
-8. **Tests de lo que concentra más riesgo y aún no está cubierto**:
-   `_validarFormulario`, `_recalcularFacturacion` (fijar primero la regla del
-   descuento, ver §7.5) y `LiquidacionDto` contra los ejemplos de
-   [endpoints.md](endpoints.md).
+12. **Tests de lo que concentra más riesgo y aún no está cubierto**:
+    `_validarFormulario`, `_recalcularFacturacion` (fijar primero la regla del
+    descuento, ver §7.5), liquidaciones y `LiquidacionDto` contra los ejemplos
+    de [endpoints.md](endpoints.md).
 
-9. **Crear `lib/core/theme/app_theme.dart`** con `temaLight()`/`temaDark()` y
-   `themeMode: ThemeMode.system`, y una `SplashPage` para `AuthLoading`.
+13. **Crear `lib/core/theme/app_theme.dart`** con `temaLight()`/`temaDark()` y
+    `themeMode: ThemeMode.system`, y una `SplashPage` para `AuthLoading`.
 
-10. **Parametrizar la `baseUrl`** con `--dart-define=API_BASE_URL=...`.
+14. **Parametrizar la `baseUrl`** con `--dart-define=API_BASE_URL=...`.
 
-11. **Partir `formulario_servicio.dart`** (2.867 líneas) en un widget por paso
+15. **Partir `formulario_servicio.dart`** (2.867 líneas) en un widget por paso
     y sacar de la vista el cálculo de facturación que duplica al BLoC (§7.1).
 
-12. Resolver la nota de `Progreso_app.md` sobre los filtros de mis servicios, y
-    actualizar [README.md](../README.md) y la `description` de `pubspec.yaml`.
+16. Avisar al repo backend del desvío en la tabla de roles de
+    `endpoints.md` (§7.7), y actualizar [README.md](../README.md) y la
+    `description` de `pubspec.yaml`.
 
 ---
 
@@ -413,16 +516,20 @@ En orden de prioridad — de "rompe el uso diario" a "deuda de calidad":
 
 ### 7.1 Lógica en las vistas
 
-La violación más seria del relevamiento anterior (HTTP crudo en
-`mis_servicios_page.dart`) **está resuelta**. Queda lógica menor en
-[formulario_servicio.dart](../lib/features/servicios/presentation/widgets/formulario_servicio.dart):
+La violación más seria del relevamiento original (HTTP crudo en
+`mis_servicios_page.dart`) sigue resuelta. Queda lógica en dos vistas:
 
-- **Cálculo de facturación en el widget**: el paso de facturación recalcula
+- **Filtrado y totales de liquidaciones en la vista** *(nuevo en este
+  relevamiento)*: `_filtrarPorEstado` y la suma de `totalLiquidacionUsd`
+  ([liquidaciones_screen.dart:63-79 y 152-157](../lib/features/liquidaciones/presentation/pages/liquidaciones_screen.dart#L63))
+  son reglas de negocio calculadas en el `builder`. Además, al paginar dejan de
+  ser correctas (§3.2).
+- **Cálculo de facturación en el formulario**: el paso de facturación recalcula
   subtotal de km, precio en ARS y montos de descuento con su propio
   `_doubleDesdeTextoLocal`
   ([formulario_servicio.dart:1620-1632](../lib/features/servicios/presentation/widgets/formulario_servicio.dart#L1620)),
   en paralelo a `_recalcularFacturacion` del BLoC.
-- **Normalización de partes en el widget**: `_normalizarParteFalladaBackend`
+- **Normalización de partes en el formulario**: `_normalizarParteFalladaBackend`
   ([formulario_servicio.dart:2785](../lib/features/servicios/presentation/widgets/formulario_servicio.dart#L2785))
   decide la parte a partir del nombre de la categoría al elegir productos.
 - **Armado de la solicitud de firma en la vista**: el bottom sheet captura el
@@ -433,23 +540,32 @@ La violación más seria del relevamiento anterior (HTTP crudo en
 
 | Duplicación | Dónde |
 |---|---|
-| Normalización de "parte que falló" | `_normalizarParteFallada` en [servicio_bloc.dart:1600](../lib/features/servicios/presentation/bloc/servicio_bloc.dart#L1600) **y** `_normalizarParteFalladaBackend` en [formulario_servicio.dart:2785](../lib/features/servicios/presentation/widgets/formulario_servicio.dart#L2785). Ambas ya mapean `web` correctamente, pero hay que mantenerlas en sincronía a mano |
-| Extracción de `pdfUrl` del documento | `_extraerPdfUrl` en [servicio_dto.dart:483](../lib/features/servicios/infrastructure/dtos/servicio_dto.dart#L483) **y** `_extraerPdfUrlDesdeDocumento` en [servicio_repository_impl.dart:384](../lib/features/servicios/infrastructure/repositories/servicio_repository_impl.dart#L384) — se movió de la vista al repositorio, pero sigue duplicada |
+| Normalización de "parte que falló" | `_normalizarParteFallada` en [servicio_bloc.dart:1600](../lib/features/servicios/presentation/bloc/servicio_bloc.dart#L1600) **y** `_normalizarParteFalladaBackend` en [formulario_servicio.dart:2785](../lib/features/servicios/presentation/widgets/formulario_servicio.dart#L2785). Ambas mapean `web` correctamente, pero hay que mantenerlas en sincronía a mano |
+| Extracción de `pdfUrl` del documento | `_extraerPdfUrl` en [servicio_dto.dart:483](../lib/features/servicios/infrastructure/dtos/servicio_dto.dart#L483) **y** `_extraerPdfUrlDesdeDocumento` en [servicio_repository_impl.dart:384](../lib/features/servicios/infrastructure/repositories/servicio_repository_impl.dart#L384) |
 | Helpers `_doubleDesdeDynamic` / `_intDesdeDynamic` / `_boolDesdeDynamic` | 7 archivos: `servicio_dto`, `orden_servicio_respuesta_dto`, `repuesto_dto`, `cotizacion_actual_dto`, `liquidacion_dto`, `catalogo_repository_impl`, `servicio_repository_impl` |
 | Formateo de fecha dd/MM/yyyy | 5 copias: `servicio_bloc`, `formulario_servicio`, `generar_pdf_orden_servicio_use_case`, `mis_servicios_page`, `liquidaciones_screen` |
 | Bucle de reintento de pendientes (`for` + `try` + `_quitarDocumentoPendiente`) | Dos copias casi literales dentro de `_onServicioDocumentoPendientesReintentarSolicitado` ([servicio_bloc.dart:734-830](../lib/features/servicios/presentation/bloc/servicio_bloc.dart#L734)) |
-| `copilot-instructions.md` | En la raíz y en `.github/`; ya no son idénticos (divergieron), lo que empeora el problema: no está claro cuál vale |
+| Colección Postman | `docs/backend_feedback.postman_collection.json` (copia del 12/09) **y** el symlink `docs/backend_feedback_postman_collection.json`: dos nombres casi iguales, uno desactualizado (§7.7) |
+| `copilot-instructions.md` | En la raíz y en `.github/`, con contenido divergente: no está claro cuál vale |
 
 ### 7.3 Código muerto
 
+- **Fallback de liquidaciones sin paginación** *(nuevo)*:
+  `obtenerMisLiquidacionesRawSinPaginacion`
+  ([liquidacion_remote_data_source.dart:23-28](../lib/features/liquidaciones/infrastructure/datasources/liquidacion_remote_data_source.dart#L23)),
+  `_debeReintentarSinPaginacion` y `_contieneErrorParametroNoPermitido`
+  ([liquidacion_repository_impl.dart:92-116](../lib/features/liquidaciones/infrastructure/repositories/liquidacion_repository_impl.dart#L92)).
+  Sólo se disparaban con el 400 `property page should not exist`, que el backend
+  ya no devuelve.
+- `LiquidacionesLoaded.meta`: se emite pero ninguna vista ni evento lo lee.
 - `ObtenerCatalogosUseCase.ejecutar()` y la clase `CatalogosData`
   ([obtener_catalogos_use_case.dart:8 y 82](../lib/features/catalogos/application/obtener_catalogos_use_case.dart#L8)).
 - Evento `CargarCatalogos`: registrado pero nunca despachado.
 - `ServicioInitial` ([servicio_state.dart:18](../lib/features/servicios/presentation/bloc/servicio_state.dart#L18)): nunca se emite.
 - `ApiClient.patch()`, `ApiConstants.register`, `SecureStorage.borrarValor()`:
-  sin uso (`borrarToken()` ya se usa desde el logout).
-- `NetworkException`: declarada y nunca lanzada; los errores de red siguen
-  cayendo en `ServerException` genéricos.
+  sin uso.
+- `NetworkException`: declarada y nunca lanzada; los errores de red caen en
+  `ServerException` genéricos.
 - `authRepository`, `catalogoRepository`, `servicioRepository` y
   `liquidacionRepository` expuestos como públicos en `AppDependencies` sin que
   nadie los lea desde afuera.
@@ -460,8 +576,11 @@ La violación más seria del relevamiento anterior (HTTP crudo en
 ### 7.4 Inconsistencias de estilo y convención
 
 - **Indentación mezclada**: `servicios/`, `auth/`, `catalogos/` y `core/` usan
-  tabuladores; `liquidaciones/` y ahora **todo `main.dart`** usan 2 espacios. No
-  hay `.editorconfig`.
+  tabuladores; `liquidaciones/` y `main.dart` usan 2 espacios. No hay
+  `.editorconfig`.
+- **Estructura de liquidaciones distinta**: es la única feature con
+  `infrastructure/datasources/` entre el repositorio y `ApiClient`; las demás
+  llaman a `ApiClient` desde el repositorio, como indica CLAUDE.md.
 - **`failures.dart` no contiene ningún `Failure`**: son excepciones; debería
   llamarse `exceptions.dart`.
 - **Nombres respecto de CLAUDE.md**: `features/liquidaciones/` vs
@@ -475,12 +594,23 @@ La violación más seria del relevamiento anterior (HTTP crudo en
 
 ### 7.5 Riesgos funcionales concretos
 
+- **Listados truncados a 20** (§3.1, §3.2): el técnico no ve órdenes ni
+  liquidaciones viejas y el total aprobado en USD sale menor que el real, sin
+  ningún aviso en pantalla.
+- **Fuente del PDF descargada en runtime** *(nuevo)*:
+  `PdfGoogleFonts.notoSansRegular()`/`notoSansBold()`
+  ([generar_pdf_orden_servicio_use_case.dart:17-18](../lib/features/servicios/application/generar_pdf_orden_servicio_use_case.dart#L17))
+  bajan la fuente de `fonts.gstatic.com`. Sin conexión (caso típico en campo,
+  justo cuando la cola offline tiene sentido) `printing` cae a Helvetica sin
+  soporte Unicode: el propio `flutter test` lo muestra (`Unable to download …
+  fallback to Helvetica`). Además agrega una llamada de red a cada primera
+  generación.
 - **PDF en base64 dentro de `flutter_secure_storage`**
   ([servicio_repository_impl.dart:631](../lib/features/servicios/infrastructure/repositories/servicio_repository_impl.dart#L631)).
   El keystore no está pensado para blobs; con varias órdenes pendientes puede
   fallar. `rutaPdfLocal` sigue siendo un pseudo-URI `memoria://...` que no apunta
   a nada ([servicio_bloc.dart:1137](../lib/features/servicios/presentation/bloc/servicio_bloc.dart#L1137)).
-- **Cola de pendientes compartida entre usuarios** (ver §3.5).
+- **Cola de pendientes compartida entre usuarios** (§3.7).
 - **Búsqueda de cotización "a fuerza bruta"**: `_buscarValorPorClaves`
   ([servicio_repository_impl.dart:566](../lib/features/servicios/infrastructure/repositories/servicio_repository_impl.dart#L566))
   recorre todo el JSON probando varios nombres de clave, incluido `'valor'`.
@@ -497,11 +627,9 @@ La violación más seria del relevamiento anterior (HTTP crudo en
   total con IVA en ARS ([servicio_bloc.dart:1478-1485](../lib/features/servicios/presentation/bloc/servicio_bloc.dart#L1478)),
   mientras la vista muestra un `descuentoMontoUsd` calculado sobre el subtotal
   bruto ([formulario_servicio.dart:1631](../lib/features/servicios/presentation/widgets/formulario_servicio.dart#L1631)).
-- **Avisos de `flutter analyze`**: el import innecesario de `dart:typed_data` se
-  fue con la refactorización de mis servicios. Quedan los tres
-  `use_build_context_synchronously` del flujo de firma
-  (`formulario_servicio.dart:570, 586, 605`), que pueden lanzar si el técnico
-  cierra la hoja mientras se captura la firma.
+- **Avisos de `flutter analyze`**: los tres `use_build_context_synchronously`
+  del flujo de firma (`formulario_servicio.dart:570, 586, 605`), que pueden
+  lanzar si el técnico cierra la hoja mientras se captura la firma.
 
 ### 7.6 Dependencias
 
@@ -512,34 +640,64 @@ La violación más seria del relevamiento anterior (HTTP crudo en
 
 En `dev_dependencies` siguen faltando `bloc_test` y `mocktail`/`mockito`.
 
+### 7.7 Documentación y contrato *(sección nueva)*
+
+- **Symlinks con ruta absoluta.** `docs/endpoints.md` apunta a
+  `/d/NEST + FLUTTER/Feedback Tecnico/backend_feedback/docs/endpoints.md`, y el
+  postman a una ruta absoluta equivalente. Sólo resuelven en esta máquina y con
+  esta estructura de carpetas. Además `core.symlinks` está en `false` en este
+  clon: en Windows, quien clone sin symlinks habilitados va a recibir un archivo
+  de texto con la ruta en lugar del contrato. Hoy `endpoints.md` figura como
+  `T` (cambio de tipo) sin commitear y el postman nuevo como no trackeado.
+- **Postman duplicado.** Coexisten `backend_feedback.postman_collection.json`
+  (archivo real del 12/09, trackeado, desactualizado: no tiene, por ejemplo,
+  `page`/`limit` en `/liquidaciones/mias`) y
+  `backend_feedback_postman_collection.json` (symlink al día). CLAUDE.md
+  referencia el segundo nombre; conviene borrar el primero para que nadie
+  modele desde la copia vieja.
+- **Desvío dentro del contrato del backend.** La tabla de roles de
+  [endpoints.md](endpoints.md) lista `GET /liquidaciones/:id/items` sólo para
+  `admin-tecnico`, pero el controller lo declara
+  `@Auth(ValidRoles.tecnico, ValidRoles.adminTecnico)` y filtra por usuario. La
+  app lo usa como técnico y funciona. Lo que está mal es la tabla del backend, y
+  se debería corregir allá. Mientras tanto, cualquiera que modele desde la tabla
+  va a pensar que la app llama a un endpoint prohibido.
+- **Referencias rotas**:
+  [flutter-tecnico-copilot-handoff.md](flutter-tecnico-copilot-handoff.md)
+  apunta a `docs/postman/backend_feedback.postman_collection.json`, que no
+  existe en este repo; CLAUDE.md documenta `localhost:3000` como base URL
+  mientras el código usa Render.
+
 ---
 
-## Porcentaje aproximado de avance: **≈ 86 %**
+## Porcentaje aproximado de avance: **≈ 84 %**
 
-**Justificación.** El 78 % anterior correspondía a un camino crítico completo
-pero con huecos de uso diario y de contrato. Desde entonces se cerraron
-justamente esos huecos: sesión persistente, logout real, cierre de sesión global
-ante 401, HTTP fuera de las vistas, `resolucionId` como array, parte `web` y
-reglas por canal alineadas con el contrato actualizado. Además se pasó de 0 a 51
-tests reales sobre las zonas que se tocaron. Eso recupera la mayor parte del
-bloque de "funcionalidad desviada", buena parte de "deuda técnica" y una porción
-de "calidad y verificación": **+8 puntos**.
+**Justificación.** El relevamiento anterior estimó ≈ 86 %. Desde entonces **no
+cambió código de la app**, así que no hay avance nuevo que sumar. Lo que cambió
+es la medición: al contrastar con el contrato al día y revisar cómo cargan los
+listados, aparecieron dos huecos funcionales que el 86 % no contemplaba. "Mis
+servicios" y "Liquidaciones" muestran sólo los 20 registros más recientes, y el
+total aprobado se calcula sobre esa página. Esto afecta el uso diario de
+cualquier técnico con historial, así que se descuentan **2 puntos**. El resto de
+lo verificado coincide con el relevamiento anterior: todo lo que figuraba como
+resuelto sigue resuelto, y 51 tests pasan.
 
-El ≈ 14 % restante:
+El ≈ 16 % restante:
 
-- **~5 % — funcionalidad faltante o desviada**: sin detalle ni edición de
-  órdenes (`GET`/`PATCH /servicios/:id`), `km` entero y `km = 0` aceptado en
-  campo, rol no verificado, cola de pendientes compartida entre usuarios, equipo
-  obligatorio en remoto.
+- **~7 % — funcionalidad faltante o desviada**: listados sin paginar (servicios
+  y liquidaciones), sin detalle ni edición de órdenes (`GET`/`PATCH
+  /servicios/:id`), `km` entero y `km = 0` aceptado en campo, rol no verificado,
+  cola de pendientes compartida entre usuarios, equipo obligatorio en remoto.
 - **~5 % — calidad y verificación**: sin tests de validación, facturación,
-  liquidaciones ni widgets; sin CI; sin configuración por entorno; sin
-  `app_theme.dart` ni tema oscuro.
+  liquidaciones, paginación ni widgets; sin CI; sin configuración por entorno;
+  sin `app_theme.dart` ni tema oscuro; PDF dependiente de red para la fuente.
 - **~4 % — deuda técnica**: formulario de 2.867 líneas con cálculo propio de
-  facturación, cinco focos de duplicación, código muerto, indentación mezclada y
-  los riesgos de §7.5 (blobs en secure storage, parseo por fuerza bruta,
-  detección de error de firma por texto que ya no coincide con el backend,
-  descuento ambiguo).
+  facturación, lógica de liquidaciones en la vista, focos de duplicación, código
+  muerto (incluido el fallback sin paginación), indentación mezclada, los
+  riesgos de §7.5 y los symlinks del contrato con ruta absoluta.
 
-La app se puede usar en campo sin re-loguearse y cumple el contrato en los
-puntos que más datos perdían. Lo que falta es, sobre todo, poder corregir una
-orden ya cargada y blindar con tests y CI lo que ya funciona.
+La app se puede usar en campo sin re-loguearse y cumple el contrato del alta de
+órdenes. Lo más urgente ahora es que el técnico vea **todo** su historial, no
+sólo los últimos 20 registros: el backend ya lo permite y el cambio queda del
+lado de la app. Después vienen poder corregir una orden cargada y blindar con
+tests y CI lo que ya funciona.
