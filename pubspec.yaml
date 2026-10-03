@@ -66,6 +66,13 @@ flutter:
   # the material Icons class.
   uses-material-design: true
 
+  # Fuente del PDF de la orden, embebida para generarlo sin conexión.
+  # Noto Sans (SIL Open Font License 1.1, ver assets/fonts/OFL.txt).
+  assets:
+    - assets/fonts/NotoSans-Regular.ttf
+    - assets/fonts/NotoSans-Bold.ttf
+    - assets/fonts/OFL.txt
+
   # To add assets to your application, add an assets section, like this:
   # assets:
   #   - images/a_dot_burr.jpeg
