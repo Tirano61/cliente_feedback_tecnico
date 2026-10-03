@@ -1,12 +1,30 @@
-import 'dart:typed_data';
-
 import 'package:cliente_feedback_tecnico/features/servicios/domain/entities/facturacion_item.dart';
 import 'package:cliente_feedback_tecnico/features/servicios/domain/entities/orden_servicio_respuesta.dart';
+import 'package:flutter/services.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
-import 'package:printing/printing.dart';
 
 class GenerarPdfOrdenServicioUseCase {
+	static const String rutaFuenteBase = 'assets/fonts/NotoSans-Regular.ttf';
+	static const String rutaFuenteNegrita = 'assets/fonts/NotoSans-Bold.ttf';
+
+	final AssetBundle _bundle;
+	Future<pw.ThemeData>? _tema;
+
+	GenerarPdfOrdenServicioUseCase({AssetBundle? bundle})
+			: _bundle = bundle ?? rootBundle;
+
+	/// La fuente sale del bundle de la app, nunca de la red: el técnico en campo
+	/// suele estar sin conexión y una fuente sin Unicode rompe acentos y ñ en la
+	/// orden que firma el cliente. Se carga una sola vez por instancia.
+	Future<pw.ThemeData> _cargarTema() {
+		return _tema ??= () async {
+			final fuenteBase = pw.Font.ttf(await _bundle.load(rutaFuenteBase));
+			final fuenteNegrita = pw.Font.ttf(await _bundle.load(rutaFuenteNegrita));
+			return pw.ThemeData.withFont(base: fuenteBase, bold: fuenteNegrita);
+		}();
+	}
+
 	Future<Uint8List> ejecutar(
 		OrdenServicioRespuesta orden, {
 		Uint8List? firmaClienteTrazoPng,
@@ -14,14 +32,7 @@ class GenerarPdfOrdenServicioUseCase {
 		String? firmaClienteDocumento,
 		DateTime? firmaFechaHora,
 	}) async {
-		final fuenteBase = await PdfGoogleFonts.notoSansRegular();
-		final fuenteNegrita = await PdfGoogleFonts.notoSansBold();
-		final documento = pw.Document(
-			theme: pw.ThemeData.withFont(
-				base: fuenteBase,
-				bold: fuenteNegrita,
-			),
-		);
+		final documento = pw.Document(theme: await _cargarTema());
 		final servicio = orden.servicio;
 		final fechaOrden = orden.fechaHoraServicio ?? servicio.fechaHoraServicio ?? servicio.fecha;
 
