@@ -486,6 +486,8 @@ class _TarjetaServicio extends StatelessWidget {
 							),
 						),
 						const SizedBox(height: 6),
+						_IndicadorLiquidacion(estado: servicio.estadoLiquidacion),
+						const SizedBox(height: 6),
 						Text(
 							'Cliente: $nombreCliente',
 							style: TextStyle(
@@ -628,6 +630,52 @@ class _TarjetaServicio extends StatelessWidget {
 		final hora = local.hour.toString().padLeft(2, '0');
 		final minuto = local.minute.toString().padLeft(2, '0');
 		return '$dia/$mes/$anio - $hora:$minuto';
+	}
+}
+
+/// Estado de la liquidacion, aparte del badge de resuelto: uno dice si el
+/// problema tecnico se soluciono, este si el servicio ya se aprobo para pago.
+class _IndicadorLiquidacion extends StatelessWidget {
+	final EstadoLiquidacionServicio estado;
+
+	const _IndicadorLiquidacion({required this.estado});
+
+	@override
+	Widget build(BuildContext context) {
+		final (color, icono, texto) = switch (estado) {
+			EstadoLiquidacionServicio.aprobada => (
+					Colors.green.shade700,
+					Icons.paid_outlined,
+					'Liquidacion aprobada',
+				),
+			EstadoLiquidacionServicio.pendiente => (
+					Colors.amber.shade800,
+					Icons.hourglass_top,
+					'Liquidacion pendiente de aprobacion',
+				),
+			EstadoLiquidacionServicio.noAplica => (
+					Theme.of(context).colorScheme.onSurfaceVariant,
+					Icons.money_off_outlined,
+					'Sin liquidacion (no es servicio de campo)',
+				),
+		};
+
+		return Row(
+			children: [
+				Icon(icono, size: 16, color: color),
+				const SizedBox(width: 6),
+				Flexible(
+					child: Text(
+						texto,
+						style: TextStyle(
+							fontSize: 12,
+							fontWeight: FontWeight.w600,
+							color: color,
+						),
+					),
+				),
+			],
+		);
 	}
 }
 

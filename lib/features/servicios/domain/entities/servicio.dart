@@ -7,6 +7,21 @@ import 'package:cliente_feedback_tecnico/features/servicios/domain/entities/prod
 
 enum Canal { campo, remoto, fabrica }
 
+/// Estado de la liquidacion de un servicio, visto por el tecnico.
+///
+/// `aprobado = false` del backend no alcanza para decir "pendiente": tambien
+/// vale false en remoto y fabrica, que nunca generan liquidacion.
+enum EstadoLiquidacionServicio {
+	/// Canal campo con liquidacion aprobada.
+	aprobada,
+
+	/// Canal campo sin aprobar todavia: liquidacion pendiente o reabierta.
+	pendiente,
+
+	/// Remoto o fabrica: no hay nada que liquidar.
+	noAplica,
+}
+
 class Servicio extends Equatable {
 	final String id;
 	final String? idempotencyKey;
@@ -88,6 +103,17 @@ class Servicio extends Equatable {
 	/// true cuando el listado ya trae el documento cargado: sirve para no
 	/// preguntarle al backend por el PDF de una orden que ya lo tiene.
 	bool get tieneDocumentoCargado => documento?.tieneContenidoCargado ?? false;
+
+	/// Solo `canal = campo` genera liquidacion, asi que solo ahi `aprobado`
+	/// distingue aprobada de pendiente.
+	EstadoLiquidacionServicio get estadoLiquidacion {
+		if (canal != Canal.campo) {
+			return EstadoLiquidacionServicio.noAplica;
+		}
+		return aprobado
+				? EstadoLiquidacionServicio.aprobada
+				: EstadoLiquidacionServicio.pendiente;
+	}
 
 	@override
 	List<Object?> get props => [

@@ -22,6 +22,7 @@ import 'package:cliente_feedback_tecnico/features/servicios/application/obtener_
 import 'package:cliente_feedback_tecnico/features/servicios/application/obtener_mis_servicios_use_case.dart';
 import 'package:cliente_feedback_tecnico/features/servicios/application/quitar_documento_pendiente_use_case.dart';
 import 'package:cliente_feedback_tecnico/features/servicios/application/subir_documento_firmado_use_case.dart';
+import 'package:cliente_feedback_tecnico/features/servicios/domain/entities/servicio.dart';
 import 'package:cliente_feedback_tecnico/features/servicios/infrastructure/repositories/servicio_repository_impl.dart';
 import 'package:cliente_feedback_tecnico/features/servicios/presentation/bloc/filtro_estado_servicio.dart';
 import 'package:cliente_feedback_tecnico/features/servicios/presentation/bloc/servicio_bloc.dart';
@@ -466,6 +467,33 @@ void main() {
 			await entorno.cerrar();
 		});
 
+		test('solo campo tiene liquidacion: aprobado=false en remoto no es pendiente',
+				() async {
+			final entorno = _armarEntorno(
+				MockClient((request) async {
+					if (request.url.path.endsWith('/servicios/mios')) {
+						return _respuestaPagina([
+							{...servicio('a', aprobado: true), 'canal': 'campo'},
+							{...servicio('b'), 'canal': 'campo'},
+							{...servicio('c'), 'canal': 'remoto'},
+							{...servicio('d'), 'canal': 'fabrica'},
+						]);
+					}
+					return http.Response('{}', 404);
+				}),
+			);
+
+			final listado = await _cargarListado(entorno);
+			expect(listado.servicios.map((s) => s.estadoLiquidacion), [
+				EstadoLiquidacionServicio.aprobada,
+				EstadoLiquidacionServicio.pendiente,
+				EstadoLiquidacionServicio.noAplica,
+				EstadoLiquidacionServicio.noAplica,
+			]);
+
+			await entorno.cerrar();
+		});
+
 		test('manda busqueda y filtro al backend y muestra lo que devuelve', () async {
 			final pedidos = <Map<String, String>>[];
 			final entorno = _armarEntorno(
@@ -485,7 +513,11 @@ void main() {
 			);
 
 			final listado = await _cargarListado(entorno);
-			expect(pedidos.single, {'page': '1', 'limit': '20'});
+			expect(pedidos.single, {
+				'orderBy': 'fechaServicio',
+				'page': '1',
+				'limit': '20',
+			});
 			expect(listado.total, 101);
 			expect(listado.hayMasPaginas, isTrue);
 
@@ -498,7 +530,12 @@ void main() {
 				),
 			);
 			final conFiltro = _comoListado(await filtrado);
-			expect(pedidos.last, {'aprobado': 'false', 'page': '1', 'limit': '20'});
+			expect(pedidos.last, {
+				'aprobado': 'false',
+				'orderBy': 'fechaServicio',
+				'page': '1',
+				'limit': '20',
+			});
 			expect(conFiltro.servicios, hasLength(2));
 			expect(conFiltro.actualizando, isFalse);
 
@@ -512,6 +549,7 @@ void main() {
 			expect(pedidos.last, {
 				'q': 'perez',
 				'aprobado': 'false',
+				'orderBy': 'fechaServicio',
 				'page': '1',
 				'limit': '20',
 			});
@@ -523,6 +561,7 @@ void main() {
 			expect(pedidos.last, {
 				'q': 'perez',
 				'aprobado': 'false',
+				'orderBy': 'fechaServicio',
 				'page': '1',
 				'limit': '20',
 			});
@@ -563,11 +602,13 @@ void main() {
 
 		test('la pagina siguiente se agrega sin repetir servicios', () async {
 			final paginas = <String?>[];
+			final ordenes = <String?>[];
 			final entorno = _armarEntorno(
 				MockClient((request) async {
 					if (request.url.path.endsWith('/servicios/mios')) {
 						final page = request.url.queryParameters['page'];
 						paginas.add(page);
+						ordenes.add(request.url.queryParameters['orderBy']);
 						if (page == '1') {
 							return _respuestaPagina(
 								[servicio('a'), servicio('b')],
@@ -603,6 +644,8 @@ void main() {
 			entorno.servicioBloc.add(const MisServiciosSiguientePaginaSolicitada());
 			await Future<void>.delayed(const Duration(milliseconds: 50));
 			expect(paginas, ['1', '2']);
+			// El orden lo resuelve el backend: si cambiara entre paginas, se mezclarian.
+			expect(ordenes, ['fechaServicio', 'fechaServicio']);
 
 			await entorno.cerrar();
 		});
