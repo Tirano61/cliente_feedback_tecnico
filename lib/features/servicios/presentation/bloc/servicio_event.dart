@@ -251,6 +251,20 @@ class MisServiciosBusquedaCambiada extends ServicioEvent {
 	List<Object?> get props => [texto];
 }
 
+/// El tecnico llego al final del listado (o toco "Cargar mas"). El bloc
+/// ignora el pedido si ya esta cargando o si no quedan paginas.
+///
+/// Si la pagina anterior fallo, solo se vuelve a pedir con `reintento`: el
+/// scroll no tiene que martillar al backend mientras siga caido.
+class MisServiciosSiguientePaginaSolicitada extends ServicioEvent {
+	final bool reintento;
+
+	const MisServiciosSiguientePaginaSolicitada({this.reintento = false});
+
+	@override
+	List<Object?> get props => [reintento];
+}
+
 class ServicioDocumentoPdfVerSolicitado extends ServicioEvent {
 	final Servicio servicio;
 

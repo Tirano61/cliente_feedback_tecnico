@@ -9,6 +9,7 @@ import 'package:cliente_feedback_tecnico/core/error/failures.dart';
 import 'package:cliente_feedback_tecnico/features/servicios/domain/entities/cliente.dart';
 import 'package:cliente_feedback_tecnico/features/servicios/domain/entities/cotizacion_actual.dart';
 import 'package:cliente_feedback_tecnico/features/servicios/domain/entities/orden_servicio_respuesta.dart';
+import 'package:cliente_feedback_tecnico/features/servicios/domain/entities/pagina_servicios.dart';
 import 'package:cliente_feedback_tecnico/features/servicios/domain/entities/politica_firma_canal.dart';
 import 'package:cliente_feedback_tecnico/features/servicios/domain/entities/repuesto.dart';
 import 'package:cliente_feedback_tecnico/features/servicios/domain/entities/servicio.dart';
@@ -56,8 +57,22 @@ class ServicioRepositoryImpl implements IServicioRepository {
 	}
 
 	@override
-	Future<List<Servicio>> obtenerMisServicios() async {
-		final response = await apiClient.get(ApiConstants.serviciosMios);
+	Future<PaginaServicios> obtenerMisServicios({
+		required int pagina,
+		required int limite,
+		String busqueda = '',
+		bool? aprobado,
+	}) async {
+		final texto = busqueda.trim();
+		final query = Uri(
+			queryParameters: {
+				if (texto.isNotEmpty) 'q': texto,
+				if (aprobado != null) 'aprobado': '$aprobado',
+				'page': '$pagina',
+				'limit': '$limite',
+			},
+		).query;
+		final response = await apiClient.get('${ApiConstants.serviciosMios}?$query');
 
 		if (response.statusCode != 200) {
 			final mensajeBackend = _extraerMensajeError(response.body);
@@ -67,13 +82,24 @@ class ServicioRepositoryImpl implements IServicioRepository {
 			);
 		}
 
-		final dynamic json = jsonDecode(response.body);
-		final lista = _extraerLista(json);
+		final dynamic json = _decodeJsonSeguro(response.body);
+		if (json is! Map<String, dynamic> ||
+				json['data'] is! List ||
+				json['meta'] is! Map<String, dynamic>) {
+			throw const ServerException('Respuesta invalida al obtener los servicios.');
+		}
 
-		return lista
-				.whereType<Map<String, dynamic>>()
-				.map((item) => ServicioDto.fromJson(item).aEntidad())
-				.toList();
+		final meta = json['meta'] as Map<String, dynamic>;
+		return PaginaServicios(
+			servicios: (json['data'] as List)
+					.whereType<Map<String, dynamic>>()
+					.map((item) => ServicioDto.fromJson(item).aEntidad())
+					.toList(),
+			pagina: (meta['page'] as num?)?.toInt() ?? pagina,
+			limite: (meta['limit'] as num?)?.toInt() ?? limite,
+			total: (meta['total'] as num?)?.toInt() ?? 0,
+			totalPaginas: (meta['totalPages'] as num?)?.toInt() ?? 0,
+		);
 	}
 
 	@override

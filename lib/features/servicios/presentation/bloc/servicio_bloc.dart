@@ -68,6 +68,14 @@ class ServicioBloc extends Bloc<ServicioEvent, ServicioState> {
 	final Set<String> _serviciosPdfVerificados = <String>{};
 	int _secuenciaEfectoPdf = 0;
 
+	/// Cada consulta nueva de mis servicios (recarga, busqueda o filtro) deja
+	/// sin efecto las respuestas que sigan en vuelo: si el tecnico tipeo otra
+	/// letra o cambio el filtro, la respuesta vieja ya no es lo que esta mirando.
+	int _secuenciaMisServicios = 0;
+
+	/// Pausa antes de mandar la busqueda, para no pegarle al backend por tecla.
+	static const Duration _esperaBusquedaMisServicios = Duration(milliseconds: 400);
+
 	ServicioBloc(
 		this._cargarServicioUseCase,
 		this._obtenerMisServiciosUseCase,
@@ -105,6 +113,9 @@ class ServicioBloc extends Bloc<ServicioEvent, ServicioState> {
 		);
 		on<MisServiciosFiltroEstadoCambiado>(_onMisServiciosFiltroEstadoCambiado);
 		on<MisServiciosBusquedaCambiada>(_onMisServiciosBusquedaCambiada);
+		on<MisServiciosSiguientePaginaSolicitada>(
+			_onMisServiciosSiguientePaginaSolicitada,
+		);
 		on<ServicioDocumentoPdfVerSolicitado>(_onServicioDocumentoPdfVerSolicitado);
 		on<ServicioDocumentoEnlacePdfCopiarSolicitado>(
 			_onServicioDocumentoEnlacePdfCopiarSolicitado,
@@ -829,35 +840,213 @@ class ServicioBloc extends Bloc<ServicioEvent, ServicioState> {
 		MisServiciosSolicitados event,
 		Emitter<ServicioState> emit,
 	) async {
-		// El filtro y la busqueda son del tecnico, no del backend: recargar el
-		// listado no tiene que borrarle lo que estaba mirando.
+		// Recargar vuelve a la primera pagina pero no le borra al tecnico la
+		// busqueda ni el filtro que estaba mirando: se mandan de nuevo.
 		final anterior = state is MisServiciosLoaded
 				? state as MisServiciosLoaded
 				: null;
+		final filtroEstado = anterior?.filtroEstado ?? FiltroEstadoServicio.todos;
+		final busqueda = anterior?.busqueda ?? '';
+		final consulta = ++_secuenciaMisServicios;
 
 		emit(const MisServiciosLoading());
 		try {
 			await _cargarPendientesDesdeStorage();
-			final servicios = await _obtenerMisServiciosUseCase.ejecutar();
+			final pagina = await _obtenerMisServiciosUseCase.ejecutar(
+				pagina: 1,
+				busqueda: busqueda,
+				aprobado: filtroEstado.aprobado,
+			);
+			if (consulta != _secuenciaMisServicios) {
+				return;
+			}
 
 			// Recargar habilita volver a preguntar por el PDF de cada orden.
 			_serviciosPdfVerificados.clear();
 
 			emit(
 				MisServiciosLoaded(
-					servicios: servicios,
+					servicios: pagina.servicios,
 					serviciosConPdfConfirmado: Set<String>.from(_serviciosConPdfConfirmado),
-					filtroEstado: anterior?.filtroEstado ?? FiltroEstadoServicio.todos,
-					busqueda: anterior?.busqueda ?? '',
+					filtroEstado: filtroEstado,
+					busqueda: busqueda,
+					total: pagina.total,
+					pagina: pagina.pagina,
+					totalPaginas: pagina.totalPaginas,
 					documentosPendientes: _documentosPendientes.length,
 				),
 			);
 			add(const MisServiciosDisponibilidadPdfSolicitada());
 		} on ServerException catch (e) {
-			emit(ServicioError(mensaje: e.mensaje));
+			if (consulta == _secuenciaMisServicios) {
+				emit(ServicioError(mensaje: e.mensaje));
+			}
 		} catch (_) {
-			emit(const ServicioError(mensaje: 'No se pudieron cargar los servicios.'));
+			if (consulta == _secuenciaMisServicios) {
+				emit(const ServicioError(mensaje: 'No se pudieron cargar los servicios.'));
+			}
 		}
+	}
+
+	/// Vuelve a pedir la primera pagina con la busqueda y el filtro vigentes,
+	/// sin sacar de pantalla el listado (ni el campo de busqueda) mientras tanto.
+	Future<void> _consultarPrimeraPaginaMisServicios(
+		Emitter<ServicioState> emit, {
+		Duration? espera,
+	}) async {
+		final consulta = ++_secuenciaMisServicios;
+		if (espera != null) {
+			await Future<void>.delayed(espera);
+			if (consulta != _secuenciaMisServicios) {
+				return;
+			}
+		}
+
+		if (emit.isDone || state is! MisServiciosLoaded) {
+			return;
+		}
+		final vigente = state as MisServiciosLoaded;
+		emit(
+			vigente.copyWith(
+				actualizando: true,
+				cargandoMas: false,
+				limpiarErrorListado: true,
+				limpiarErrorPaginacion: true,
+			),
+		);
+
+		try {
+			final pagina = await _obtenerMisServiciosUseCase.ejecutar(
+				pagina: 1,
+				busqueda: vigente.busqueda,
+				aprobado: vigente.filtroEstado.aprobado,
+			);
+			if (consulta != _secuenciaMisServicios) {
+				return;
+			}
+
+			_emitirEnMisServicios(
+				emit,
+				(actual) => actual.copyWith(
+					servicios: pagina.servicios,
+					total: pagina.total,
+					pagina: pagina.pagina,
+					totalPaginas: pagina.totalPaginas,
+					actualizando: false,
+				),
+			);
+			if (!isClosed) {
+				add(const MisServiciosDisponibilidadPdfSolicitada());
+			}
+		} on ServerException catch (e) {
+			_cerrarConsultaMisServiciosConError(emit, consulta, e.mensaje);
+		} catch (_) {
+			_cerrarConsultaMisServiciosConError(
+				emit,
+				consulta,
+				'No se pudieron cargar los servicios.',
+			);
+		}
+	}
+
+	/// Si falla la consulta con la busqueda/filtro nuevos, el listado anterior
+	/// no corresponde a lo que pide el tecnico: se vacia y se muestra el error.
+	void _cerrarConsultaMisServiciosConError(
+		Emitter<ServicioState> emit,
+		int consulta,
+		String mensaje,
+	) {
+		if (consulta != _secuenciaMisServicios) {
+			return;
+		}
+
+		_emitirEnMisServicios(
+			emit,
+			(actual) => actual.copyWith(
+				servicios: const <Servicio>[],
+				total: 0,
+				pagina: 0,
+				totalPaginas: 0,
+				actualizando: false,
+				errorListado: mensaje,
+			),
+		);
+	}
+
+	Future<void> _onMisServiciosSiguientePaginaSolicitada(
+		MisServiciosSiguientePaginaSolicitada event,
+		Emitter<ServicioState> emit,
+	) async {
+		if (state is! MisServiciosLoaded) {
+			return;
+		}
+
+		final actual = state as MisServiciosLoaded;
+		if (actual.cargandoMas || actual.actualizando || !actual.hayMasPaginas) {
+			return;
+		}
+		if (actual.errorPaginacion != null && !event.reintento) {
+			return;
+		}
+
+		final consulta = _secuenciaMisServicios;
+		emit(actual.copyWith(cargandoMas: true, limpiarErrorPaginacion: true));
+
+		try {
+			final pagina = await _obtenerMisServiciosUseCase.ejecutar(
+				pagina: actual.pagina + 1,
+				busqueda: actual.busqueda,
+				aprobado: actual.filtroEstado.aprobado,
+			);
+			if (consulta != _secuenciaMisServicios) {
+				return;
+			}
+
+			_emitirEnMisServicios(emit, (vigente) {
+				// El backend pagina por createdAt DESC: si entro un servicio nuevo
+				// entre pagina y pagina, el offset se corre y uno se repite.
+				final idsCargados = vigente.servicios.map((s) => s.id).toSet();
+				return vigente.copyWith(
+					servicios: [
+						...vigente.servicios,
+						...pagina.servicios.where((s) => !idsCargados.contains(s.id)),
+					],
+					total: pagina.total,
+					pagina: pagina.pagina,
+					totalPaginas: pagina.totalPaginas,
+					cargandoMas: false,
+				);
+			});
+			if (!isClosed) {
+				add(const MisServiciosDisponibilidadPdfSolicitada());
+			}
+		} on ServerException catch (e) {
+			_cerrarPaginaMisServiciosConError(emit, consulta, e.mensaje);
+		} catch (_) {
+			_cerrarPaginaMisServiciosConError(
+				emit,
+				consulta,
+				'No se pudieron cargar mas servicios.',
+			);
+		}
+	}
+
+	void _cerrarPaginaMisServiciosConError(
+		Emitter<ServicioState> emit,
+		int consulta,
+		String mensaje,
+	) {
+		if (consulta != _secuenciaMisServicios) {
+			return;
+		}
+
+		_emitirEnMisServicios(
+			emit,
+			(vigente) => vigente.copyWith(
+				cargandoMas: false,
+				errorPaginacion: mensaje,
+			),
+		);
 	}
 
 	/// El listado de GET /servicios/mios no siempre trae el documento, asi que
@@ -919,26 +1108,48 @@ class ServicioBloc extends Bloc<ServicioEvent, ServicioState> {
 		);
 	}
 
-	void _onMisServiciosFiltroEstadoCambiado(
+	Future<void> _onMisServiciosFiltroEstadoCambiado(
 		MisServiciosFiltroEstadoCambiado event,
 		Emitter<ServicioState> emit,
-	) {
+	) async {
 		if (state is! MisServiciosLoaded) {
 			return;
 		}
 
-		emit((state as MisServiciosLoaded).copyWith(filtroEstado: event.filtro));
+		final actual = state as MisServiciosLoaded;
+		if (actual.filtroEstado == event.filtro) {
+			return;
+		}
+
+		emit(actual.copyWith(filtroEstado: event.filtro));
+		await _consultarPrimeraPaginaMisServicios(emit);
 	}
 
-	void _onMisServiciosBusquedaCambiada(
+	Future<void> _onMisServiciosBusquedaCambiada(
 		MisServiciosBusquedaCambiada event,
 		Emitter<ServicioState> emit,
-	) {
+	) async {
 		if (state is! MisServiciosLoaded) {
 			return;
 		}
 
-		emit((state as MisServiciosLoaded).copyWith(busqueda: event.texto));
+		final actual = state as MisServiciosLoaded;
+		if (actual.busqueda == event.texto) {
+			return;
+		}
+
+		// El texto se guarda tal cual para que el campo no salte, pero el
+		// backend ignora los espacios de los bordes: si solo cambiaron esos, la
+		// consulta en vuelo (o la ultima) sigue sirviendo.
+		emit(actual.copyWith(busqueda: event.texto));
+		if (actual.busqueda.trim() == event.texto.trim()) {
+			return;
+		}
+
+		await _consultarPrimeraPaginaMisServicios(
+			emit,
+			espera: _esperaBusquedaMisServicios,
+		);
 	}
 
 	Future<void> _onServicioDocumentoPdfVerSolicitado(

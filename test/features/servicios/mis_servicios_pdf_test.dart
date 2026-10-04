@@ -48,6 +48,27 @@ final Map<String, dynamic> _servicioSinDocumento = {
 	'km': 40,
 };
 
+/// GET /servicios/mios con el shape del contrato: `data` + `meta`.
+http.Response _respuestaPagina(
+	List<Map<String, dynamic>> items, {
+	int page = 1,
+	int totalPages = 1,
+	int? total,
+}) {
+	return http.Response(
+		jsonEncode({
+			'data': items,
+			'meta': {
+				'page': page,
+				'limit': 20,
+				'total': total ?? items.length,
+				'totalPages': totalPages,
+			},
+		}),
+		200,
+	);
+}
+
 class _Entorno {
 	final SecureStorageEnMemoria storage;
 	final ApiClient apiClient;
@@ -144,7 +165,7 @@ void main() {
 			final entorno = _armarEntorno(
 				MockClient((request) async {
 					if (request.url.path.endsWith('/servicios/mios')) {
-						return http.Response(jsonEncode([_servicioSinDocumento]), 200);
+						return _respuestaPagina([_servicioSinDocumento]);
 					}
 					if (request.url.path.endsWith('/servicios/$_servicioId/documento')) {
 						return http.Response(
@@ -175,7 +196,7 @@ void main() {
 			final entorno = _armarEntorno(
 				MockClient((request) async {
 					if (request.url.path.endsWith('/servicios/mios')) {
-						return http.Response(jsonEncode([_servicioSinDocumento]), 200);
+						return _respuestaPagina([_servicioSinDocumento]);
 					}
 					return http.Response('{"message":"Unauthorized"}', 401);
 				}),
@@ -203,7 +224,7 @@ void main() {
 			final entorno = _armarEntorno(
 				MockClient((request) async {
 					if (request.url.path.endsWith('/servicios/mios')) {
-						return http.Response(jsonEncode([_servicioConDocumento]), 200);
+						return _respuestaPagina([_servicioConDocumento]);
 					}
 					if (request.url.path.endsWith('/documento/pdf')) {
 						return http.Response.bytes([37, 80, 68, 70], 200);
@@ -232,7 +253,7 @@ void main() {
 			final entorno = _armarEntorno(
 				MockClient((request) async {
 					if (request.url.path.endsWith('/servicios/mios')) {
-						return http.Response(jsonEncode([_servicioConDocumento]), 200);
+						return _respuestaPagina([_servicioConDocumento]);
 					}
 					return http.Response('{"message":"Not Found"}', 404);
 				}),
@@ -259,7 +280,7 @@ void main() {
 			final entorno = _armarEntorno(
 				MockClient((request) async {
 					if (request.url.path.endsWith('/servicios/mios')) {
-						return http.Response(jsonEncode([_servicioConDocumento]), 200);
+						return _respuestaPagina([_servicioConDocumento]);
 					}
 					return http.Response('{"message":"Unauthorized"}', 401);
 				}),
@@ -287,7 +308,7 @@ void main() {
 			final entorno = _armarEntorno(
 				MockClient((request) async {
 					if (request.url.path.endsWith('/servicios/mios')) {
-						return http.Response(jsonEncode([_servicioConDocumento]), 200);
+						return _respuestaPagina([_servicioConDocumento]);
 					}
 					return http.Response(
 						jsonEncode({
@@ -326,7 +347,7 @@ void main() {
 			final entorno = _armarEntorno(
 				MockClient((request) async {
 					if (request.url.path.endsWith('/servicios/mios')) {
-						return http.Response(jsonEncode([_servicioConDocumento]), 200);
+						return _respuestaPagina([_servicioConDocumento]);
 					}
 					return http.Response(
 						jsonEncode({
@@ -360,7 +381,7 @@ void main() {
 			final entorno = _armarEntorno(
 				MockClient((request) async {
 					if (request.url.path.endsWith('/servicios/mios')) {
-						return http.Response(jsonEncode([_servicioConDocumento]), 200);
+						return _respuestaPagina([_servicioConDocumento]);
 					}
 					return http.Response(jsonEncode({'documento': {}}), 200);
 				}),
@@ -389,7 +410,7 @@ void main() {
 			final entorno = _armarEntorno(
 				MockClient((request) async {
 					if (request.url.path.endsWith('/servicios/mios')) {
-						return http.Response(jsonEncode([_servicioConDocumento]), 200);
+						return _respuestaPagina([_servicioConDocumento]);
 					}
 					return http.Response('{"message":"Unauthorized"}', 401);
 				}),
@@ -414,22 +435,49 @@ void main() {
 		});
 	});
 
-	group('filtro y busqueda', () {
-		test('filtrar y buscar es trabajo del bloc, no de la vista', () async {
+	group('filtro, busqueda y paginacion', () {
+		/// Item del listado con documento, para que el bloc no consulte su PDF.
+		Map<String, dynamic> servicio(String id, {bool aprobado = false}) => {
+					..._servicioConDocumento,
+					'id': id,
+					'aprobado': aprobado,
+				};
+
+		test('lee aprobado del backend sin probar otros nombres', () async {
 			final entorno = _armarEntorno(
 				MockClient((request) async {
 					if (request.url.path.endsWith('/servicios/mios')) {
-						return http.Response(
-							jsonEncode([
-								{..._servicioConDocumento, 'aprobado': true},
-								{
-									..._servicioConDocumento,
-									'id': '33333333-3333-4333-8333-333333333333',
-									'sintoma': 'Celda rota',
-									'aprobado': false,
-								},
-							]),
-							200,
+						return _respuestaPagina([
+							servicio('a', aprobado: true),
+							{
+								...servicio('b'),
+								'aprobado_liquidacion': true,
+								'liquidacion': {'aprobado': true},
+							},
+						]);
+					}
+					return http.Response('{}', 404);
+				}),
+			);
+
+			final listado = await _cargarListado(entorno);
+			expect(listado.servicios.map((s) => s.aprobado), [true, false]);
+
+			await entorno.cerrar();
+		});
+
+		test('manda busqueda y filtro al backend y muestra lo que devuelve', () async {
+			final pedidos = <Map<String, String>>[];
+			final entorno = _armarEntorno(
+				MockClient((request) async {
+					if (request.url.path.endsWith('/servicios/mios')) {
+						pedidos.add(request.url.queryParameters);
+						// Mezcla aprobados y no: si la app filtrara localmente, se notaria.
+						// El total cambia por pedido para saber a cual corresponde el estado.
+						return _respuestaPagina(
+							[servicio('a', aprobado: true), servicio('b')],
+							total: 100 + pedidos.length,
+							totalPages: 6,
 						);
 					}
 					return http.Response('{}', 404);
@@ -437,34 +485,174 @@ void main() {
 			);
 
 			final listado = await _cargarListado(entorno);
-			expect(listado.filtroEstado, FiltroEstadoServicio.todos);
-			expect(listado.serviciosFiltrados, hasLength(2));
+			expect(pedidos.single, {'page': '1', 'limit': '20'});
+			expect(listado.total, 101);
+			expect(listado.hayMasPaginas, isTrue);
 
 			final filtrado = entorno.servicioBloc.stream.firstWhere(
-				(estado) =>
-					estado is MisServiciosLoaded &&
-					estado.filtroEstado == FiltroEstadoServicio.pendientes,
+				(estado) => estado is MisServiciosLoaded && estado.total == 102,
 			);
 			entorno.servicioBloc.add(
 				const MisServiciosFiltroEstadoCambiado(
 					filtro: FiltroEstadoServicio.pendientes,
 				),
 			);
-			expect(_comoListado(await filtrado).serviciosFiltrados, hasLength(1));
+			final conFiltro = _comoListado(await filtrado);
+			expect(pedidos.last, {'aprobado': 'false', 'page': '1', 'limit': '20'});
+			expect(conFiltro.servicios, hasLength(2));
+			expect(conFiltro.actualizando, isFalse);
 
 			final buscado = entorno.servicioBloc.stream.firstWhere(
-				(estado) => estado is MisServiciosLoaded && estado.busqueda == 'celda',
+				(estado) => estado is MisServiciosLoaded && estado.total == 103,
 			);
 			entorno.servicioBloc.add(
-				const MisServiciosBusquedaCambiada(texto: 'celda'),
+				const MisServiciosBusquedaCambiada(texto: '  perez '),
 			);
-			final conBusqueda = _comoListado(await buscado);
-			expect(conBusqueda.serviciosFiltrados.single.sintoma, 'Celda rota');
+			await buscado;
+			expect(pedidos.last, {
+				'q': 'perez',
+				'aprobado': 'false',
+				'page': '1',
+				'limit': '20',
+			});
 
 			// Recargar no le borra al tecnico lo que estaba mirando.
 			final recargado = await _cargarListado(entorno);
 			expect(recargado.filtroEstado, FiltroEstadoServicio.pendientes);
-			expect(recargado.busqueda, 'celda');
+			expect(recargado.busqueda, '  perez ');
+			expect(pedidos.last, {
+				'q': 'perez',
+				'aprobado': 'false',
+				'page': '1',
+				'limit': '20',
+			});
+
+			await entorno.cerrar();
+		});
+
+		test('la busqueda espera a que el tecnico deje de tipear', () async {
+			final busquedas = <String?>[];
+			final entorno = _armarEntorno(
+				MockClient((request) async {
+					if (request.url.path.endsWith('/servicios/mios')) {
+						busquedas.add(request.url.queryParameters['q']);
+						return _respuestaPagina(
+							[servicio('a')],
+							total: busquedas.length,
+						);
+					}
+					return http.Response('{}', 404);
+				}),
+			);
+			await _cargarListado(entorno);
+
+			final buscado = entorno.servicioBloc.stream.firstWhere(
+				(estado) => estado is MisServiciosLoaded && estado.total == 2,
+			);
+			entorno.servicioBloc
+				..add(const MisServiciosBusquedaCambiada(texto: 'p'))
+				..add(const MisServiciosBusquedaCambiada(texto: 'pe'))
+				..add(const MisServiciosBusquedaCambiada(texto: 'per'));
+			final conBusqueda = _comoListado(await buscado);
+
+			expect(busquedas, [null, 'per']);
+			expect(conBusqueda.busqueda, 'per');
+
+			await entorno.cerrar();
+		});
+
+		test('la pagina siguiente se agrega sin repetir servicios', () async {
+			final paginas = <String?>[];
+			final entorno = _armarEntorno(
+				MockClient((request) async {
+					if (request.url.path.endsWith('/servicios/mios')) {
+						final page = request.url.queryParameters['page'];
+						paginas.add(page);
+						if (page == '1') {
+							return _respuestaPagina(
+								[servicio('a'), servicio('b')],
+								total: 3,
+								totalPages: 2,
+							);
+						}
+						// Entro un servicio nuevo entre pagina y pagina: 'b' se repite.
+						return _respuestaPagina(
+							[servicio('b'), servicio('c')],
+							page: 2,
+							total: 4,
+							totalPages: 2,
+						);
+					}
+					return http.Response('{}', 404);
+				}),
+			);
+			await _cargarListado(entorno);
+
+			final completo = entorno.servicioBloc.stream.firstWhere(
+				(estado) => estado is MisServiciosLoaded && estado.pagina == 2,
+			);
+			entorno.servicioBloc.add(const MisServiciosSiguientePaginaSolicitada());
+			final listado = _comoListado(await completo);
+
+			expect(listado.servicios.map((s) => s.id), ['a', 'b', 'c']);
+			expect(listado.total, 4);
+			expect(listado.hayMasPaginas, isFalse);
+			expect(listado.cargandoMas, isFalse);
+
+			// Sin paginas pendientes no se vuelve a pedir.
+			entorno.servicioBloc.add(const MisServiciosSiguientePaginaSolicitada());
+			await Future<void>.delayed(const Duration(milliseconds: 50));
+			expect(paginas, ['1', '2']);
+
+			await entorno.cerrar();
+		});
+
+		test('si falla la pagina siguiente solo se reintenta a pedido', () async {
+			var paginasPedidas = 0;
+			final entorno = _armarEntorno(
+				MockClient((request) async {
+					if (request.url.path.endsWith('/servicios/mios')) {
+						if (request.url.queryParameters['page'] == '1') {
+							return _respuestaPagina([servicio('a')], total: 2, totalPages: 2);
+						}
+						paginasPedidas++;
+						if (paginasPedidas == 1) {
+							return http.Response('{"message":"Fallo el backend"}', 500);
+						}
+						return _respuestaPagina(
+							[servicio('b')],
+							page: 2,
+							total: 2,
+							totalPages: 2,
+						);
+					}
+					return http.Response('{}', 404);
+				}),
+			);
+			await _cargarListado(entorno);
+
+			final conError = entorno.servicioBloc.stream.firstWhere(
+				(estado) => estado is MisServiciosLoaded && estado.errorPaginacion != null,
+			);
+			entorno.servicioBloc.add(const MisServiciosSiguientePaginaSolicitada());
+			final fallido = _comoListado(await conError);
+			expect(fallido.errorPaginacion, 'Fallo el backend');
+			expect(fallido.servicios.map((s) => s.id), ['a']);
+
+			// El scroll no reintenta solo.
+			entorno.servicioBloc.add(const MisServiciosSiguientePaginaSolicitada());
+			await Future<void>.delayed(const Duration(milliseconds: 50));
+			expect(paginasPedidas, 1);
+
+			final recuperado = entorno.servicioBloc.stream.firstWhere(
+				(estado) => estado is MisServiciosLoaded && estado.pagina == 2,
+			);
+			entorno.servicioBloc.add(
+				const MisServiciosSiguientePaginaSolicitada(reintento: true),
+			);
+			final listado = _comoListado(await recuperado);
+			expect(listado.servicios.map((s) => s.id), ['a', 'b']);
+			expect(listado.errorPaginacion, isNull);
 
 			await entorno.cerrar();
 		});
@@ -477,7 +665,7 @@ void main() {
 				autorizaciones[request.url.path] = request.headers['Authorization'];
 
 				if (request.url.path.endsWith('/servicios/mios')) {
-					return http.Response(jsonEncode([_servicioSinDocumento]), 200);
+					return _respuestaPagina([_servicioSinDocumento]);
 				}
 				if (request.url.path.endsWith('/documento/pdf')) {
 					return http.Response.bytes([37, 80, 68, 70], 200);
