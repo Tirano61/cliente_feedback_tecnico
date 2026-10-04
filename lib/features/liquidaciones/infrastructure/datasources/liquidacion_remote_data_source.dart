@@ -20,13 +20,6 @@ class LiquidacionRemoteDataSource {
     );
   }
 
-  Future<http.Response> obtenerMisLiquidacionesRawSinPaginacion({
-    required String estado,
-  }) {
-    final queryEstado = Uri.encodeQueryComponent(estado);
-    return _apiClient.get('${ApiConstants.liquidacionesMias}?estado=$queryEstado');
-  }
-
   Future<http.Response> obtenerItemsLiquidacionRaw(String liquidacionId) {
     return _apiClient.get(ApiConstants.liquidacionItems(liquidacionId));
   }
