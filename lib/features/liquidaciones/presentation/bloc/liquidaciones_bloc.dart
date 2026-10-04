@@ -36,12 +36,23 @@ class LiquidacionesBloc extends Bloc<LiquidacionesEvent, LiquidacionesState> {
 
   Future<void> _cargarLiquidaciones(Emitter<LiquidacionesState> emit) async {
     try {
-      final respuesta = await _obtenerMisLiquidacionesUseCase.ejecutar();
+      final liquidaciones = await _obtenerMisLiquidacionesUseCase.ejecutar();
+
+      List<Liquidacion> porEstado(EstadoLiquidacion estado) =>
+          liquidaciones.where((item) => item.estado == estado).toList();
+
+      final aprobadas = porEstado(EstadoLiquidacion.aprobada);
+      final totalAprobadasUsd = aprobadas.fold<double>(
+        0,
+        (acum, item) => acum + item.resumen.totalLiquidacionUsd,
+      );
 
       emit(
         LiquidacionesLoaded(
-          liquidaciones: respuesta.liquidaciones,
-          meta: respuesta.meta,
+          pendientes: porEstado(EstadoLiquidacion.pendiente),
+          aprobadas: aprobadas,
+          reabiertas: porEstado(EstadoLiquidacion.reabierta),
+          totalAprobadasUsd: totalAprobadasUsd,
         ),
       );
     } on AuthException catch (error) {

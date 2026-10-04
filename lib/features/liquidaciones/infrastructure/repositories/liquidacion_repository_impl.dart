@@ -15,18 +15,11 @@ class LiquidacionRepositoryImpl implements ILiquidacionRepository {
     required int page,
     required int limit,
   }) async {
-    final estadoQuery = LiquidacionDto.filtroAString(estado);
-    var response = await _remoteDataSource.obtenerMisLiquidacionesRaw(
+    final response = await _remoteDataSource.obtenerMisLiquidacionesRaw(
       estado: LiquidacionDto.filtroAString(estado),
       page: page,
       limit: limit,
     );
-
-    if (response.statusCode == 400 && _debeReintentarSinPaginacion(response.body)) {
-      response = await _remoteDataSource.obtenerMisLiquidacionesRawSinPaginacion(
-        estado: estadoQuery,
-      );
-    }
 
     if (response.statusCode == 401 || response.statusCode == 403) {
       throw const AuthException('Sesion expirada. Inicia sesion nuevamente.');
@@ -87,31 +80,5 @@ class LiquidacionRepositoryImpl implements ILiquidacionRepository {
     }
 
     return null;
-  }
-
-  bool _debeReintentarSinPaginacion(String body) {
-    final json = _remoteDataSource.parsearMapaSeguro(body);
-    if (json == null) {
-      return false;
-    }
-
-    final mensaje = json['message'];
-    if (mensaje is String) {
-      return _contieneErrorParametroNoPermitido(mensaje);
-    }
-
-    if (mensaje is List) {
-      return mensaje.any(
-        (item) => _contieneErrorParametroNoPermitido(item.toString()),
-      );
-    }
-
-    return false;
-  }
-
-  bool _contieneErrorParametroNoPermitido(String texto) {
-    final normalizado = texto.toLowerCase();
-    return normalizado.contains('property page should not exist') ||
-        normalizado.contains('property limit should not exist');
   }
 }

@@ -35,31 +35,36 @@ class LiquidacionesSesionExpirada extends LiquidacionesState {
 }
 
 class LiquidacionesLoaded extends LiquidacionesState {
-  final List<Liquidacion> liquidaciones;
-  final MetaLiquidaciones meta;
+  /// Listas por estado y total, calculados por el BLoC sobre todas las paginas.
+  final List<Liquidacion> pendientes;
+  final List<Liquidacion> aprobadas;
+  final List<Liquidacion> reabiertas;
+  final double totalAprobadasUsd;
   final Map<String, List<ItemLiquidacion>> detallesItemsPorLiquidacion;
   final Set<String> detallesCargandoIds;
   final String? mensajeAviso;
 
   const LiquidacionesLoaded({
-    required this.liquidaciones,
-    required this.meta,
+    required this.pendientes,
+    required this.aprobadas,
+    required this.reabiertas,
+    required this.totalAprobadasUsd,
     this.detallesItemsPorLiquidacion = const {},
     this.detallesCargandoIds = const {},
     this.mensajeAviso,
   });
 
   LiquidacionesLoaded copyWith({
-    List<Liquidacion>? liquidaciones,
-    MetaLiquidaciones? meta,
     Map<String, List<ItemLiquidacion>>? detallesItemsPorLiquidacion,
     Set<String>? detallesCargandoIds,
     String? mensajeAviso,
     bool limpiarMensajeAviso = false,
   }) {
     return LiquidacionesLoaded(
-      liquidaciones: liquidaciones ?? this.liquidaciones,
-      meta: meta ?? this.meta,
+      pendientes: pendientes,
+      aprobadas: aprobadas,
+      reabiertas: reabiertas,
+      totalAprobadasUsd: totalAprobadasUsd,
       detallesItemsPorLiquidacion:
           detallesItemsPorLiquidacion ?? this.detallesItemsPorLiquidacion,
       detallesCargandoIds: detallesCargandoIds ?? this.detallesCargandoIds,
@@ -69,8 +74,10 @@ class LiquidacionesLoaded extends LiquidacionesState {
 
   @override
   List<Object?> get props => [
-        liquidaciones,
-        meta,
+        pendientes,
+        aprobadas,
+        reabiertas,
+        totalAprobadasUsd,
         detallesItemsPorLiquidacion,
         detallesCargandoIds,
         mensajeAviso,

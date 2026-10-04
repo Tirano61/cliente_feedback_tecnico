@@ -61,30 +61,13 @@ class _LiquidacionesScreenState extends State<LiquidacionesScreen> {
             }
 
             if (state is LiquidacionesLoaded) {
-              final pendientes = _filtrarPorEstado(
-                state.liquidaciones,
-                EstadoLiquidacion.pendiente,
-              );
-              final aprobadas = _filtrarPorEstado(
-                state.liquidaciones,
-                EstadoLiquidacion.aprobada,
-              );
-              final reabiertas = _filtrarPorEstado(
-                state.liquidaciones,
-                EstadoLiquidacion.reabierta,
-              );
-              final totalAprobadas = aprobadas.fold<double>(
-                0,
-                (acum, item) => acum + item.resumen.totalLiquidacionUsd,
-              );
-
               return Column(
                 children: [
                   _HeaderTotales(
-                    totalAprobadas: totalAprobadas,
-                    pendientes: pendientes.length,
-                    aprobadas: aprobadas.length,
-                    reabiertas: reabiertas.length,
+                    totalAprobadas: state.totalAprobadasUsd,
+                    pendientes: state.pendientes.length,
+                    aprobadas: state.aprobadas.length,
+                    reabiertas: state.reabiertas.length,
                   ),
                   const TabBar(
                     tabs: [
@@ -98,7 +81,7 @@ class _LiquidacionesScreenState extends State<LiquidacionesScreen> {
                       children: [
                         _ListaLiquidacionesTab(
                           estado: EstadoLiquidacion.pendiente,
-                          liquidaciones: pendientes,
+                          liquidaciones: state.pendientes,
                           detallesItemsPorLiquidacion:
                               state.detallesItemsPorLiquidacion,
                           detallesCargandoIds: state.detallesCargandoIds,
@@ -111,7 +94,7 @@ class _LiquidacionesScreenState extends State<LiquidacionesScreen> {
                         ),
                         _ListaLiquidacionesTab(
                           estado: EstadoLiquidacion.aprobada,
-                          liquidaciones: aprobadas,
+                          liquidaciones: state.aprobadas,
                           detallesItemsPorLiquidacion:
                               state.detallesItemsPorLiquidacion,
                           detallesCargandoIds: state.detallesCargandoIds,
@@ -124,7 +107,7 @@ class _LiquidacionesScreenState extends State<LiquidacionesScreen> {
                         ),
                         _ListaLiquidacionesTab(
                           estado: EstadoLiquidacion.reabierta,
-                          liquidaciones: reabiertas,
+                          liquidaciones: state.reabiertas,
                           detallesItemsPorLiquidacion:
                               state.detallesItemsPorLiquidacion,
                           detallesCargandoIds: state.detallesCargandoIds,
@@ -147,13 +130,6 @@ class _LiquidacionesScreenState extends State<LiquidacionesScreen> {
         ),
       ),
     );
-  }
-
-  List<Liquidacion> _filtrarPorEstado(
-    List<Liquidacion> liquidaciones,
-    EstadoLiquidacion estado,
-  ) {
-    return liquidaciones.where((item) => item.estado == estado).toList();
   }
 
   void _abrirDetalleLiquidacion(Liquidacion liquidacion) {
