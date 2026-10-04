@@ -8,6 +8,7 @@ import 'package:cliente_feedback_tecnico/core/auth/secure_storage.dart';
 import 'package:cliente_feedback_tecnico/core/error/failures.dart';
 import 'package:cliente_feedback_tecnico/features/servicios/domain/entities/cliente.dart';
 import 'package:cliente_feedback_tecnico/features/servicios/domain/entities/cotizacion_actual.dart';
+import 'package:cliente_feedback_tecnico/features/servicios/domain/entities/orden_mis_servicios.dart';
 import 'package:cliente_feedback_tecnico/features/servicios/domain/entities/orden_servicio_respuesta.dart';
 import 'package:cliente_feedback_tecnico/features/servicios/domain/entities/pagina_servicios.dart';
 import 'package:cliente_feedback_tecnico/features/servicios/domain/entities/politica_firma_canal.dart';
@@ -62,12 +63,18 @@ class ServicioRepositoryImpl implements IServicioRepository {
 		required int limite,
 		String busqueda = '',
 		bool? aprobado,
+		OrdenMisServicios? orden,
 	}) async {
 		final texto = busqueda.trim();
 		final query = Uri(
 			queryParameters: {
 				if (texto.isNotEmpty) 'q': texto,
 				if (aprobado != null) 'aprobado': '$aprobado',
+				if (orden != null)
+					'orderBy': switch (orden) {
+						OrdenMisServicios.fechaCarga => 'fechaCarga',
+						OrdenMisServicios.fechaServicio => 'fechaServicio',
+					},
 				'page': '$pagina',
 				'limit': '$limite',
 			},

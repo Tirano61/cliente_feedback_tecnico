@@ -2,6 +2,7 @@ import 'dart:typed_data';
 
 import 'package:cliente_feedback_tecnico/features/servicios/domain/entities/cliente.dart';
 import 'package:cliente_feedback_tecnico/features/servicios/domain/entities/cotizacion_actual.dart';
+import 'package:cliente_feedback_tecnico/features/servicios/domain/entities/orden_mis_servicios.dart';
 import 'package:cliente_feedback_tecnico/features/servicios/domain/entities/orden_servicio_respuesta.dart';
 import 'package:cliente_feedback_tecnico/features/servicios/domain/entities/pagina_servicios.dart';
 import 'package:cliente_feedback_tecnico/features/servicios/domain/entities/repuesto.dart';
@@ -11,12 +12,14 @@ import 'package:cliente_feedback_tecnico/features/servicios/domain/entities/soli
 abstract class IServicioRepository {
 	Future<OrdenServicioRespuesta> cargarServicio(Servicio servicio);
 
-	/// GET /servicios/mios. `busqueda` vacia y `aprobado` null no filtran.
+	/// GET /servicios/mios. `busqueda` vacia y `aprobado` null no filtran;
+	/// `orden` null deja el orden por defecto del backend.
 	Future<PaginaServicios> obtenerMisServicios({
 		required int pagina,
 		required int limite,
 		String busqueda = '',
 		bool? aprobado,
+		OrdenMisServicios? orden,
 	});
 
 	Future<List<Cliente>> buscarClientes(String query);
