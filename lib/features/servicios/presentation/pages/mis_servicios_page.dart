@@ -142,7 +142,11 @@ class _MisServiciosPageState extends State<MisServiciosPage> {
 			},
 		);
 
-		if (state.servicios.isEmpty) {
+		final sinServiciosCargados = state.servicios.isEmpty &&
+				!state.hayFiltrosActivos &&
+				!state.actualizando &&
+				state.errorListado == null;
+		if (sinServiciosCargados) {
 			return Column(
 				children: [
 					panelPendientes,
@@ -153,7 +157,10 @@ class _MisServiciosPageState extends State<MisServiciosPage> {
 			);
 		}
 
-		final serviciosFiltrados = state.serviciosFiltrados;
+		final errorListado = state.errorListado;
+		final mostrarPie = state.hayMasPaginas ||
+				state.cargandoMas ||
+				state.errorPaginacion != null;
 
 		return Column(
 			children: [
@@ -164,7 +171,7 @@ class _MisServiciosPageState extends State<MisServiciosPage> {
 						controller: _busquedaController,
 						decoration: const InputDecoration(
 							prefixIcon: Icon(Icons.search),
-							labelText: 'Buscar por sintoma, modelo, serie o ID',
+							labelText: 'Buscar por cliente, sintoma, modelo o serie',
 						),
 						onChanged: (valor) {
 							context.read<ServicioBloc>().add(
@@ -183,19 +190,51 @@ class _MisServiciosPageState extends State<MisServiciosPage> {
 					},
 				),
 				panelPendientes,
-				if (serviciosFiltrados.isEmpty)
-					const Expanded(
+				Padding(
+					padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+					child: SizedBox(
+						height: 4,
+						child: state.actualizando ? const LinearProgressIndicator() : null,
+					),
+				),
+				if (errorListado != null)
+					Expanded(
 						child: Center(
-							child: Text('No hay servicios para los filtros aplicados.'),
+							child: Column(
+								mainAxisSize: MainAxisSize.min,
+								children: [
+									Text(errorListado, textAlign: TextAlign.center),
+									const SizedBox(height: 12),
+									OutlinedButton.icon(
+										onPressed: () {
+											context.read<ServicioBloc>().add(
+												const MisServiciosSolicitados(),
+											);
+										},
+										icon: const Icon(Icons.refresh),
+										label: const Text('Reintentar'),
+									),
+								],
+							),
+						),
+					)
+				else if (state.servicios.isEmpty)
+					Expanded(
+						child: Center(
+							child: Text(
+								state.actualizando
+										? 'Buscando servicios...'
+										: 'No hay servicios para los filtros aplicados.',
+							),
 						),
 					)
 				else ...[
 					Padding(
-						padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+						padding: const EdgeInsets.fromLTRB(16, 4, 16, 0),
 						child: Align(
 							alignment: Alignment.centerLeft,
 							child: Text(
-								'Se muestran ${serviciosFiltrados.length} de ${state.servicios.length} servicios',
+								'Se muestran ${state.servicios.length} de ${state.total} servicios',
 								style: Theme.of(context).textTheme.bodySmall,
 							),
 						),
@@ -205,39 +244,68 @@ class _MisServiciosPageState extends State<MisServiciosPage> {
 							onRefresh: () async {
 								context.read<ServicioBloc>().add(const MisServiciosSolicitados());
 							},
-							child: ListView.separated(
-								padding: const EdgeInsets.all(16),
-								itemCount: serviciosFiltrados.length,
-								separatorBuilder: (_, _) => const SizedBox(height: 12),
-								itemBuilder: (context, index) {
-									final servicio = serviciosFiltrados[index];
-									final servicioId = servicio.id.trim();
-									return _TarjetaServicio(
-										servicio: servicio,
-										tienePdf: state.tienePdfDisponible(servicio),
-										subiendoPdfAhora: state.servicioIdSubiendoPdf == servicioId,
-										descargandoPdf: state.servicioIdDescargandoPdf == servicioId,
-										copiandoEnlacePdf:
-												state.servicioIdCopiandoEnlacePdf == servicioId,
-										onVerPdf: () {
-											context.read<ServicioBloc>().add(
-												ServicioDocumentoPdfVerSolicitado(servicio: servicio),
-											);
-										},
-										onCopiarEnlacePdf: () {
-											context.read<ServicioBloc>().add(
-												ServicioDocumentoEnlacePdfCopiarSolicitado(
-													servicio: servicio,
-												),
-											);
-										},
-										onSubirPdfAhora: () {
-											context.read<ServicioBloc>().add(
-												ServicioDocumentoSubirAhoraSolicitado(servicio: servicio),
-											);
-										},
-									);
+							child: NotificationListener<ScrollNotification>(
+								// Cerca del final se pide la pagina siguiente; el bloc descarta
+								// los pedidos repetidos mientras carga.
+								onNotification: (notificacion) {
+									if (notificacion.metrics.extentAfter < 400) {
+										context.read<ServicioBloc>().add(
+											const MisServiciosSiguientePaginaSolicitada(),
+										);
+									}
+									return false;
 								},
+								child: ListView.separated(
+									padding: const EdgeInsets.all(16),
+									itemCount: state.servicios.length + (mostrarPie ? 1 : 0),
+									separatorBuilder: (_, _) => const SizedBox(height: 12),
+									itemBuilder: (context, index) {
+										if (index == state.servicios.length) {
+											return _PiePaginacion(
+												cargandoMas: state.cargandoMas,
+												errorPaginacion: state.errorPaginacion,
+												onCargarMas: () {
+													context.read<ServicioBloc>().add(
+														const MisServiciosSiguientePaginaSolicitada(),
+													);
+												},
+												onReintentar: () {
+													context.read<ServicioBloc>().add(
+														const MisServiciosSiguientePaginaSolicitada(reintento: true),
+													);
+												},
+											);
+										}
+
+										final servicio = state.servicios[index];
+										final servicioId = servicio.id.trim();
+										return _TarjetaServicio(
+											servicio: servicio,
+											tienePdf: state.tienePdfDisponible(servicio),
+											subiendoPdfAhora: state.servicioIdSubiendoPdf == servicioId,
+											descargandoPdf: state.servicioIdDescargandoPdf == servicioId,
+											copiandoEnlacePdf:
+													state.servicioIdCopiandoEnlacePdf == servicioId,
+											onVerPdf: () {
+												context.read<ServicioBloc>().add(
+													ServicioDocumentoPdfVerSolicitado(servicio: servicio),
+												);
+											},
+											onCopiarEnlacePdf: () {
+												context.read<ServicioBloc>().add(
+													ServicioDocumentoEnlacePdfCopiarSolicitado(
+														servicio: servicio,
+													),
+												);
+											},
+											onSubirPdfAhora: () {
+												context.read<ServicioBloc>().add(
+													ServicioDocumentoSubirAhoraSolicitado(servicio: servicio),
+												);
+											},
+										);
+									},
+								),
 							),
 						),
 					),
@@ -281,6 +349,55 @@ class _FiltrosEstado extends StatelessWidget {
 						onSelected: (_) => onChanged(FiltroEstadoServicio.pendientes),
 					),
 				],
+			),
+		);
+	}
+}
+
+/// Ultimo item del listado: progreso, error de la pagina siguiente o boton
+/// para pedirla cuando el listado no alcanza a llenar la pantalla.
+class _PiePaginacion extends StatelessWidget {
+	final bool cargandoMas;
+	final String? errorPaginacion;
+	final VoidCallback onCargarMas;
+	final VoidCallback onReintentar;
+
+	const _PiePaginacion({
+		required this.cargandoMas,
+		required this.errorPaginacion,
+		required this.onCargarMas,
+		required this.onReintentar,
+	});
+
+	@override
+	Widget build(BuildContext context) {
+		if (cargandoMas) {
+			return const Padding(
+				padding: EdgeInsets.symmetric(vertical: 8),
+				child: Center(child: CircularProgressIndicator()),
+			);
+		}
+
+		final error = errorPaginacion;
+		if (error != null) {
+			return Column(
+				children: [
+					Text(error, textAlign: TextAlign.center),
+					const SizedBox(height: 8),
+					OutlinedButton.icon(
+						onPressed: onReintentar,
+						icon: const Icon(Icons.refresh),
+						label: const Text('Reintentar'),
+					),
+				],
+			);
+		}
+
+		return Center(
+			child: OutlinedButton.icon(
+				onPressed: onCargarMas,
+				icon: const Icon(Icons.expand_more),
+				label: const Text('Cargar mas'),
 			),
 		);
 	}

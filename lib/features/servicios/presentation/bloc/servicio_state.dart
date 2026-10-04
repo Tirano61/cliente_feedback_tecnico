@@ -337,6 +337,8 @@ class MisServiciosLoading extends ServicioState {
 class MisServiciosLoaded extends ServicioState {
 	static const Object _sinCambioMensajePendientes = Object();
 
+	/// Paginas ya traidas, en el orden del backend (createdAt DESC). La
+	/// busqueda y el filtro los aplica el backend: se renderiza tal cual.
 	final List<Servicio> servicios;
 
 	/// Ordenes que el backend confirmo que ya tienen PDF aunque el listado de
@@ -344,6 +346,22 @@ class MisServiciosLoaded extends ServicioState {
 	final Set<String> serviciosConPdfConfirmado;
 	final FiltroEstadoServicio filtroEstado;
 	final String busqueda;
+
+	/// `meta.total` del backend: cuenta lo que matchea la busqueda y el filtro.
+	final int total;
+	final int pagina;
+	final int totalPaginas;
+
+	/// Se esta trayendo de nuevo la primera pagina por un cambio de busqueda o
+	/// filtro. El listado anterior sigue visible hasta que llegue la respuesta.
+	final bool actualizando;
+	final bool cargandoMas;
+
+	/// Fallo la consulta de la primera pagina con la busqueda/filtro vigentes.
+	final String? errorListado;
+
+	/// Fallo la carga de la pagina siguiente; lo ya traido sigue valiendo.
+	final String? errorPaginacion;
 	final int documentosPendientes;
 	final bool reintentandoPendientes;
 	final String? servicioIdSubiendoPdf;
@@ -362,6 +380,13 @@ class MisServiciosLoaded extends ServicioState {
 		this.serviciosConPdfConfirmado = const <String>{},
 		this.filtroEstado = FiltroEstadoServicio.todos,
 		this.busqueda = '',
+		this.total = 0,
+		this.pagina = 0,
+		this.totalPaginas = 0,
+		this.actualizando = false,
+		this.cargandoMas = false,
+		this.errorListado,
+		this.errorPaginacion,
 		this.documentosPendientes = 0,
 		this.reintentandoPendientes = false,
 		this.servicioIdSubiendoPdf,
@@ -372,49 +397,11 @@ class MisServiciosLoaded extends ServicioState {
 		this.mensajePendientes,
 	});
 
-	/// Listado ya filtrado por estado y texto, y ordenado del mas nuevo al mas
-	/// viejo. La vista solo lo renderiza.
-	List<Servicio> get serviciosFiltrados {
-		final texto = busqueda.trim().toLowerCase();
+	bool get hayMasPaginas => pagina < totalPaginas;
 
-		final filtrados = servicios.where((servicio) {
-			final coincideEstado = switch (filtroEstado) {
-				FiltroEstadoServicio.aprobados => servicio.aprobado,
-				FiltroEstadoServicio.pendientes => !servicio.aprobado,
-				FiltroEstadoServicio.todos => true,
-			};
-
-			if (!coincideEstado) {
-				return false;
-			}
-
-			if (texto.isEmpty) {
-				return true;
-			}
-
-			return servicio.sintoma.toLowerCase().contains(texto) ||
-					servicio.equipoModelo.toLowerCase().contains(texto) ||
-					servicio.equipoNroSerie.toLowerCase().contains(texto) ||
-					servicio.id.toLowerCase().contains(texto);
-		}).toList();
-
-		filtrados.sort((a, b) {
-			final fechaA = a.fechaHoraServicio ?? a.fecha;
-			final fechaB = b.fechaHoraServicio ?? b.fecha;
-			if (fechaA == null && fechaB == null) {
-				return 0;
-			}
-			if (fechaA == null) {
-				return 1;
-			}
-			if (fechaB == null) {
-				return -1;
-			}
-			return fechaB.compareTo(fechaA);
-		});
-
-		return filtrados;
-	}
+	/// Distingue "el tecnico no tiene servicios" de "nada matchea el filtro".
+	bool get hayFiltrosActivos =>
+			busqueda.trim().isNotEmpty || filtroEstado != FiltroEstadoServicio.todos;
 
 	/// La orden tiene PDF si el listado ya lo trae o si el backend lo confirmo.
 	bool tienePdfDisponible(Servicio servicio) {
@@ -427,6 +414,15 @@ class MisServiciosLoaded extends ServicioState {
 		Set<String>? serviciosConPdfConfirmado,
 		FiltroEstadoServicio? filtroEstado,
 		String? busqueda,
+		int? total,
+		int? pagina,
+		int? totalPaginas,
+		bool? actualizando,
+		bool? cargandoMas,
+		String? errorListado,
+		bool limpiarErrorListado = false,
+		String? errorPaginacion,
+		bool limpiarErrorPaginacion = false,
 		int? documentosPendientes,
 		bool? reintentandoPendientes,
 		String? servicioIdSubiendoPdf,
@@ -448,6 +444,16 @@ class MisServiciosLoaded extends ServicioState {
 					serviciosConPdfConfirmado ?? this.serviciosConPdfConfirmado,
 			filtroEstado: filtroEstado ?? this.filtroEstado,
 			busqueda: busqueda ?? this.busqueda,
+			total: total ?? this.total,
+			pagina: pagina ?? this.pagina,
+			totalPaginas: totalPaginas ?? this.totalPaginas,
+			actualizando: actualizando ?? this.actualizando,
+			cargandoMas: cargandoMas ?? this.cargandoMas,
+			errorListado:
+					limpiarErrorListado ? null : (errorListado ?? this.errorListado),
+			errorPaginacion: limpiarErrorPaginacion
+					? null
+					: (errorPaginacion ?? this.errorPaginacion),
 			documentosPendientes: documentosPendientes ?? this.documentosPendientes,
 			reintentandoPendientes:
 					reintentandoPendientes ?? this.reintentandoPendientes,
@@ -479,6 +485,13 @@ class MisServiciosLoaded extends ServicioState {
 				serviciosConPdfConfirmado,
 				filtroEstado,
 				busqueda,
+				total,
+				pagina,
+				totalPaginas,
+				actualizando,
+				cargandoMas,
+				errorListado,
+				errorPaginacion,
 				documentosPendientes,
 				reintentandoPendientes,
 				servicioIdSubiendoPdf,

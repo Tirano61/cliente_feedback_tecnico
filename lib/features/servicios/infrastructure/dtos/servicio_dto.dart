@@ -228,7 +228,10 @@ class ServicioDto {
 			tecnicoId: json['tecnicoId']?.toString() ?? json['tecnico_id']?.toString() ?? '',
 			fecha: DateTime.tryParse(json['fecha']?.toString() ?? ''),
 			resuelto: json['resuelto'] == true,
-			aprobado: _aprobadoDesdeJson(json),
+			// GET /servicios/mios, /servicios y /servicios/:id siempre lo mandan.
+			// La respuesta de POST /servicios no: una orden recien creada no tiene
+			// liquidacion aprobada, asi que su ausencia es false.
+			aprobado: json['aprobado'] == true,
 		);
 	}
 
@@ -538,37 +541,6 @@ class ServicioDto {
 		}
 		final texto = valor.toString().trim();
 		return texto.isEmpty ? null : texto;
-	}
-
-	static bool _aprobadoDesdeJson(Map<String, dynamic> json) {
-		if (json.containsKey('aprobado')) {
-			return _boolDesdeDynamic(json['aprobado']);
-		}
-
-		if (json.containsKey('aprobado_liquidacion')) {
-			return _boolDesdeDynamic(json['aprobado_liquidacion']);
-		}
-
-		final liquidacion = json['liquidacion'];
-		if (liquidacion is Map<String, dynamic>) {
-			return _boolDesdeDynamic(liquidacion['aprobado']);
-		}
-
-		return false;
-	}
-
-	static bool _boolDesdeDynamic(dynamic valor) {
-		if (valor is bool) {
-			return valor;
-		}
-		if (valor is num) {
-			return valor == 1;
-		}
-		if (valor is String) {
-			final normalizado = valor.toLowerCase().trim();
-			return normalizado == 'true' || normalizado == '1' || normalizado == 'si';
-		}
-		return false;
 	}
 
 	static Canal _canalDesdeString(String valor) {
