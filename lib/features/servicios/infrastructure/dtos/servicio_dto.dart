@@ -282,8 +282,15 @@ class ServicioDto {
 			body['utcOffsetMinutos'] = utcOffsetMinutos;
 		}
 		if (facturacion != null) {
+			// La cotizacion y el valor del km viajan siempre que se hayan cargado:
+			// son los que se usaron para calcular el total que vio el cliente. El
+			// backend los guarda tal cual si siguen vigentes (ultimas 48 h) y si no
+			// rechaza la orden con 409; nunca los reemplaza.
 			body['facturacion'] = {
-				'valorKmUsdSnapshot': facturacion!.valorKmUsdSnapshot,
+				if (facturacion!.cotizacionDolarSnapshot > 0)
+					'cotizacionDolarSnapshot': facturacion!.cotizacionDolarSnapshot,
+				if (facturacion!.valorKmUsdSnapshot > 0)
+					'valorKmUsdSnapshot': facturacion!.valorKmUsdSnapshot,
 				'kmCantidad': facturacion!.kmCantidad,
 				'subtotalKmUsd': facturacion!.subtotalKmUsd,
 				'subtotalKmArs': facturacion!.subtotalKmArs,

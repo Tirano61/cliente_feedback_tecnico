@@ -10,6 +10,11 @@ import 'package:cliente_feedback_tecnico/features/servicios/domain/entities/serv
 import 'package:cliente_feedback_tecnico/features/servicios/domain/entities/solicitud_documento_firmado.dart';
 
 abstract class IServicioRepository {
+	/// Da de alta la orden (POST /servicios).
+	///
+	/// Lanza `ValoresOrdenRechazadosException` si el backend la rechaza porque
+	/// la cotizacion, el valor del km o el precio de algun repuesto ya no es el
+	/// vigente, y `ServerException` ante cualquier otro error.
 	Future<OrdenServicioRespuesta> cargarServicio(Servicio servicio);
 
 	/// GET /servicios/mios. `busqueda` vacia y `aprobado` null no filtran;

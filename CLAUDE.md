@@ -104,8 +104,10 @@ documento             pdfHashSha256, pdfUrl, datos de firma (todo null al crear)
 
 ### Facturación
 
-- La app calcula los `facturacionItems` (mano de obra, viático por km, repuestos)
-- El backend completa `cotizacionDolarSnapshot` y `valorKmUsdSnapshot` con los valores activos — la app no los manda
+- La app calcula los `facturacionItems` (mano de obra, viático por km, repuestos) y los subtotales/totales son la suma de esas mismas líneas: lo que ve el cliente es lo que se guarda
+- La app manda `cotizacionDolarSnapshot` y `valorKmUsdSnapshot` con los que calculó el total (se traen de `GET /cotizacion` y `GET /tarifa-km` al entrar a Facturación o con "Actualizar valores"). El backend los acepta si estuvieron vigentes en las últimas 48 h; si no, rechaza con 409 y nunca cambia precios
+- Los km se facturan enteros (el campo no acepta decimales) para que `km` y `facturacion.kmCantidad` coincidan
+- 409 `COTIZACION_INVALIDA` / `TARIFA_KM_INVALIDA` / `REPUESTO_INEXISTENTE` / `REPUESTO_INACTIVO` / `PRECIO_REPUESTO_DESACTUALIZADO`: el repositorio lanza `ValoresOrdenRechazadosException`; el BLoC actualiza los valores sin perder el formulario, recalcula, conserva la `idempotencyKey` y emite `avisoValores`; la vista muestra un diálogo con qué cambió y el total anterior/nuevo. No se reintenta solo: el técnico le muestra el total nuevo al cliente y vuelve a guardar
 - Debe haber al menos un item `mano_obra`
 - La respuesta de POST trae todo lo necesario para generar el PDF sin otra llamada
 

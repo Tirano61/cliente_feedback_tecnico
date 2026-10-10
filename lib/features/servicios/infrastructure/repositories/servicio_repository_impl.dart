@@ -16,6 +16,7 @@ import 'package:cliente_feedback_tecnico/features/servicios/domain/entities/poli
 import 'package:cliente_feedback_tecnico/features/servicios/domain/entities/repuesto.dart';
 import 'package:cliente_feedback_tecnico/features/servicios/domain/entities/servicio.dart';
 import 'package:cliente_feedback_tecnico/features/servicios/domain/entities/solicitud_documento_firmado.dart';
+import 'package:cliente_feedback_tecnico/features/servicios/domain/errors/valores_orden_rechazados_exception.dart';
 import 'package:cliente_feedback_tecnico/features/servicios/domain/repositories/i_servicio_repository.dart';
 import 'package:cliente_feedback_tecnico/features/servicios/infrastructure/dtos/cliente_dto.dart';
 import 'package:cliente_feedback_tecnico/features/servicios/infrastructure/dtos/cotizacion_actual_dto.dart';
@@ -43,6 +44,12 @@ class ServicioRepositoryImpl implements IServicioRepository {
 		);
 
 		if (response.statusCode != 200 && response.statusCode != 201) {
+			final rechazoValores = response.statusCode == 409
+					? _extraerRechazoValores(response.body)
+					: null;
+			if (rechazoValores != null) {
+				throw rechazoValores;
+			}
 			final mensajeBackend = _extraerMensajeError(response.body);
 			throw ServerException(
 				mensajeBackend ?? 'No se pudo guardar la orden de servicio.',
@@ -497,6 +504,68 @@ class ServicioRepositoryImpl implements IServicioRepository {
 			}
 		}
 		return const [];
+	}
+
+	/// 409 de POST /servicios por cotizacion, tarifa km o repuestos que no
+	/// coinciden con los vigentes. Cualquier otro 409 (o un body que no se
+	/// entiende) devuelve null y se trata como error generico.
+	ValoresOrdenRechazadosException? _extraerRechazoValores(String body) {
+		final json = _extraerMapa(_decodeJsonSeguro(body));
+		if (json == null) {
+			return null;
+		}
+		final codigo = json['codigo'];
+		if (codigo is! String || !CodigoRechazoValores.todos.contains(codigo)) {
+			return null;
+		}
+
+		final itemsCrudos = json['items'];
+		final items = <ValorRechazado>[];
+		if (itemsCrudos is List) {
+			for (final itemCrudo in itemsCrudos) {
+				final item = _extraerMapa(itemCrudo);
+				if (item == null) {
+					continue;
+				}
+				final codigoItem = item['codigo'];
+				items.add(
+					ValorRechazado(
+						codigo: codigoItem is String ? codigoItem : codigo,
+						campo: _textoOpcional(item['campo']),
+						repuestoId: _textoOpcional(item['repuestoId']),
+						descripcion: _textoOpcional(item['descripcion']),
+						valorEnviado: _numeroOpcional(item['valorEnviado'] ?? item['precioEnviadoUsd']),
+						valorVigente: _numeroOpcional(item['valorVigente'] ?? item['precioVigenteUsd']),
+					),
+				);
+			}
+		}
+
+		final mensaje = _textoOpcional(json['mensaje']) ??
+				_textoOpcional(json['message']) ??
+				'La orden no se guardo porque cambiaron los valores.';
+		return ValoresOrdenRechazadosException(
+			codigo: codigo,
+			mensaje: mensaje,
+			items: items,
+		);
+	}
+
+	String? _textoOpcional(dynamic valor) {
+		if (valor is String && valor.trim().isNotEmpty) {
+			return valor.trim();
+		}
+		return null;
+	}
+
+	double? _numeroOpcional(dynamic valor) {
+		if (valor is num) {
+			return valor.toDouble();
+		}
+		if (valor is String) {
+			return double.tryParse(valor);
+		}
+		return null;
 	}
 
 	String? _extraerMensajeError(String body) {

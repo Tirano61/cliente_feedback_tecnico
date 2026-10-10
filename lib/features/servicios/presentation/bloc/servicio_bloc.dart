@@ -20,8 +20,10 @@ import 'package:cliente_feedback_tecnico/features/servicios/domain/entities/fact
 import 'package:cliente_feedback_tecnico/features/servicios/domain/entities/orden_servicio_respuesta.dart';
 import 'package:cliente_feedback_tecnico/features/servicios/domain/entities/politica_firma_canal.dart';
 import 'package:cliente_feedback_tecnico/features/servicios/domain/entities/producto_falla.dart';
+import 'package:cliente_feedback_tecnico/features/servicios/domain/entities/repuesto.dart';
 import 'package:cliente_feedback_tecnico/features/servicios/domain/entities/servicio.dart';
 import 'package:cliente_feedback_tecnico/features/servicios/domain/entities/solicitud_documento_firmado.dart';
+import 'package:cliente_feedback_tecnico/features/servicios/domain/errors/valores_orden_rechazados_exception.dart';
 import 'package:cliente_feedback_tecnico/features/servicios/presentation/bloc/filtro_estado_servicio.dart';
 import 'package:cliente_feedback_tecnico/features/servicios/presentation/bloc/servicio_event.dart';
 import 'package:cliente_feedback_tecnico/features/servicios/presentation/bloc/servicio_state.dart';
@@ -218,23 +220,29 @@ class ServicioBloc extends Bloc<ServicioEvent, ServicioState> {
 
 		try {
 			final cotizacion = await _obtenerCotizacionActualUseCase.ejecutar();
+			// Mientras se esperaba la respuesta el tecnico pudo seguir cargando:
+			// se parte del estado actual, no del capturado antes del await.
+			final antes = _recalcularFacturacion(_estadoFormularioActual());
+			final despues = _recalcularFacturacion(
+				antes.copyWith(
+					cargandoFacturacion: false,
+					cotizacionDolarSnapshot: cotizacion.cotizacionDolar,
+					valorKmUsdSnapshot: cotizacion.valorKmUsd,
+					repuestosDisponibles: const [],
+					buscandoRepuestos: false,
+					errorMensaje: null,
+				),
+			);
 
 			emit(
-				_recalcularFacturacion(
-					actual.copyWith(
-						cargandoFacturacion: false,
-						cotizacionDolarSnapshot: cotizacion.cotizacionDolar,
-						valorKmUsdSnapshot: cotizacion.valorKmUsd,
-						repuestosDisponibles: const [],
-						buscandoRepuestos: false,
-						errorMensaje: null,
-					),
+				despues.copyWith(
+					avisoValores: _avisoPorActualizacionDeValores(antes, despues),
 				),
 			);
 		} on ServerException catch (e) {
 			emit(
 				_recalcularFacturacion(
-					actual.copyWith(
+					_estadoFormularioActual().copyWith(
 						cargandoFacturacion: false,
 						errorMensaje: e.mensaje,
 					),
@@ -243,13 +251,166 @@ class ServicioBloc extends Bloc<ServicioEvent, ServicioState> {
 		} catch (_) {
 			emit(
 				_recalcularFacturacion(
-					actual.copyWith(
+					_estadoFormularioActual().copyWith(
 						cargandoFacturacion: false,
 						errorMensaje: 'No se pudo inicializar la facturacion.',
 					),
 				),
 			);
 		}
+	}
+
+	/// Si ya habia valores cargados y cambiaron, avisa al tecnico: el total que
+	/// pudo haber visto el cliente ya no es el mismo. La primera carga
+	/// (valores en 0) no genera aviso.
+	AvisoValoresOrden? _avisoPorActualizacionDeValores(
+		ServicioFormularioState antes,
+		ServicioFormularioState despues,
+	) {
+		final cambios = <String>[];
+		if (antes.cotizacionDolarSnapshot > 0 &&
+				!_mismoValor(antes.cotizacionDolarSnapshot, despues.cotizacionDolarSnapshot)) {
+			cambios.add(
+				'Cotizacion del dolar: ${_formatearValorAviso(antes.cotizacionDolarSnapshot)} -> ${_formatearValorAviso(despues.cotizacionDolarSnapshot)} ARS',
+			);
+		}
+		if (antes.valorKmUsdSnapshot > 0 &&
+				!_mismoValor(antes.valorKmUsdSnapshot, despues.valorKmUsdSnapshot)) {
+			cambios.add(
+				'Valor del km: ${_formatearValorAviso(antes.valorKmUsdSnapshot)} -> ${_formatearValorAviso(despues.valorKmUsdSnapshot)} USD',
+			);
+		}
+		if (cambios.isEmpty) {
+			return null;
+		}
+		return AvisoValoresOrden(
+			ordenRechazada: false,
+			titulo: 'Se actualizaron los valores',
+			mensaje:
+					'Cambiaron los valores con los que se calculo la orden. Si ya le mostraste el total al cliente, mostrale el total nuevo antes de guardar.',
+			cambios: cambios,
+			totalAnteriorArs: antes.totalFinalArs,
+			totalNuevoArs: despues.totalFinalArs,
+		);
+	}
+
+	/// La orden no se guardo porque algun valor ya no es el vigente. Se
+	/// actualiza el formulario con los valores vigentes (sin perder nada de lo
+	/// cargado), se recalcula el total y se avisa al tecnico. No se reintenta
+	/// solo: el cliente tiene que ver el total nuevo antes de volver a guardar.
+	ServicioFormularioState _aplicarRechazoDeValores(
+		ServicioFormularioState estado,
+		ValoresOrdenRechazadosException rechazo,
+	) {
+		final cambios = <String>[];
+		var cotizacion = estado.cotizacionDolarSnapshot;
+		var valorKmUsd = estado.valorKmUsdSnapshot;
+		var repuestos = List<RepuestoSeleccionado>.of(estado.repuestosSeleccionados);
+
+		for (final item in rechazo.items) {
+			switch (item.codigo) {
+				case CodigoRechazoValores.cotizacionInvalida:
+					{
+						final vigente = item.valorVigente;
+						if (vigente != null && vigente > 0) {
+							cambios.add(
+								'Cotizacion del dolar: ${_formatearValorAviso(cotizacion)} -> ${_formatearValorAviso(vigente)} ARS',
+							);
+							cotizacion = vigente;
+						}
+					}
+				case CodigoRechazoValores.tarifaKmInvalida:
+					{
+						final vigente = item.valorVigente;
+						if (vigente != null && vigente > 0) {
+							cambios.add(
+								'Valor del km: ${_formatearValorAviso(valorKmUsd)} -> ${_formatearValorAviso(vigente)} USD',
+							);
+							valorKmUsd = vigente;
+						}
+					}
+				case CodigoRechazoValores.precioRepuestoDesactualizado:
+					{
+						final vigente = item.valorVigente;
+						final indice = repuestos.indexWhere(
+							(seleccionado) => seleccionado.repuesto.id == item.repuestoId,
+						);
+						if (vigente != null && indice >= 0) {
+							final seleccionado = repuestos[indice];
+							cambios.add(
+								'${_nombreRepuestoAviso(seleccionado, item)}: ${_formatearValorAviso(seleccionado.repuesto.precioUsd)} -> ${_formatearValorAviso(vigente)} USD',
+							);
+							repuestos[indice] = seleccionado.copyWith(
+								repuesto: Repuesto(
+									id: seleccionado.repuesto.id,
+									codigo: seleccionado.repuesto.codigo,
+									nombre: seleccionado.repuesto.nombre,
+									precioUsd: vigente,
+								),
+							);
+						}
+					}
+				case CodigoRechazoValores.repuestoInactivo:
+				case CodigoRechazoValores.repuestoInexistente:
+					{
+						final indice = repuestos.indexWhere(
+							(seleccionado) => seleccionado.repuesto.id == item.repuestoId,
+						);
+						final motivo = item.codigo == CodigoRechazoValores.repuestoInactivo
+								? 'dado de baja en el catalogo'
+								: 'no existe en el catalogo';
+						if (indice >= 0) {
+							cambios.add(
+								'${_nombreRepuestoAviso(repuestos[indice], item)}: se quito de la orden ($motivo)',
+							);
+							repuestos = [...repuestos]..removeAt(indice);
+						}
+					}
+			}
+		}
+
+		final recalculado = _recalcularFacturacion(
+			estado.copyWith(
+				guardando: false,
+				cotizacionDolarSnapshot: cotizacion,
+				valorKmUsdSnapshot: valorKmUsd,
+				repuestosSeleccionados: repuestos,
+			),
+		);
+
+		return recalculado.copyWith(
+			avisoValores: AvisoValoresOrden(
+				ordenRechazada: true,
+				titulo: 'La orden NO se guardo',
+				mensaje: cambios.isEmpty
+						? rechazo.mensaje
+						: 'Cambiaron valores con los que se calculo la orden. La orden ya se actualizo con los valores vigentes: mostrale el total nuevo al cliente y volve a guardar.',
+				cambios: cambios.isEmpty
+						? const ['Toca "Actualizar valores" en Facturacion para traer los valores vigentes.']
+						: cambios,
+				totalAnteriorArs: estado.totalFinalArs,
+				totalNuevoArs: recalculado.totalFinalArs,
+			),
+		);
+	}
+
+	String _nombreRepuestoAviso(RepuestoSeleccionado seleccionado, ValorRechazado item) {
+		final codigo = seleccionado.repuesto.codigo.trim();
+		final nombre = seleccionado.repuesto.nombre.trim();
+		if (codigo.isEmpty && nombre.isEmpty) {
+			return item.descripcion ?? 'Repuesto';
+		}
+		return 'Repuesto $codigo - $nombre';
+	}
+
+	bool _mismoValor(double a, double b) {
+		return (a * 10000).round() == (b * 10000).round();
+	}
+
+	String _formatearValorAviso(double valor) {
+		final conCuatro = valor.toStringAsFixed(4);
+		final conDos = valor.toStringAsFixed(2);
+		return double.parse(conCuatro) == double.parse(conDos) ? conDos : conCuatro;
 	}
 
 	Future<void> _onServicioBuscarRepuestosSolicitado(
@@ -558,6 +719,9 @@ class ServicioBloc extends Bloc<ServicioEvent, ServicioState> {
 					documentosPendientes: _documentosPendientes.length,
 				),
 			);
+		} on ValoresOrdenRechazadosException catch (e) {
+			// La idempotencyKey se conserva: el rechazo no la consume en el backend.
+			emit(_aplicarRechazoDeValores(estadoConClave, e));
 		} on ServerException catch (e) {
 			emit(estadoConClave.copyWith(guardando: false, errorMensaje: e.mensaje));
 		} catch (_) {
@@ -1526,6 +1690,13 @@ class ServicioBloc extends Bloc<ServicioEvent, ServicioState> {
 		if (hayFacturacionAdicional && precioServicioUsd <= 0) {
 			return 'Ingresa el precio del servicio para incluir el item mano de obra en la facturacion.';
 		}
+		final hayFacturacion = precioServicioUsd > 0 || hayFacturacionAdicional;
+		if (hayFacturacion && estado.cotizacionDolarSnapshot <= 0) {
+			return 'No se cargo la cotizacion del dolar. Toca "Actualizar valores" en Facturacion antes de guardar.';
+		}
+		if (km > 0 && estado.valorKmUsdSnapshot <= 0) {
+			return 'No se cargo el valor del km. Toca "Actualizar valores" en Facturacion antes de guardar.';
+		}
 		if (estado.sintoma.trim().isEmpty) {
 			return 'Completa el sintoma reportado.';
 		}
@@ -1550,12 +1721,14 @@ class ServicioBloc extends Bloc<ServicioEvent, ServicioState> {
 		final productosFalla = _productosFallaNormalizados(
 			estadoRecalculado.productosFallaSeleccionados,
 		);
-		final kmCantidad = _doubleDesdeTexto(estadoRecalculado.km, valorPorDefecto: 0);
+		final kmCantidad = _kmFacturables(estadoRecalculado);
 		final precioServicioUsd = _doubleDesdeTexto(
 			estadoRecalculado.precioServicioUsd,
 			valorPorDefecto: 0,
 		);
-		final facturacionItems = _construirItemsFacturacion(estadoRecalculado, kmCantidad);
+		// Las mismas lineas que se ven en pantalla: lo que se guarda es lo que
+		// vio el cliente.
+		final facturacionItems = estadoRecalculado.itemsFacturacion;
 		final incluyeFacturacion =
 				precioServicioUsd > 0 ||
 				kmCantidad > 0 ||
@@ -1590,7 +1763,7 @@ class ServicioBloc extends Bloc<ServicioEvent, ServicioState> {
 			equipoUbicacion: estadoRecalculado.equipoUbicacion.trim(),
 			equipoAnio: int.parse(estadoRecalculado.equipoAnio.trim()),
 			partesFallaron: partesFallaron,
-			km: esCampo ? kmCantidad.round() : null,
+			km: esCampo ? kmCantidad.toInt() : null,
 			sintoma: estadoRecalculado.sintoma.trim(),
 			diagnosticoDetalle: estadoRecalculado.diagnosticoDetalle.trim(),
 			diagnosticoCatIds: estadoRecalculado.diagnosticoCatIdsSeleccionados,
@@ -1654,32 +1827,39 @@ class ServicioBloc extends Bloc<ServicioEvent, ServicioState> {
 		return '$dia/$mes/$anio $hora:$minuto';
 	}
 
-	ServicioFormularioState _recalcularFacturacion(ServicioFormularioState estado) {
-		final kmCantidad = _doubleDesdeTexto(estado.km, valorPorDefecto: 0);
-		final precioServicioUsd = _doubleDesdeTexto(
-			estado.precioServicioUsd,
-			valorPorDefecto: 0,
-		);
-		final cotizacion = estado.cotizacionDolarSnapshot;
-		final valorKmUsd = estado.valorKmUsdSnapshot;
+	/// Km que se facturan: enteros, igual que el `km` de la orden, para que
+	/// `facturacion.kmCantidad` coincida con `km` y la linea de viatico sea la
+	/// misma en pantalla y en el backend.
+	double _kmFacturables(ServicioFormularioState estado) {
+		final km = _doubleDesdeTexto(estado.km, valorPorDefecto: 0);
+		if (km <= 0) {
+			return 0;
+		}
+		return km.roundToDouble();
+	}
 
-		final subtotalKmUsd = _redondear2(kmCantidad * valorKmUsd);
-		final subtotalKmArs = _redondear2(subtotalKmUsd * cotizacion);
-		final subtotalServicioUsd = _redondear2(precioServicioUsd);
-		final subtotalServicioArs = _redondear2(subtotalServicioUsd * cotizacion);
-		final subtotalRepuestosUsd = _redondear2(
-			estado.repuestosSeleccionados.fold(
-				0,
-				(acumulado, item) => acumulado + (item.cantidad * item.repuesto.precioUsd),
-			),
-		);
-		final subtotalRepuestosArs = _redondear2(subtotalRepuestosUsd * cotizacion);
-		final subtotalBrutoUsd = _redondear2(
-			subtotalServicioUsd + subtotalKmUsd + subtotalRepuestosUsd,
-		);
-		final subtotalBrutoArs = _redondear2(
-			subtotalServicioArs + subtotalKmArs + subtotalRepuestosArs,
-		);
+	/// Todos los importes salen de las lineas de facturacion: primero se arman
+	/// las lineas (las mismas que se muestran y se mandan) y los subtotales son
+	/// la suma de esas lineas. Asi el total de pantalla es exactamente el que
+	/// guarda el backend.
+	ServicioFormularioState _recalcularFacturacion(ServicioFormularioState estado) {
+		final items = _construirItemsFacturacion(estado, _kmFacturables(estado));
+
+		double sumarUsd(bool Function(FacturacionItem item) filtro) => _redondear2(
+					items.where(filtro).fold(0.0, (acumulado, item) => acumulado + item.subtotalUsd),
+				);
+		double sumarArs(bool Function(FacturacionItem item) filtro) => _redondear2(
+					items.where(filtro).fold(0.0, (acumulado, item) => acumulado + item.subtotalArs),
+				);
+
+		final subtotalKmUsd = sumarUsd((item) => item.tipoItem == 'viatico');
+		final subtotalKmArs = sumarArs((item) => item.tipoItem == 'viatico');
+		final subtotalServicioUsd = sumarUsd((item) => item.tipoItem == 'mano_obra');
+		final subtotalServicioArs = sumarArs((item) => item.tipoItem == 'mano_obra');
+		final subtotalRepuestosUsd = sumarUsd((item) => item.tipoItem == 'repuesto');
+		final subtotalRepuestosArs = sumarArs((item) => item.tipoItem == 'repuesto');
+		final subtotalBrutoUsd = sumarUsd((_) => true);
+		final subtotalBrutoArs = sumarArs((_) => true);
 
 		final ivaPorcentaje = _doubleDesdeTexto(estado.ivaPorcentaje, valorPorDefecto: 21);
 		final descuentoPorcentaje = _doubleDesdeTexto(
@@ -1706,6 +1886,12 @@ class ServicioBloc extends Bloc<ServicioEvent, ServicioState> {
 			subtotalGeneralArs: subtotalGeneralArs,
 			totalConIvaArs: totalConIvaArs,
 			totalFinalArs: totalFinalArs,
+			itemsFacturacion: items,
+			// copyWith limpia los mensajes de un solo uso si no se pasan: recalcular
+			// no tiene que borrar el error o aviso que trae el estado.
+			errorMensaje: estado.errorMensaje,
+			exitoMensaje: estado.exitoMensaje,
+			avisoValores: estado.avisoValores,
 		);
 	}
 

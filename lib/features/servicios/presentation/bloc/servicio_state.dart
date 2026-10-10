@@ -1,6 +1,7 @@
 import 'dart:typed_data';
 
 import 'package:cliente_feedback_tecnico/features/servicios/domain/entities/cliente.dart';
+import 'package:cliente_feedback_tecnico/features/servicios/domain/entities/facturacion_item.dart';
 import 'package:cliente_feedback_tecnico/features/servicios/domain/entities/orden_servicio_respuesta.dart';
 import 'package:cliente_feedback_tecnico/features/servicios/domain/entities/producto_falla.dart';
 import 'package:cliente_feedback_tecnico/features/servicios/domain/entities/repuesto.dart';
@@ -59,6 +60,9 @@ class ServicioFormularioState extends ServicioState {
 	final double subtotalGeneralArs;
 	final double totalConIvaArs;
 	final double totalFinalArs;
+	/// Lineas de facturacion tal cual se muestran y se mandan al backend. Los
+	/// subtotales y totales salen de sumar estas lineas.
+	final List<FacturacionItem> itemsFacturacion;
 	final bool guardando;
 	final bool buscandoClientes;
 	final bool creandoCliente;
@@ -71,6 +75,9 @@ class ServicioFormularioState extends ServicioState {
 	final int documentosPendientes;
 	final String? errorMensaje;
 	final String? exitoMensaje;
+	/// Aviso de un solo uso: la orden no se guardo (o se actualizaron los
+	/// valores) porque cambio la cotizacion, el valor del km o algun repuesto.
+	final AvisoValoresOrden? avisoValores;
 
 	const ServicioFormularioState({
 		this.idempotencyKey = '',
@@ -112,6 +119,7 @@ class ServicioFormularioState extends ServicioState {
 		this.subtotalGeneralArs = 0,
 		this.totalConIvaArs = 0,
 		this.totalFinalArs = 0,
+		this.itemsFacturacion = const [],
 		this.guardando = false,
 		this.buscandoClientes = false,
 		this.creandoCliente = false,
@@ -124,6 +132,7 @@ class ServicioFormularioState extends ServicioState {
 		this.documentosPendientes = 0,
 		this.errorMensaje,
 		this.exitoMensaje,
+		this.avisoValores,
 	});
 
 	/// Provincia, lugar de atencion y km solo aplican en `canal = campo`: en
@@ -172,6 +181,7 @@ class ServicioFormularioState extends ServicioState {
 		double? subtotalGeneralArs,
 		double? totalConIvaArs,
 		double? totalFinalArs,
+		List<FacturacionItem>? itemsFacturacion,
 		bool? guardando,
 		bool? buscandoClientes,
 		bool? creandoCliente,
@@ -185,6 +195,7 @@ class ServicioFormularioState extends ServicioState {
 		int? documentosPendientes,
 		String? errorMensaje,
 		String? exitoMensaje,
+		AvisoValoresOrden? avisoValores,
 		bool limpiarMensajes = false,
 		bool limpiarClienteSeleccionado = false,
 		bool limpiarPdfOrden = false,
@@ -240,6 +251,7 @@ class ServicioFormularioState extends ServicioState {
 			subtotalGeneralArs: subtotalGeneralArs ?? this.subtotalGeneralArs,
 			totalConIvaArs: totalConIvaArs ?? this.totalConIvaArs,
 			totalFinalArs: totalFinalArs ?? this.totalFinalArs,
+			itemsFacturacion: itemsFacturacion ?? this.itemsFacturacion,
 			guardando: guardando ?? this.guardando,
 			buscandoClientes: buscandoClientes ?? this.buscandoClientes,
 			creandoCliente: creandoCliente ?? this.creandoCliente,
@@ -254,7 +266,18 @@ class ServicioFormularioState extends ServicioState {
 			documentosPendientes: documentosPendientes ?? this.documentosPendientes,
 			errorMensaje: limpiarMensajes ? null : errorMensaje,
 			exitoMensaje: limpiarMensajes ? null : exitoMensaje,
+			avisoValores: limpiarMensajes ? null : avisoValores,
 		);
+	}
+
+	/// Km facturados (linea de viatico); 0 si no hay viatico.
+	double get kmFacturados {
+		for (final item in itemsFacturacion) {
+			if (item.tipoItem == 'viatico') {
+				return item.cantidad;
+			}
+		}
+		return 0;
 	}
 
 	@override
@@ -298,6 +321,7 @@ class ServicioFormularioState extends ServicioState {
 				subtotalGeneralArs,
 				totalConIvaArs,
 				totalFinalArs,
+				itemsFacturacion,
 				guardando,
 				buscandoClientes,
 				creandoCliente,
@@ -310,6 +334,39 @@ class ServicioFormularioState extends ServicioState {
 				documentosPendientes,
 				errorMensaje,
 				exitoMensaje,
+				avisoValores,
+			];
+}
+
+/// Que cambio en los valores de la orden y como queda el total.
+///
+/// `ordenRechazada` es true cuando el backend no guardo la orden: el tecnico
+/// tiene que mostrarle el total nuevo al cliente y volver a guardar.
+class AvisoValoresOrden extends Equatable {
+	final bool ordenRechazada;
+	final String titulo;
+	final String mensaje;
+	final List<String> cambios;
+	final double totalAnteriorArs;
+	final double totalNuevoArs;
+
+	const AvisoValoresOrden({
+		required this.ordenRechazada,
+		required this.titulo,
+		required this.mensaje,
+		required this.cambios,
+		required this.totalAnteriorArs,
+		required this.totalNuevoArs,
+	});
+
+	@override
+	List<Object?> get props => [
+				ordenRechazada,
+				titulo,
+				mensaje,
+				cambios,
+				totalAnteriorArs,
+				totalNuevoArs,
 			];
 }
 

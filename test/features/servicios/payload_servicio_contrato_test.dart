@@ -63,6 +63,12 @@ Future<Map<String, dynamic>> _guardarOrden({
 				bodyEnviado = jsonDecode(request.body) as Map<String, dynamic>;
 				return http.Response(jsonEncode(_respuestaAlta), 201);
 			}
+			if (request.method == 'GET' && request.url.path.endsWith('/cotizacion')) {
+				return http.Response(jsonEncode({'valor': 1120}), 200);
+			}
+			if (request.method == 'GET' && request.url.path.endsWith('/tarifa-km')) {
+				return http.Response(jsonEncode({'valorKmUsd': 0.75}), 200);
+			}
 			return http.Response('{}', 404);
 		}),
 		storage,
@@ -83,6 +89,14 @@ Future<Map<String, dynamic>> _guardarOrden({
 		ObtenerEnlacePdfDocumentoUseCase(repositorio),
 		DescargarPdfDocumentoUseCase(repositorio),
 	);
+
+	// Como en la app: la facturacion arranca con la cotizacion y el valor del
+	// km del servidor (sin eso el bloc no deja guardar una orden con cobro).
+	final facturacionLista = bloc.stream.firstWhere(
+		(estado) => estado is ServicioFormularioState && estado.cotizacionDolarSnapshot > 0,
+	);
+	bloc.add(const ServicioFacturacionInicializada());
+	await facturacionLista;
 
 	// El tecnico carga los mismos datos en los tres canales: es el bloc el que
 	// decide que provincia, lugar y km solo aplican en campo.

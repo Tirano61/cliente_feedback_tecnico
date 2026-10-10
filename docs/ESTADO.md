@@ -134,8 +134,11 @@ activos", que es lo que el formulario necesita: no hace falta mandarlo.
   productos que fallaron por parte, label de resolución según canal. `web` es
   una parte válida ([servicio_bloc.dart:32-40](../lib/features/servicios/presentation/bloc/servicio_bloc.dart#L32)).
 - **Repuestos**: búsqueda (`GET /repuestos?q=`) y selección en combo, con cantidad.
-- **Facturación**: `GET /cotizacion` + `GET /tarifa-km` con "Actualizar valores";
-  subtotales, IVA y descuento en vivo; en remoto/fábrica no se factura viático.
+- **Facturación**: `GET /cotizacion` + `GET /tarifa-km` al entrar al paso y con
+  "Actualizar valores" (si cambiaron, avisa con el total anterior y el nuevo);
+  las líneas (`itemsFacturacion` del estado) se arman en el BLoC y los
+  subtotales, IVA y descuento salen de sumarlas; en remoto/fábrica no se
+  factura viático.
 
 **Alta de la orden** — [servicio_bloc.dart](../lib/features/servicios/presentation/bloc/servicio_bloc.dart) (1.640 líneas):
 
@@ -144,8 +147,11 @@ activos", que es lo que el formulario necesita: no hace falta mandarlo.
 - Idempotencia real: `idempotencyKey` uuid v4 por orden, validado y reutilizado
   en reintentos; el mensaje de éxito distingue `replayed`.
 - `fechaHoraServicio` ISO-8601 + `timezoneIana` + `utcOffsetMinutos`.
-- `facturacionItems` (`mano_obra`, `viatico`, `repuesto`) y `facturacion` sin
-  mandar los snapshots que completa el backend.
+- `facturacionItems` (`mano_obra`, `viatico`, `repuesto`) y `facturacion` con
+  `cotizacionDolarSnapshot` y `valorKmUsdSnapshot` usados para el total.
+- Rechazo 409 por cotización, valor del km o repuestos: diálogo con qué cambió
+  y el total nuevo, sin perder el formulario ni la `idempotencyKey`
+  ([facturacion_valores_orden_test.dart](../test/features/servicios/facturacion_valores_orden_test.dart)).
 - **Contrato cubierto por tests**: `resolucionId`, `diagnosticoCatId` y
   `partesFallaron` viajan como arrays; reglas por canal para campo/remoto/fábrica
   ([payload_servicio_contrato_test.dart](../test/features/servicios/payload_servicio_contrato_test.dart)).
@@ -246,12 +252,8 @@ está por omisión:
      `page` y `limit` en `QueryMisLiquidacionesDto`, así que el fallback no se
      dispara más (código muerto, §7.3) y paginar ya es posible.
 
-3. **`km` sigue siendo `int`.** `Servicio.km` es `int?`
-   ([servicio.dart:35](../lib/features/servicios/domain/entities/servicio.dart#L35))
-   y el BLoC redondea (`kmCantidad.round()`,
-   [servicio_bloc.dart:1382](../lib/features/servicios/presentation/bloc/servicio_bloc.dart#L1382)),
-   mientras el campo acepta decimales y `facturacion.kmCantidad` viaja con el
-   valor decimal: con 12,5 km la orden guarda `km = 13` y factura 12,5.
+3. ~~**`km` sigue siendo `int`.**~~ Resuelto: el campo sólo acepta enteros y el
+   BLoC factura los km redondeados, así `km` y `facturacion.kmCantidad` coinciden.
 
 4. **`km = 0` pasa la validación en campo.** `_validarFormulario` sólo exige que
    el campo no esté vacío y que no sea negativo
@@ -524,11 +526,9 @@ La violación más seria del relevamiento original (HTTP crudo en
   ([liquidaciones_screen.dart:63-79 y 152-157](../lib/features/liquidaciones/presentation/pages/liquidaciones_screen.dart#L63))
   son reglas de negocio calculadas en el `builder`. Además, al paginar dejan de
   ser correctas (§3.2).
-- **Cálculo de facturación en el formulario**: el paso de facturación recalcula
-  subtotal de km, precio en ARS y montos de descuento con su propio
-  `_doubleDesdeTextoLocal`
-  ([formulario_servicio.dart:1620-1632](../lib/features/servicios/presentation/widgets/formulario_servicio.dart#L1620)),
-  en paralelo a `_recalcularFacturacion` del BLoC.
+- **Cálculo de facturación en el formulario**: resuelto en parte; las líneas
+  y subtotales salen de `itemsFacturacion` del BLoC. Queda en la vista el monto
+  del descuento (USD y ARS) que se muestra en el resumen.
 - **Normalización de partes en el formulario**: `_normalizarParteFalladaBackend`
   ([formulario_servicio.dart:2785](../lib/features/servicios/presentation/widgets/formulario_servicio.dart#L2785))
   decide la parte a partir del nombre de la categoría al elegir productos.

@@ -14,6 +14,7 @@ import 'package:cliente_feedback_tecnico/features/servicios/presentation/bloc/se
 import 'package:cliente_feedback_tecnico/features/servicios/presentation/bloc/servicio_event.dart';
 import 'package:cliente_feedback_tecnico/features/servicios/presentation/bloc/servicio_state.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:printing/printing.dart';
 import 'package:signature/signature.dart';
@@ -39,6 +40,8 @@ class _FormularioServicioState extends State<FormularioServicio> {
 	final TextEditingController _sintomaController = TextEditingController();
 	final TextEditingController _diagnosticoDetalleController = TextEditingController();
 	final TextEditingController _observacionesController = TextEditingController();
+
+	static const int _pasoFacturacion = 3;
 
 	String? _modeloIndicadorSeleccionadoId;
 	int _pasoActivo = 0;
@@ -67,10 +70,122 @@ class _FormularioServicioState extends State<FormularioServicio> {
 	}
 
 	void _cambiarPaso(int nuevoPaso) {
+		final entraAFacturacion =
+				nuevoPaso == _pasoFacturacion && _pasoActivo != _pasoFacturacion;
 		setState(() {
 			_pasoActivo = nuevoPaso;
 		});
 		_asegurarCatalogosParaPaso(nuevoPaso);
+		// Antes de que el cliente vea el total se traen la cotizacion y el valor
+		// del km vigentes.
+		if (entraAFacturacion) {
+			context.read<ServicioBloc>().add(const ServicioFacturacionInicializada());
+		}
+	}
+
+	Future<void> _mostrarAvisoValores(AvisoValoresOrden aviso) async {
+		final colorScheme = Theme.of(context).colorScheme;
+		final textTheme = Theme.of(context).textTheme;
+		final colorAviso = aviso.ordenRechazada ? colorScheme.error : colorScheme.primary;
+		final cambioTotal = _formatearMonto(aviso.totalAnteriorArs) !=
+				_formatearMonto(aviso.totalNuevoArs);
+
+		final irAFacturacion = await showDialog<bool>(
+			context: context,
+			barrierDismissible: false,
+			builder: (dialogContext) {
+				return AlertDialog(
+					icon: Icon(
+						aviso.ordenRechazada ? Icons.error_outline : Icons.info_outline,
+						color: colorAviso,
+						size: 36,
+					),
+					title: Text(
+						aviso.titulo,
+						textAlign: TextAlign.center,
+						style: textTheme.titleLarge?.copyWith(
+							color: colorAviso,
+							fontWeight: FontWeight.w700,
+						),
+					),
+					content: SizedBox(
+						width: 520,
+						child: SingleChildScrollView(
+							child: Column(
+								mainAxisSize: MainAxisSize.min,
+								crossAxisAlignment: CrossAxisAlignment.start,
+								children: [
+									Text(aviso.mensaje, style: textTheme.bodyLarge),
+									const SizedBox(height: 12),
+									Text(
+										'Que cambio:',
+										style: textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
+									),
+									const SizedBox(height: 4),
+									...aviso.cambios.map(
+										(cambio) => Padding(
+											padding: const EdgeInsets.only(bottom: 4),
+											child: Text('- $cambio', style: textTheme.bodyMedium),
+										),
+									),
+									if (cambioTotal) ...[
+										const SizedBox(height: 12),
+										Container(
+											width: double.infinity,
+											padding: const EdgeInsets.all(12),
+											decoration: BoxDecoration(
+												color: colorAviso.withValues(alpha: 0.10),
+												borderRadius: BorderRadius.circular(10),
+												border: Border.all(color: colorAviso),
+											),
+											child: Column(
+												crossAxisAlignment: CrossAxisAlignment.start,
+												children: [
+													Text(
+														'Total anterior: ${_formatearMonto(aviso.totalAnteriorArs)} ARS',
+														style: textTheme.bodyMedium?.copyWith(
+															decoration: TextDecoration.lineThrough,
+														),
+													),
+													const SizedBox(height: 4),
+													Text(
+														'Total nuevo: ${_formatearMonto(aviso.totalNuevoArs)} ARS',
+														style: textTheme.titleMedium?.copyWith(
+															fontWeight: FontWeight.w700,
+														),
+													),
+												],
+											),
+										),
+									],
+								],
+							),
+						),
+					),
+					actions: [
+						if (_pasoActivo != _pasoFacturacion)
+							TextButton(
+								onPressed: () => Navigator.of(dialogContext).pop(false),
+								child: const Text('Cerrar'),
+							),
+						FilledButton(
+							onPressed: () => Navigator.of(dialogContext).pop(true),
+							child: Text(
+								_pasoActivo == _pasoFacturacion ? 'Entendido' : 'Ver facturacion',
+							),
+						),
+					],
+				);
+			},
+		);
+
+		if (!mounted || irAFacturacion != true || _pasoActivo == _pasoFacturacion) {
+			return;
+		}
+		// Se va directo al paso sin volver a pedir los valores: ya son los vigentes.
+		setState(() {
+			_pasoActivo = _pasoFacturacion;
+		});
 	}
 
 	void _recargarCatalogosFalla() {
@@ -661,6 +776,11 @@ class _FormularioServicioState extends State<FormularioServicio> {
 					);
 				}
 
+				final avisoValores = state.avisoValores;
+				if (avisoValores != null) {
+					_mostrarAvisoValores(avisoValores);
+				}
+
 				if (state.exitoMensaje != null && state.exitoMensaje!.isNotEmpty) {
 					ScaffoldMessenger.of(context).showSnackBar(
 						SnackBar(content: Text(state.exitoMensaje!)),
@@ -1127,7 +1247,7 @@ class _FormularioServicioState extends State<FormularioServicio> {
 						resolucionLabel: resolucionLabel,
 					),
 				);
-			case 3:
+			case _pasoFacturacion:
 				return _buildSeccionFacturacion(context, estadoFormulario);
 			case 4:
 				return _buildZonaVisual(
@@ -1618,13 +1738,7 @@ class _FormularioServicioState extends State<FormularioServicio> {
 		final anchoPantalla = MediaQuery.sizeOf(context).width;
 		final mostrarTablaDetalle = anchoPantalla >= 860;
 		final anchosTabla = _resolverAnchosDetalleFacturado(anchoPantalla);
-		final kmCantidad = _doubleDesdeTextoLocal(estado.km);
-		final precioServicioUsd = _doubleDesdeTextoLocal(estado.precioServicioUsd);
-		final hayServicioTecnico = precioServicioUsd > 0;
-		final precioServicioArs = precioServicioUsd * estado.cotizacionDolarSnapshot;
-		final hayViatico = kmCantidad > 0;
-		final subtotalKmUsdCalculado = kmCantidad * estado.valorKmUsdSnapshot;
-		final subtotalKmArsCalculado = subtotalKmUsdCalculado * estado.cotizacionDolarSnapshot;
+		final kmCantidad = estado.kmFacturados;
 		final descuentoPorcentaje = _doubleDesdeTextoLocal(estado.descuentoPorcentaje);
 		final subtotalBrutoUsd =
 				estado.subtotalServicioUsd + estado.subtotalKmUsd + estado.subtotalRepuestosUsd;
@@ -1718,14 +1832,16 @@ class _FormularioServicioState extends State<FormularioServicio> {
 								child: Padding(
 									padding: const EdgeInsets.only(top: 10),
 									child: Text(
-										'Calculo km: ${_formatearCantidad(kmCantidad)} x ${_formatearMonto(estado.valorKmUsdSnapshot)} USD = ${_formatearMonto(subtotalKmUsdCalculado)} USD / ${_formatearMonto(subtotalKmArsCalculado)} ARS',
+										'Calculo km: ${_formatearCantidad(kmCantidad)} x ${_formatearMonto(estado.valorKmUsdSnapshot)} USD = ${_formatearMonto(estado.subtotalKmUsd)} USD / ${_formatearMonto(estado.subtotalKmArs)} ARS',
 										style: _estiloTextoCompacto(context),
 									),
 								),
 							),
 							derecha: TextField(
 								controller: _kmController,
-								keyboardType: const TextInputType.numberWithOptions(decimal: true),
+								// Km enteros: es lo que se factura y lo que guarda la orden.
+								keyboardType: TextInputType.number,
+								inputFormatters: [FilteringTextInputFormatter.digitsOnly],
 								style: _estiloTextoCompacto(context),
 								decoration: _decoracionCampoCompacta(
 									context,
@@ -1836,24 +1952,12 @@ class _FormularioServicioState extends State<FormularioServicio> {
 						_buildDetalleFacturadoTabla(
 							context: context,
 							estado: estado,
-							hayServicioTecnico: hayServicioTecnico,
-							precioServicioUsd: precioServicioUsd,
-							precioServicioArs: precioServicioArs,
-							hayViatico: hayViatico,
-							kmCantidad: kmCantidad,
-							subtotalKmArsCalculado: subtotalKmArsCalculado,
 							anchos: anchosTabla,
 						)
 					else
 						_buildDetalleFacturadoCompacto(
 							context: context,
 							estado: estado,
-							hayServicioTecnico: hayServicioTecnico,
-							precioServicioUsd: precioServicioUsd,
-							precioServicioArs: precioServicioArs,
-							hayViatico: hayViatico,
-							kmCantidad: kmCantidad,
-							subtotalKmArsCalculado: subtotalKmArsCalculado,
 						),
 					const SizedBox(height: 10),
 					const SizedBox(height: 10),
@@ -1908,15 +2012,11 @@ class _FormularioServicioState extends State<FormularioServicio> {
 		);
 	}
 
+	/// Las filas salen de `estado.itemsFacturacion`: las mismas lineas que se
+	/// mandan al backend, con los importes ya redondeados por el bloc.
 	Widget _buildDetalleFacturadoTabla({
 		required BuildContext context,
 		required ServicioFormularioState estado,
-		required bool hayServicioTecnico,
-		required double precioServicioUsd,
-		required double precioServicioArs,
-		required bool hayViatico,
-		required double kmCantidad,
-		required double subtotalKmArsCalculado,
 		required _DetalleFacturadoAnchos anchos,
 	}) {
 		return SingleChildScrollView(
@@ -1926,45 +2026,29 @@ class _FormularioServicioState extends State<FormularioServicio> {
 				child: Column(
 					children: [
 						_buildFilaCabeceraDetalleFacturado(context, anchos: anchos),
-						if (hayServicioTecnico)
-							_buildFilaDetalleFacturado(
-								context: context,
-								descripcion: 'Servicio tecnico',
-								cantidad: '1',
-								precioUsd: _formatearMonto(precioServicioUsd),
-								subtotalArs: _formatearMonto(precioServicioArs),
-								anchos: anchos,
-							),
-						if (hayViatico)
-							_buildFilaDetalleFacturado(
-								context: context,
-								descripcion: 'Viatico por km',
-								cantidad: _formatearCantidad(kmCantidad),
-								precioUsd: _formatearMonto(estado.valorKmUsdSnapshot),
-								subtotalArs: _formatearMonto(subtotalKmArsCalculado),
-								anchos: anchos,
-							),
-						...estado.repuestosSeleccionados.map((item) {
-							final subtotalArs =
-									item.cantidad * item.repuesto.precioUsd * estado.cotizacionDolarSnapshot;
+						...estado.itemsFacturacion.map((item) {
+							final esRepuesto = item.tipoItem == 'repuesto';
+							final repuestoId = item.referenciaId;
 							return _buildFilaDetalleFacturado(
 								context: context,
-								descripcion: '${item.repuesto.codigo} - ${item.repuesto.nombre}',
+								descripcion: item.descripcion,
 								cantidad: _formatearCantidad(item.cantidad),
-								precioUsd: _formatearMonto(item.repuesto.precioUsd),
-								subtotalArs: _formatearMonto(subtotalArs),
-								cantidadEditable: true,
-								repuestoId: item.repuesto.id,
+								precioUsd: _formatearMonto(item.precioUnitarioUsd),
+								subtotalArs: _formatearMonto(item.subtotalArs),
+								cantidadEditable: esRepuesto,
+								repuestoId: repuestoId,
 								cantidadInicial: _formatearCantidad(item.cantidad),
-								onEliminar: () {
-									context.read<ServicioBloc>().add(
-											ServicioRepuestoEliminado(repuestoId: item.repuesto.id),
-									);
-								},
+								onEliminar: esRepuesto && repuestoId != null
+										? () {
+												context.read<ServicioBloc>().add(
+															ServicioRepuestoEliminado(repuestoId: repuestoId),
+														);
+											}
+										: null,
 								anchos: anchos,
 							);
 						}),
-						if (!hayServicioTecnico && !hayViatico && estado.repuestosSeleccionados.isEmpty)
+						if (estado.itemsFacturacion.isEmpty)
 							Container(
 								width: anchos.anchoTotal,
 								padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
@@ -1989,14 +2073,8 @@ class _FormularioServicioState extends State<FormularioServicio> {
 	Widget _buildDetalleFacturadoCompacto({
 		required BuildContext context,
 		required ServicioFormularioState estado,
-		required bool hayServicioTecnico,
-		required double precioServicioUsd,
-		required double precioServicioArs,
-		required bool hayViatico,
-		required double kmCantidad,
-		required double subtotalKmArsCalculado,
 	}) {
-		if (!hayServicioTecnico && !hayViatico && estado.repuestosSeleccionados.isEmpty) {
+		if (estado.itemsFacturacion.isEmpty) {
 			return Container(
 				width: double.infinity,
 				padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
@@ -2012,43 +2090,27 @@ class _FormularioServicioState extends State<FormularioServicio> {
 		}
 
 		return Column(
-			children: [
-				if (hayServicioTecnico)
-					_buildTarjetaDetalleFacturado(
-						context: context,
-						descripcion: 'Servicio tecnico',
-						cantidad: '1',
-						precioUsd: _formatearMonto(precioServicioUsd),
-						subtotalArs: _formatearMonto(precioServicioArs),
-					),
-				if (hayViatico)
-					_buildTarjetaDetalleFacturado(
-						context: context,
-						descripcion: 'Viatico por km',
-						cantidad: _formatearCantidad(kmCantidad),
-						precioUsd: _formatearMonto(estado.valorKmUsdSnapshot),
-						subtotalArs: _formatearMonto(subtotalKmArsCalculado),
-					),
-				...estado.repuestosSeleccionados.map((item) {
-					final subtotalArs =
-							item.cantidad * item.repuesto.precioUsd * estado.cotizacionDolarSnapshot;
-					return _buildTarjetaDetalleFacturado(
-						context: context,
-						descripcion: '${item.repuesto.codigo} - ${item.repuesto.nombre}',
-						cantidad: _formatearCantidad(item.cantidad),
-						precioUsd: _formatearMonto(item.repuesto.precioUsd),
-						subtotalArs: _formatearMonto(subtotalArs),
-						cantidadEditable: true,
-						repuestoId: item.repuesto.id,
-						cantidadInicial: _formatearCantidad(item.cantidad),
-						onEliminar: () {
-							context.read<ServicioBloc>().add(
-									ServicioRepuestoEliminado(repuestoId: item.repuesto.id),
-							);
-						},
-					);
-				}),
-			],
+			children: estado.itemsFacturacion.map((item) {
+				final esRepuesto = item.tipoItem == 'repuesto';
+				final repuestoId = item.referenciaId;
+				return _buildTarjetaDetalleFacturado(
+					context: context,
+					descripcion: item.descripcion,
+					cantidad: _formatearCantidad(item.cantidad),
+					precioUsd: _formatearMonto(item.precioUnitarioUsd),
+					subtotalArs: _formatearMonto(item.subtotalArs),
+					cantidadEditable: esRepuesto,
+					repuestoId: repuestoId,
+					cantidadInicial: _formatearCantidad(item.cantidad),
+					onEliminar: esRepuesto && repuestoId != null
+							? () {
+									context.read<ServicioBloc>().add(
+												ServicioRepuestoEliminado(repuestoId: repuestoId),
+											);
+								}
+							: null,
+				);
+			}).toList(),
 		);
 	}
 
