@@ -1,3 +1,4 @@
+import 'package:cliente_feedback_tecnico/core/fecha/fecha_iso8601.dart';
 import 'package:cliente_feedback_tecnico/features/servicios/domain/entities/servicio.dart';
 import 'package:cliente_feedback_tecnico/features/servicios/domain/entities/documento_orden.dart';
 import 'package:cliente_feedback_tecnico/features/servicios/domain/entities/facturacion.dart';
@@ -269,7 +270,10 @@ class ServicioDto {
 			body['idempotencyKey'] = idempotencyKey;
 		}
 		if (fechaHoraServicio != null) {
-			body['fechaHoraServicio'] = fechaHoraServicio!.toIso8601String();
+			body['fechaHoraServicio'] = fechaIso8601ConOffset(
+				fechaHoraServicio!,
+				utcOffsetMinutos: utcOffsetMinutos,
+			);
 		}
 		if (timezoneIana != null && timezoneIana!.trim().isNotEmpty) {
 			body['timezoneIana'] = timezoneIana;
@@ -314,7 +318,9 @@ class ServicioDto {
 				'pdfUrl': documento!.pdfUrl,
 				'firmaClienteNombre': documento!.firmaClienteNombre,
 				'firmaClienteDocumento': documento!.firmaClienteDocumento,
-				'firmaFechaHora': documento!.firmaFechaHora?.toIso8601String(),
+				'firmaFechaHora': documento!.firmaFechaHora == null
+						? null
+						: fechaIso8601ConOffset(documento!.firmaFechaHora!),
 			};
 		}
 
