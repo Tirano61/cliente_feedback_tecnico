@@ -1,5 +1,4 @@
 import 'dart:convert';
-import 'dart:typed_data';
 
 import 'package:cliente_feedback_tecnico/features/catalogos/presentation/bloc/catalogo_bloc.dart';
 import 'package:cliente_feedback_tecnico/features/catalogos/presentation/bloc/catalogo_event.dart';
@@ -680,6 +679,9 @@ class _FormularioServicioState extends State<FormularioServicio> {
 																					return;
 																				}
 																				firmaTrazoPng = await firmaClienteController.toPngBytes();
+																				if (!sheetContext.mounted) {
+																					return;
+																				}
 																				if (firmaTrazoPng == null || firmaTrazoPng.isEmpty) {
 																					await showDialog<void>(
 																						context: sheetContext,
@@ -698,6 +700,9 @@ class _FormularioServicioState extends State<FormularioServicio> {
 																				}
 																			}
 
+																	if (!context.mounted || !sheetContext.mounted) {
+																		return;
+																	}
 																	context.read<ServicioBloc>().add(
 																		ServicioDocumentoSubidaSolicitada(
 																			servicioId: orden.servicioId,
