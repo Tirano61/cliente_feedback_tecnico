@@ -14,8 +14,10 @@ import 'package:cliente_feedback_tecnico/features/servicios/application/obtener_
 import 'package:cliente_feedback_tecnico/features/servicios/application/obtener_mis_servicios_use_case.dart';
 import 'package:cliente_feedback_tecnico/features/servicios/application/quitar_documento_pendiente_use_case.dart';
 import 'package:cliente_feedback_tecnico/features/servicios/application/subir_documento_firmado_use_case.dart';
+import 'package:cliente_feedback_tecnico/features/servicios/domain/entities/documento_orden.dart';
 import 'package:cliente_feedback_tecnico/features/servicios/domain/entities/producto_falla.dart';
 import 'package:cliente_feedback_tecnico/features/servicios/domain/entities/servicio.dart';
+import 'package:cliente_feedback_tecnico/features/servicios/infrastructure/dtos/servicio_dto.dart';
 import 'package:cliente_feedback_tecnico/features/servicios/infrastructure/repositories/servicio_repository_impl.dart';
 import 'package:cliente_feedback_tecnico/features/servicios/presentation/bloc/servicio_bloc.dart';
 import 'package:cliente_feedback_tecnico/features/servicios/presentation/bloc/servicio_event.dart';
@@ -201,6 +203,67 @@ void main() {
 
 			expect(tipos, contains('mano_obra'));
 			expect(tipos, isNot(contains('viatico')));
+		});
+	});
+
+	group('fecha del servicio', () {
+		final formatoConOffset = RegExp(
+			r'^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}[+-]\d{2}:\d{2}$',
+		);
+
+		test('el DTO serializa fechaHoraServicio con el offset de la orden', () {
+			final body = ServicioDto.desdeEntidad(
+				Servicio(
+					id: '',
+					fechaHoraServicio: DateTime.utc(2026, 10, 5, 0, 0, 58, 129),
+					timezoneIana: 'America/Argentina/Buenos_Aires',
+					utcOffsetMinutos: -180,
+					canal: Canal.campo,
+					clienteId: _clienteId,
+					equipoNroSerie: 'SN-001',
+					equipoModelo: 'ST455',
+					equipoUbicacion: 'Tolva principal',
+					equipoAnio: 2021,
+					partesFallaron: const ['indicador'],
+					sintoma: 'No inicia',
+					diagnosticoDetalle: 'Fuente sin salida',
+					diagnosticoCatIds: const [_diagnosticoUnoId],
+					resolucionIds: const [_resolucionUnaId],
+					documento: DocumentoOrden(
+						firmaFechaHora: DateTime.utc(2026, 10, 5, 0, 30),
+					),
+				),
+			).toJson();
+
+			expect(body['fechaHoraServicio'], '2026-10-04T21:00:58.129-03:00');
+			expect(body['timezoneIana'], 'America/Argentina/Buenos_Aires');
+			expect(body['utcOffsetMinutos'], -180);
+			expect(
+				(body['documento'] as Map<String, dynamic>)['firmaFechaHora'],
+				matches(formatoConOffset),
+			);
+		});
+
+		test('el POST del formulario manda fecha con offset, zona y offset en minutos', () async {
+			final antes = DateTime.now();
+			final body = await _guardarOrden(canal: Canal.campo);
+
+			final fecha = body['fechaHoraServicio'] as String;
+			final offsetMinutos = body['utcOffsetMinutos'] as int;
+
+			expect(fecha, matches(formatoConOffset));
+			expect(offsetMinutos, antes.timeZoneOffset.inMinutes);
+			expect(body['timezoneIana'], 'America/Argentina/Buenos_Aires');
+
+			// El offset escrito en la fecha es el mismo que viaja en utcOffsetMinutos.
+			final signo = offsetMinutos < 0 ? '-' : '+';
+			final horas = (offsetMinutos.abs() ~/ 60).toString().padLeft(2, '0');
+			final minutos = (offsetMinutos.abs() % 60).toString().padLeft(2, '0');
+			expect(fecha.endsWith('$signo$horas:$minutos'), isTrue);
+
+			// Y apunta al instante real de la carga, no corrido por la zona.
+			final diferencia = DateTime.parse(fecha).difference(antes).abs();
+			expect(diferencia, lessThan(const Duration(minutes: 1)));
 		});
 	});
 }

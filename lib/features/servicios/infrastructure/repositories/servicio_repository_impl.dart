@@ -6,6 +6,7 @@ import 'package:cliente_feedback_tecnico/core/api/api_client.dart';
 import 'package:cliente_feedback_tecnico/core/api/api_constants.dart';
 import 'package:cliente_feedback_tecnico/core/auth/secure_storage.dart';
 import 'package:cliente_feedback_tecnico/core/error/failures.dart';
+import 'package:cliente_feedback_tecnico/core/fecha/fecha_iso8601.dart';
 import 'package:cliente_feedback_tecnico/features/servicios/domain/entities/cliente.dart';
 import 'package:cliente_feedback_tecnico/features/servicios/domain/entities/cotizacion_actual.dart';
 import 'package:cliente_feedback_tecnico/features/servicios/domain/entities/orden_mis_servicios.dart';
@@ -243,7 +244,7 @@ class ServicioRepositoryImpl implements IServicioRepository {
 			if ((solicitud.firmaClienteDocumento ?? '').trim().isNotEmpty) {
 				campos['firmaClienteDocumento'] = solicitud.firmaClienteDocumento!.trim();
 			}
-			campos['firmaFechaHora'] = solicitud.firmaFechaHora!.toIso8601String();
+			campos['firmaFechaHora'] = fechaIso8601ConOffset(solicitud.firmaFechaHora!);
 		}
 
 		final archivoPdf = http.MultipartFile.fromBytes(
