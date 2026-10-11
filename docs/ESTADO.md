@@ -255,12 +255,8 @@ está por omisión:
 3. ~~**`km` sigue siendo `int`.**~~ Resuelto: el campo sólo acepta enteros y el
    BLoC factura los km redondeados, así `km` y `facturacion.kmCantidad` coinciden.
 
-4. **`km = 0` pasa la validación en campo.** `_validarFormulario` sólo exige que
-   el campo no esté vacío y que no sea negativo
-   ([servicio_bloc.dart:1299-1305](../lib/features/servicios/presentation/bloc/servicio_bloc.dart#L1299)).
-   El contrato dice que en `campo` `km` debe ser **mayor a 0** porque la
-   liquidación automática lo exige: la app deja enviar una orden que el backend
-   rechaza con 400.
+4. ~~**`km = 0` pasa la validación en campo.**~~ Resuelto: `_validarFormulario`
+   exige km mayor a 0 en campo (el backend lo necesita para la liquidación).
 
 5. **Rol del usuario sin verificar.** `Usuario.roles` se parsea y se persiste,
    pero nadie lo consulta: un usuario sin rol `tecnico` entra a la app igual y
