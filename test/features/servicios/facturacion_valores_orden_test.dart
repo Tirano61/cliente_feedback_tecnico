@@ -264,6 +264,18 @@ void main() {
 			expect(facturacion['kmCantidad'], 121);
 		});
 
+		test('en campo no deja guardar con 0 km', () async {
+			final escenario = _Escenario();
+			await escenario.actualizarValores();
+			await escenario.cargarOrdenDeCampo(km: '0');
+
+			final estado = await escenario.guardar();
+			await escenario.cerrar();
+
+			expect(estado.errorMensaje, contains('mayores a 0'));
+			expect(escenario.bodiesAlta, isEmpty);
+		});
+
 		test('sin cotizacion cargada no deja guardar una orden con cobro', () async {
 			final escenario = _Escenario();
 			await escenario.cargarOrdenDeCampo();

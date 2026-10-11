@@ -1678,6 +1678,11 @@ class ServicioBloc extends Bloc<ServicioEvent, ServicioState> {
 		if (km < 0) {
 			return 'Completa los kilometros con un valor numerico valido.';
 		}
+		// En campo el backend genera la liquidacion del tecnico por tipo de
+		// salida segun los km: con 0 km rechaza la orden.
+		if (estado.requiereDatosDeCampo && _kmFacturables(estado) <= 0) {
+			return 'En un servicio de campo los kilometros tienen que ser mayores a 0.';
+		}
 		final precioServicioUsd = _doubleDesdeTexto(
 			estado.precioServicioUsd,
 			valorPorDefecto: 0,
