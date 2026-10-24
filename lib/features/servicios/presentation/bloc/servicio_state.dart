@@ -26,6 +26,10 @@ class ServicioFormularioState extends ServicioState {
 	final String timezoneIana;
 	final int? utcOffsetMinutos;
 	final Canal? canal;
+
+	/// El canal lo definio la pantalla que abrio el formulario (por ejemplo el
+	/// servicio de fabrica de una recepcion) y no se puede cambiar.
+	final bool canalFijo;
 	final String clienteId;
 	final String lugarProvinciaId;
 	final String lugarDetalle;
@@ -85,6 +89,7 @@ class ServicioFormularioState extends ServicioState {
 		this.timezoneIana = '',
 		this.utcOffsetMinutos,
 		this.canal,
+		this.canalFijo = false,
 		this.clienteId = '',
 		this.lugarProvinciaId = '',
 		this.lugarDetalle = '',
@@ -147,6 +152,7 @@ class ServicioFormularioState extends ServicioState {
 		bool limpiarFechaHoraServicio = false,
 		bool limpiarUtcOffsetMinutos = false,
 		Canal? canal,
+		bool? canalFijo,
 		String? clienteId,
 		String? lugarProvinciaId,
 		String? lugarDetalle,
@@ -210,6 +216,7 @@ class ServicioFormularioState extends ServicioState {
 					? null
 					: (utcOffsetMinutos ?? this.utcOffsetMinutos),
 			canal: canal ?? this.canal,
+			canalFijo: canalFijo ?? this.canalFijo,
 			clienteId: clienteId ?? this.clienteId,
 			lugarProvinciaId: lugarProvinciaId ?? this.lugarProvinciaId,
 			lugarDetalle: lugarDetalle ?? this.lugarDetalle,
@@ -287,6 +294,7 @@ class ServicioFormularioState extends ServicioState {
 				timezoneIana,
 				utcOffsetMinutos,
 				canal,
+				canalFijo,
 				clienteId,
 				lugarProvinciaId,
 				lugarDetalle,

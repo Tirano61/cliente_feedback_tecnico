@@ -28,11 +28,19 @@ class NuevaRecepcionState extends Equatable {
 	final String sintomaReportado;
 	final String observaciones;
 	final bool guardando;
+	final bool creandoCliente;
+
+	/// Por que no se pudo dar de alta el cliente. Lo muestra el dialogo del
+	/// alta, que queda abierto con lo cargado; se limpia al reintentar.
+	final String? errorAltaCliente;
 
 	/// Efectos de un solo uso: no se arrastran al siguiente emit.
 	final String? errorMensaje;
 	final Recepcion? recepcionCreada;
 	final RecepcionAbiertaExistente? recepcionAbierta;
+
+	/// El alta rapida termino bien (el cliente ya quedo seleccionado).
+	final Cliente? clienteCreado;
 
 	const NuevaRecepcionState({
 		this.clientesEncontrados = const [],
@@ -44,9 +52,12 @@ class NuevaRecepcionState extends Equatable {
 		this.sintomaReportado = '',
 		this.observaciones = '',
 		this.guardando = false,
+		this.creandoCliente = false,
+		this.errorAltaCliente,
 		this.errorMensaje,
 		this.recepcionCreada,
 		this.recepcionAbierta,
+		this.clienteCreado,
 	});
 
 	NuevaRecepcionState copyWith({
@@ -60,9 +71,13 @@ class NuevaRecepcionState extends Equatable {
 		String? sintomaReportado,
 		String? observaciones,
 		bool? guardando,
+		bool? creandoCliente,
+		String? errorAltaCliente,
+		bool limpiarErrorAltaCliente = false,
 		String? errorMensaje,
 		Recepcion? recepcionCreada,
 		RecepcionAbiertaExistente? recepcionAbierta,
+		Cliente? clienteCreado,
 	}) {
 		return NuevaRecepcionState(
 			clientesEncontrados: clientesEncontrados ?? this.clientesEncontrados,
@@ -75,9 +90,13 @@ class NuevaRecepcionState extends Equatable {
 			sintomaReportado: sintomaReportado ?? this.sintomaReportado,
 			observaciones: observaciones ?? this.observaciones,
 			guardando: guardando ?? this.guardando,
+			creandoCliente: creandoCliente ?? this.creandoCliente,
+			errorAltaCliente:
+					limpiarErrorAltaCliente ? null : (errorAltaCliente ?? this.errorAltaCliente),
 			errorMensaje: errorMensaje,
 			recepcionCreada: recepcionCreada,
 			recepcionAbierta: recepcionAbierta,
+			clienteCreado: clienteCreado,
 		);
 	}
 
@@ -92,8 +111,11 @@ class NuevaRecepcionState extends Equatable {
 				sintomaReportado,
 				observaciones,
 				guardando,
+				creandoCliente,
+				errorAltaCliente,
 				errorMensaje,
 				recepcionCreada,
 				recepcionAbierta,
+				clienteCreado,
 			];
 }

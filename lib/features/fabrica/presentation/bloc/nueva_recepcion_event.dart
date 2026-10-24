@@ -60,6 +60,26 @@ class NuevaRecepcionCambiada extends NuevaRecepcionEvent {
 			];
 }
 
+/// Alta rapida de cliente (`POST /clientes`): queda creado y seleccionado.
+class NuevaRecepcionClienteRapidoSolicitado extends NuevaRecepcionEvent {
+	final String cuit;
+	final String nombre;
+	final String contacto;
+	final String telefono;
+	final String localidad;
+
+	const NuevaRecepcionClienteRapidoSolicitado({
+		required this.cuit,
+		required this.nombre,
+		this.contacto = '',
+		this.telefono = '',
+		this.localidad = '',
+	});
+
+	@override
+	List<Object?> get props => [cuit, nombre, contacto, telefono, localidad];
+}
+
 class NuevaRecepcionGuardada extends NuevaRecepcionEvent {
 	const NuevaRecepcionGuardada();
 }

@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'package:cliente_feedback_tecnico/core/widgets/alta_rapida_cliente_dialogo.dart';
 import 'package:cliente_feedback_tecnico/features/catalogos/presentation/bloc/catalogo_bloc.dart';
 import 'package:cliente_feedback_tecnico/features/catalogos/presentation/bloc/catalogo_event.dart';
 import 'package:cliente_feedback_tecnico/features/catalogos/presentation/bloc/catalogo_state.dart';
@@ -11,6 +12,7 @@ import 'package:cliente_feedback_tecnico/features/servicios/domain/entities/prod
 import 'package:cliente_feedback_tecnico/features/servicios/domain/entities/servicio.dart';
 import 'package:cliente_feedback_tecnico/features/servicios/presentation/bloc/servicio_bloc.dart';
 import 'package:cliente_feedback_tecnico/features/servicios/presentation/bloc/servicio_event.dart';
+import 'package:cliente_feedback_tecnico/features/servicios/presentation/bloc/precarga_formulario_servicio.dart';
 import 'package:cliente_feedback_tecnico/features/servicios/presentation/bloc/servicio_state.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -19,7 +21,15 @@ import 'package:printing/printing.dart';
 import 'package:signature/signature.dart';
 
 class FormularioServicio extends StatefulWidget {
-	const FormularioServicio({super.key});
+	/// Canal fijo y datos con los que arranca (por ejemplo desde una recepcion
+	/// de fabrica). Null: formulario vacio.
+	final PrecargaFormularioServicio? precarga;
+
+	/// Con esto la pantalla que abrio el formulario se encarga de la orden
+	/// guardada (y el formulario no abre el cierre con el PDF).
+	final ValueChanged<OrdenServicioRespuesta>? onOrdenGuardada;
+
+	const FormularioServicio({this.precarga, this.onOrdenGuardada, super.key});
 
 	@override
 	State<FormularioServicio> createState() => _FormularioServicioState();
@@ -54,8 +64,16 @@ class _FormularioServicioState extends State<FormularioServicio> {
 	@override
 	void initState() {
 		super.initState();
+		final precarga = widget.precarga;
+		if (precarga != null) {
+			// El canal ya viene definido: se arranca por los datos.
+			_pasoActivo = 1;
+			_equipoNroSerieController.text = precarga.equipoNroSerie;
+			_sintomaController.text = precarga.sintoma;
+			_modeloIndicadorSeleccionadoId = precarga.equipoModeloProductoId;
+		}
 		_asegurarCatalogosParaPaso(_pasoActivo);
-		context.read<ServicioBloc>().add(const ServicioFormularioReiniciado());
+		context.read<ServicioBloc>().add(ServicioFormularioReiniciado(precarga: precarga));
 	}
 
 	void _asegurarCatalogosParaPaso(int paso) {
@@ -232,231 +250,39 @@ class _FormularioServicioState extends State<FormularioServicio> {
 	}
 
 	Future<void> _mostrarDialogoAltaRapidaCliente(BuildContext context) async {
-		final formularioKey = GlobalKey<FormState>();
-		var cuit = '';
-		var nombre = '';
-		var contacto = '';
-		var telefono = '';
-		var localidad = '';
-		var intentoCrear = false;
-		final colorScheme = Theme.of(context).colorScheme;
-		final textTheme = Theme.of(context).textTheme;
+		// El dialogo vive en otra ruta: se le pasa la misma instancia del BLoC
+		// (en el servicio de fabrica no es la de la pantalla principal).
+		final servicioBloc = context.read<ServicioBloc>();
 
 		await showDialog<void>(
 			context: context,
 			builder: (dialogContext) {
-				return StatefulBuilder(
-					builder: (context, setDialogState) {
-						return BlocBuilder<ServicioBloc, ServicioState>(
-							builder: (context, state) {
-								final estadoFormulario = state is ServicioFormularioState
-										? state
-										: const ServicioFormularioState();
-								final mensaje = estadoFormulario.errorMensaje?.isNotEmpty == true
-										? estadoFormulario.errorMensaje
-										: estadoFormulario.exitoMensaje;
-								final esError = estadoFormulario.errorMensaje?.isNotEmpty == true;
+				return BlocBuilder<ServicioBloc, ServicioState>(
+					bloc: servicioBloc,
+					builder: (context, state) {
+						final estadoFormulario = state is ServicioFormularioState
+								? state
+								: const ServicioFormularioState();
+						final esError = estadoFormulario.errorMensaje?.isNotEmpty == true;
 
-								return AlertDialog(
-									shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
-									titlePadding: const EdgeInsets.fromLTRB(18, 16, 18, 10),
-									contentPadding: const EdgeInsets.fromLTRB(18, 0, 18, 10),
-									actionsPadding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
-									title: Row(
-										children: [
-											Container(
-												padding: const EdgeInsets.all(8),
-												decoration: BoxDecoration(
-													color: colorScheme.primary.withValues(alpha: 0.12),
-													borderRadius: BorderRadius.circular(10),
-												),
-												child: Icon(
-													Icons.person_add_alt_1_outlined,
-													size: 20,
-													color: colorScheme.primary,
-												),
-											),
-											const SizedBox(width: 10),
-											Expanded(
-												child: Text(
-													'Alta rapida de cliente',
-													style: textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
-												),
-											),
-										],
+						return AltaRapidaClienteDialogo(
+							creando: estadoFormulario.creandoCliente,
+							mensaje: esError
+									? estadoFormulario.errorMensaje
+									: estadoFormulario.exitoMensaje,
+							esError: esError,
+							onCrear: (datos) {
+								final payload = <String, dynamic>{
+									'cuit': datos.cuit,
+									'nombre': datos.nombre,
+									'contacto': datos.contacto,
+									'telefono': datos.telefono,
+									'localidad': datos.localidad,
+								};
+								servicioBloc.add(
+									ServicioCrearClienteRapidoSolicitado(
+										payloadJson: jsonEncode(payload),
 									),
-									content: SizedBox(
-										width: 580,
-										child: Form(
-											key: formularioKey,
-											autovalidateMode: AutovalidateMode.onUserInteraction,
-											child: SingleChildScrollView(
-												child: Column(
-													mainAxisSize: MainAxisSize.min,
-													crossAxisAlignment: CrossAxisAlignment.start,
-													children: [
-														Container(
-															width: double.infinity,
-															padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-															decoration: BoxDecoration(
-																color: colorScheme.surfaceContainerHighest.withValues(alpha: 0.35),
-																borderRadius: BorderRadius.circular(10),
-															),
-															child: Text(
-																'Completá los datos para crear y seleccionar el cliente.',
-																style: textTheme.bodySmall?.copyWith(
-																	color: colorScheme.onSurfaceVariant,
-																),
-															),
-														),
-														const SizedBox(height: 12),
-														TextFormField(
-															onChanged: (valor) => cuit = valor,
-															keyboardType: TextInputType.number,
-															decoration: const InputDecoration(
-																labelText: 'CUIT',
-																hintText: 'Ej: 20240854124',
-																border: OutlineInputBorder(),
-															),
-															validator: (valor) {
-																if ((valor ?? '').trim().isEmpty) {
-																	return 'El CUIT es obligatorio.';
-																}
-																return null;
-															},
-														),
-														const SizedBox(height: 10),
-														TextFormField(
-															onChanged: (valor) => nombre = valor,
-															decoration: const InputDecoration(
-																labelText: 'Nombre',
-																hintText: 'Razón social o nombre del cliente',
-																border: OutlineInputBorder(),
-															),
-															validator: (valor) {
-																if ((valor ?? '').trim().isEmpty) {
-																	return 'El nombre es obligatorio.';
-																}
-																return null;
-															},
-														),
-														const SizedBox(height: 10),
-														TextFormField(
-															onChanged: (valor) => contacto = valor,
-															decoration: const InputDecoration(
-																labelText: 'Contacto',
-																border: OutlineInputBorder(),
-															),
-															validator: (valor) {
-																if ((valor ?? '').trim().isEmpty) {
-																	return 'El contacto es obligatorio.';
-																}
-																return null;
-															},
-														),
-														const SizedBox(height: 10),
-														TextFormField(
-															onChanged: (valor) => telefono = valor,
-															keyboardType: TextInputType.phone,
-															decoration: const InputDecoration(
-																labelText: 'Telefono',
-																hintText: 'Ej: +54 9 11 3462-552333',
-																border: OutlineInputBorder(),
-															),
-															validator: (valor) {
-																if ((valor ?? '').trim().isEmpty) {
-																	return 'El telefono es obligatorio.';
-																}
-																return null;
-															},
-														),
-														const SizedBox(height: 10),
-														TextFormField(
-															onChanged: (valor) => localidad = valor,
-															decoration: const InputDecoration(
-																labelText: 'Localidad',
-																hintText: 'Ej: Venado Tuerto',
-																border: OutlineInputBorder(),
-															),
-															validator: (valor) {
-																if ((valor ?? '').trim().isEmpty) {
-																	return 'La localidad es obligatoria.';
-																}
-																return null;
-															},
-														),
-														if (intentoCrear && mensaje != null && mensaje.isNotEmpty) ...[
-															const SizedBox(height: 12),
-															Container(
-																width: double.infinity,
-																padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-																decoration: BoxDecoration(
-																	color: esError
-																		? colorScheme.errorContainer.withValues(alpha: 0.65)
-																		: colorScheme.primaryContainer.withValues(alpha: 0.55),
-																	borderRadius: BorderRadius.circular(10),
-																),
-																child: Text(
-																	mensaje,
-																	style: textTheme.bodySmall?.copyWith(
-																		color: esError
-																			? colorScheme.onErrorContainer
-																			: colorScheme.onPrimaryContainer,
-																	),
-																),
-															),
-														],
-													],
-												),
-											),
-										),
-									),
-									actions: [
-										TextButton(
-											onPressed: estadoFormulario.creandoCliente
-												? null
-												: () => Navigator.of(dialogContext).pop(),
-											child: const Text('Cancelar'),
-										),
-										ElevatedButton(
-											style: ElevatedButton.styleFrom(
-												padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-												shape: RoundedRectangleBorder(
-													borderRadius: BorderRadius.circular(10),
-												),
-											),
-											onPressed: estadoFormulario.creandoCliente
-												? null
-												: () {
-													setDialogState(() {
-														intentoCrear = true;
-													});
-													if (!(formularioKey.currentState?.validate() ?? false)) {
-														return;
-													}
-
-													final payload = <String, dynamic>{
-														'cuit': cuit.trim(),
-														'nombre': nombre.trim(),
-														'contacto': contacto.trim(),
-														'telefono': telefono.trim(),
-														'localidad': localidad.trim(),
-													};
-													context.read<ServicioBloc>().add(
-														ServicioCrearClienteRapidoSolicitado(
-															payloadJson: jsonEncode(payload),
-														),
-													);
-												},
-											child: estadoFormulario.creandoCliente
-												? const SizedBox(
-													height: 16,
-													width: 16,
-													child: CircularProgressIndicator(strokeWidth: 2),
-												)
-												: const Text('Crear cliente'),
-										),
-									],
 								);
 							},
 						);
@@ -488,6 +314,8 @@ class _FormularioServicioState extends State<FormularioServicio> {
 			penColor: Colors.black,
 			exportBackgroundColor: Colors.white,
 		);
+		// La hoja vive en otra ruta: misma instancia del BLoC que el formulario.
+		final servicioBloc = context.read<ServicioBloc>();
 
 		await showModalBottomSheet<void>(
 			context: context,
@@ -497,6 +325,7 @@ class _FormularioServicioState extends State<FormularioServicio> {
 				return StatefulBuilder(
 					builder: (context, setModalState) {
 						return BlocBuilder<ServicioBloc, ServicioState>(
+							bloc: servicioBloc,
 							builder: (context, state) {
 								final estadoFormulario = state is ServicioFormularioState
 										? state
@@ -703,7 +532,7 @@ class _FormularioServicioState extends State<FormularioServicio> {
 																	if (!context.mounted || !sheetContext.mounted) {
 																		return;
 																	}
-																	context.read<ServicioBloc>().add(
+																	servicioBloc.add(
 																		ServicioDocumentoSubidaSolicitada(
 																			servicioId: orden.servicioId,
 																			orden: orden,
@@ -742,7 +571,7 @@ class _FormularioServicioState extends State<FormularioServicio> {
 																onPressed: estadoFormulario.subiendoDocumento
 																	? null
 																	: () {
-																		context.read<ServicioBloc>().add(
+																		servicioBloc.add(
 																			const ServicioDocumentoPendientesReintentarSolicitado(),
 																		);
 																	},
@@ -793,7 +622,13 @@ class _FormularioServicioState extends State<FormularioServicio> {
 
 					final orden = state.ordenActual;
 					final pdfBytes = state.pdfOrdenBytes;
-					if (orden != null && pdfBytes != null && pdfBytes.isNotEmpty) {
+					final onOrdenGuardada = widget.onOrdenGuardada;
+					if (orden != null && onOrdenGuardada != null) {
+						if (_ultimoServicioConFlujoDocumento != orden.servicioId) {
+							_ultimoServicioConFlujoDocumento = orden.servicioId;
+							onOrdenGuardada(orden);
+						}
+					} else if (orden != null && pdfBytes != null && pdfBytes.isNotEmpty) {
 						if (_ultimoServicioConFlujoDocumento != orden.servicioId) {
 							_ultimoServicioConFlujoDocumento = orden.servicioId;
 							_limpiarFormularioVisual();
@@ -1076,15 +911,18 @@ class _FormularioServicioState extends State<FormularioServicio> {
 									padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 0),
 									label: Text(canal.name),
 									selected: estadoFormulario.canal == canal,
-									onSelected: (_) {
-										if (canal != Canal.campo) {
-											_lugarDetalleController.clear();
-											_kmController.clear();
-										}
-										context.read<ServicioBloc>().add(
-												ServicioFormularioCambiado(canal: canal),
-										);
-									},
+									// Canal fijo: los demas no se pueden elegir.
+									onSelected: estadoFormulario.canalFijo && estadoFormulario.canal != canal
+											? null
+											: (_) {
+													if (canal != Canal.campo) {
+														_lugarDetalleController.clear();
+														_kmController.clear();
+													}
+													context.read<ServicioBloc>().add(
+															ServicioFormularioCambiado(canal: canal),
+													);
+												},
 								),
 							);
 						}).toList(),
@@ -2651,9 +2489,16 @@ class _FormularioServicioState extends State<FormularioServicio> {
 			);
 		}
 
+		// Un modelo precargado que no esta entre los indicadores activos no se
+		// puede mostrar en el selector.
+		final modeloSeleccionadoId =
+				opciones.any((producto) => producto.id == _modeloIndicadorSeleccionadoId)
+						? _modeloIndicadorSeleccionadoId
+						: null;
+
 		return _filaDosCampos(
 			izquierda: DropdownButtonFormField<String>(
-				initialValue: _modeloIndicadorSeleccionadoId,
+				initialValue: modeloSeleccionadoId,
 				isExpanded: true,
 				decoration: _decoracionCampoCompacta(
 					context,

@@ -25,6 +25,7 @@ import 'package:cliente_feedback_tecnico/features/servicios/domain/entities/serv
 import 'package:cliente_feedback_tecnico/features/servicios/domain/entities/solicitud_documento_firmado.dart';
 import 'package:cliente_feedback_tecnico/features/servicios/domain/errors/valores_orden_rechazados_exception.dart';
 import 'package:cliente_feedback_tecnico/features/servicios/presentation/bloc/filtro_estado_servicio.dart';
+import 'package:cliente_feedback_tecnico/features/servicios/presentation/bloc/precarga_formulario_servicio.dart';
 import 'package:cliente_feedback_tecnico/features/servicios/presentation/bloc/servicio_event.dart';
 import 'package:cliente_feedback_tecnico/features/servicios/presentation/bloc/servicio_state.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -178,7 +179,7 @@ class ServicioBloc extends Bloc<ServicioEvent, ServicioState> {
 				fechaHoraServicio: fechaHoraServicio,
 				timezoneIana: timezoneIana,
 				utcOffsetMinutos: utcOffsetMinutos,
-				canal: event.canal,
+				canal: actual.canalFijo ? null : event.canal,
 				clienteId: event.clienteId,
 				lugarProvinciaId: event.zonaId,
 				lugarDetalle: event.lugarDetalle,
@@ -1593,12 +1594,30 @@ class ServicioBloc extends Bloc<ServicioEvent, ServicioState> {
 		Emitter<ServicioState> emit,
 	) async {
 		await _cargarPendientesDesdeStorage();
-		emit(
-			_crearEstadoFormularioInicial().copyWith(
-				documentosPendientes: _documentosPendientes.length,
+		final inicial = _crearEstadoFormularioInicial().copyWith(
+			documentosPendientes: _documentosPendientes.length,
+		);
+		final precarga = event.precarga;
+		emit(precarga == null ? inicial : _aplicarPrecarga(inicial, precarga));
+		add(const ServicioFacturacionInicializada());
+	}
+
+	ServicioFormularioState _aplicarPrecarga(
+		ServicioFormularioState estado,
+		PrecargaFormularioServicio precarga,
+	) {
+		final cliente = precarga.cliente;
+		return _aplicarReglasDeCanal(
+			estado.copyWith(
+				canal: precarga.canal,
+				canalFijo: true,
+				clienteSeleccionado: cliente,
+				clienteId: cliente?.id,
+				equipoNroSerie: precarga.equipoNroSerie.trim(),
+				equipoModelo: precarga.equipoModelo.trim(),
+				sintoma: precarga.sintoma.trim(),
 			),
 		);
-		add(const ServicioFacturacionInicializada());
 	}
 
 	Future<void> _cargarPendientesDesdeStorage() async {

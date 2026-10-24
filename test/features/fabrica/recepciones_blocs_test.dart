@@ -6,6 +6,7 @@ import 'package:cliente_feedback_tecnico/features/fabrica/application/crear_rece
 import 'package:cliente_feedback_tecnico/features/fabrica/application/devolver_recepcion_use_case.dart';
 import 'package:cliente_feedback_tecnico/features/fabrica/application/obtener_recepcion_use_case.dart';
 import 'package:cliente_feedback_tecnico/features/fabrica/application/obtener_recepciones_use_case.dart';
+import 'package:cliente_feedback_tecnico/features/fabrica/application/vincular_servicio_recepcion_use_case.dart';
 import 'package:cliente_feedback_tecnico/features/fabrica/domain/entities/estados_fabrica.dart';
 import 'package:cliente_feedback_tecnico/features/fabrica/domain/entities/recepcion.dart';
 import 'package:cliente_feedback_tecnico/features/fabrica/domain/entities/referencias_fabrica.dart';
@@ -22,6 +23,7 @@ import 'package:cliente_feedback_tecnico/features/fabrica/presentation/bloc/rece
 import 'package:cliente_feedback_tecnico/features/fabrica/presentation/bloc/recepciones_state.dart';
 import 'package:cliente_feedback_tecnico/features/fabrica/presentation/bloc/reglas_recepcion.dart';
 import 'package:cliente_feedback_tecnico/features/servicios/application/buscar_clientes_use_case.dart';
+import 'package:cliente_feedback_tecnico/features/servicios/application/crear_cliente_rapido_use_case.dart';
 import 'package:cliente_feedback_tecnico/features/servicios/domain/entities/cliente.dart';
 import 'package:cliente_feedback_tecnico/features/servicios/infrastructure/repositories/servicio_repository_impl.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -396,6 +398,7 @@ void main() {
 				ObtenerRecepcionUseCase(backend.fabrica),
 				CambiarEstadoRecepcionUseCase(backend.fabrica),
 				DevolverRecepcionUseCase(backend.fabrica),
+				VincularServicioRecepcionUseCase(backend.fabrica),
 				ahora: _hoy,
 			);
 		});
@@ -594,6 +597,7 @@ void main() {
 			bloc = NuevaRecepcionBloc(
 				CrearRecepcionUseCase(backend.fabrica),
 				BuscarClientesUseCase(backend.servicios),
+				CrearClienteRapidoUseCase(backend.servicios),
 			);
 		});
 

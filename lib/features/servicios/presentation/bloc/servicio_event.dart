@@ -6,6 +6,7 @@ import 'package:cliente_feedback_tecnico/features/servicios/domain/entities/prod
 import 'package:cliente_feedback_tecnico/features/servicios/domain/entities/repuesto.dart';
 import 'package:cliente_feedback_tecnico/features/servicios/domain/entities/servicio.dart';
 import 'package:cliente_feedback_tecnico/features/servicios/presentation/bloc/filtro_estado_servicio.dart';
+import 'package:cliente_feedback_tecnico/features/servicios/presentation/bloc/precarga_formulario_servicio.dart';
 import 'package:equatable/equatable.dart';
 
 abstract class ServicioEvent extends Equatable {
@@ -111,8 +112,14 @@ class MisServiciosSolicitados extends ServicioEvent {
 	const MisServiciosSolicitados();
 }
 
+/// Formulario vacio, o con `precarga` (canal fijo y datos del equipo).
 class ServicioFormularioReiniciado extends ServicioEvent {
-	const ServicioFormularioReiniciado();
+	final PrecargaFormularioServicio? precarga;
+
+	const ServicioFormularioReiniciado({this.precarga});
+
+	@override
+	List<Object?> get props => [precarga];
 }
 
 class ServicioFacturacionInicializada extends ServicioEvent {
