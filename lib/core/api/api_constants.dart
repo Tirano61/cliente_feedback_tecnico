@@ -35,4 +35,51 @@ class ApiConstants {
 	static String liquidacionItems(String liquidacionId) {
 		return '/liquidaciones/$liquidacionId/items';
 	}
+
+	static const String fabricaComponentes = '/fabrica/componentes';
+	static const String fabricaCausas = '/fabrica/causas';
+	static const String fabricaUnidades = '/fabrica/unidades';
+	static const String fabricaAsignaciones = '/fabrica/unidades/asignaciones';
+	static const String fabricaRecepciones = '/fabrica/recepciones';
+	static const String fabricaIngresos = '/fabrica/ingresos';
+
+	static String fabricaUnidad(String unidadId) {
+		return '/fabrica/unidades/$unidadId';
+	}
+
+	static String fabricaUnidadHistorial(String unidadId) {
+		return '/fabrica/unidades/$unidadId/historial';
+	}
+
+	static String fabricaRecepcion(String recepcionId) {
+		return '/fabrica/recepciones/$recepcionId';
+	}
+
+	static String fabricaRecepcionEstado(String recepcionId) {
+		return '/fabrica/recepciones/$recepcionId/estado';
+	}
+
+	static String fabricaRecepcionServicio(String recepcionId) {
+		return '/fabrica/recepciones/$recepcionId/servicio';
+	}
+
+	static String fabricaRecepcionDevolucion(String recepcionId) {
+		return '/fabrica/recepciones/$recepcionId/devolucion';
+	}
+
+	static String fabricaIngreso(String ingresoId) {
+		return '/fabrica/ingresos/$ingresoId';
+	}
+
+	static String fabricaIngresoDerivar(String ingresoId) {
+		return '/fabrica/ingresos/$ingresoId/derivar';
+	}
+
+	static String fabricaIngresoFalla(String ingresoId) {
+		return '/fabrica/ingresos/$ingresoId/falla';
+	}
+
+	static String fabricaIngresoReparacion(String ingresoId) {
+		return '/fabrica/ingresos/$ingresoId/reparacion';
+	}
 }
