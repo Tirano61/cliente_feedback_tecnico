@@ -68,6 +68,27 @@ class CatalogoLoaded extends CatalogoState {
 		);
 	}
 
+	/// Modelos de indicador activos: productos de una categoria "indicador" o
+	/// con "indicador" en el nombre.
+	List<Producto> get indicadoresActivos {
+		final categoriasIndicadorIds = categorias
+				.where(
+					(categoria) =>
+							categoria.activo && categoria.nombre.toLowerCase().contains('indicador'),
+				)
+				.map((categoria) => categoria.id)
+				.toSet();
+
+		return productos
+				.where(
+					(producto) =>
+							producto.activo &&
+							(categoriasIndicadorIds.contains(producto.categoriaId) ||
+									producto.nombre.toLowerCase().contains('indicador')),
+				)
+				.toList();
+	}
+
 	bool get tieneBasicos =>
 			diagnosticos.isNotEmpty || resoluciones.isNotEmpty || zonas.isNotEmpty || categorias.isNotEmpty;
 

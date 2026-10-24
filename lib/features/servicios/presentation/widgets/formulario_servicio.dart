@@ -868,23 +868,7 @@ class _FormularioServicioState extends State<FormularioServicio> {
 								: const CatalogoLoaded.vacio();
 
 						final resolucionLabel = _labelResolucion(estadoFormulario.canal);
-						final categoriasIndicadorIds = catalogos.categorias
-								.where(
-									(categoria) =>
-											categoria.activo &&
-											categoria.nombre.toLowerCase().contains('indicador'),
-								)
-								.map((categoria) => categoria.id)
-								.toSet();
-
-						final indicadoresActivos = catalogos.productos
-								.where(
-									(producto) =>
-											producto.activo &&
-											(categoriasIndicadorIds.contains(producto.categoriaId) ||
-													producto.nombre.toLowerCase().contains('indicador')),
-								)
-								.toList();
+						final indicadoresActivos = catalogos.indicadoresActivos;
 						final productosCategoriaFalla = _categoriasFallaSeleccionadasIds.isEmpty
 								? const <Producto>[]
 								: catalogos.productos

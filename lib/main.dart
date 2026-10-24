@@ -6,6 +6,9 @@ import 'package:cliente_feedback_tecnico/features/auth/presentation/bloc/auth_bl
 import 'package:cliente_feedback_tecnico/features/auth/presentation/bloc/auth_event.dart';
 import 'package:cliente_feedback_tecnico/features/auth/presentation/bloc/auth_state.dart';
 import 'package:cliente_feedback_tecnico/features/auth/presentation/pages/login_page.dart';
+import 'package:cliente_feedback_tecnico/features/fabrica/presentation/bloc/nueva_recepcion_bloc.dart';
+import 'package:cliente_feedback_tecnico/features/fabrica/presentation/bloc/recepcion_detalle_bloc.dart';
+import 'package:cliente_feedback_tecnico/features/fabrica/presentation/bloc/recepciones_bloc.dart';
 import 'package:cliente_feedback_tecnico/features/liquidaciones/presentation/bloc/liquidaciones_bloc.dart';
 import 'package:cliente_feedback_tecnico/features/servicios/presentation/bloc/servicio_bloc.dart';
 import 'package:cliente_feedback_tecnico/features/servicios/presentation/pages/nueva_orden_servicio_page.dart';
@@ -62,6 +65,22 @@ class App extends StatelessWidget {
           create: (_) => LiquidacionesBloc(
             deps.obtenerMisLiquidacionesUseCase,
             deps.obtenerItemsLiquidacionUseCase,
+          ),
+        ),
+        BlocProvider(
+          create: (_) => RecepcionesBloc(deps.obtenerRecepcionesUseCase),
+        ),
+        BlocProvider(
+          create: (_) => RecepcionDetalleBloc(
+            deps.obtenerRecepcionUseCase,
+            deps.cambiarEstadoRecepcionUseCase,
+            deps.devolverRecepcionUseCase,
+          ),
+        ),
+        BlocProvider(
+          create: (_) => NuevaRecepcionBloc(
+            deps.crearRecepcionUseCase,
+            deps.buscarClientesUseCase,
           ),
         ),
       ],
