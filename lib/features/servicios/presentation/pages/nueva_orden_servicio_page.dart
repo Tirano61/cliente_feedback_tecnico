@@ -4,6 +4,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 
 import 'package:cliente_feedback_tecnico/features/auth/presentation/bloc/auth_bloc.dart';
 import 'package:cliente_feedback_tecnico/features/auth/presentation/bloc/auth_event.dart';
+import 'package:cliente_feedback_tecnico/features/fabrica/presentation/pages/fabrica_page.dart';
 import 'package:cliente_feedback_tecnico/features/liquidaciones/presentation/pages/liquidaciones_screen.dart';
 import 'package:cliente_feedback_tecnico/features/servicios/presentation/pages/mis_servicios_page.dart';
 
@@ -16,6 +17,15 @@ class NuevaOrdenServicioPage extends StatelessWidget {
 			appBar: AppBar(
 				title: const Text('Nueva orden de servicio'),
 				actions: [
+					IconButton(
+						onPressed: () {
+							Navigator.of(context).push(
+								MaterialPageRoute(builder: (_) => const FabricaPage()),
+							);
+						},
+						icon: const Icon(Icons.factory_outlined),
+						tooltip: 'Fábrica',
+					),
 					IconButton(
 						onPressed: () {
 							Navigator.of(context).push(
