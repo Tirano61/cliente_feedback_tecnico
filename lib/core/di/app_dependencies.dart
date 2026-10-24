@@ -28,6 +28,26 @@ import 'package:cliente_feedback_tecnico/features/liquidaciones/infrastructure/r
 import 'package:cliente_feedback_tecnico/features/catalogos/application/obtener_catalogos_use_case.dart';
 import 'package:cliente_feedback_tecnico/features/catalogos/domain/repositories/i_catalogo_repository.dart';
 import 'package:cliente_feedback_tecnico/features/catalogos/infrastructure/repositories/catalogo_repository_impl.dart';
+import 'package:cliente_feedback_tecnico/features/fabrica/application/obtener_componentes_use_case.dart';
+import 'package:cliente_feedback_tecnico/features/fabrica/application/obtener_causas_use_case.dart';
+import 'package:cliente_feedback_tecnico/features/fabrica/application/buscar_unidades_use_case.dart';
+import 'package:cliente_feedback_tecnico/features/fabrica/application/obtener_unidad_use_case.dart';
+import 'package:cliente_feedback_tecnico/features/fabrica/application/obtener_historial_unidad_use_case.dart';
+import 'package:cliente_feedback_tecnico/features/fabrica/application/asignar_unidad_use_case.dart';
+import 'package:cliente_feedback_tecnico/features/fabrica/application/crear_recepcion_use_case.dart';
+import 'package:cliente_feedback_tecnico/features/fabrica/application/obtener_recepciones_use_case.dart';
+import 'package:cliente_feedback_tecnico/features/fabrica/application/obtener_recepcion_use_case.dart';
+import 'package:cliente_feedback_tecnico/features/fabrica/application/cambiar_estado_recepcion_use_case.dart';
+import 'package:cliente_feedback_tecnico/features/fabrica/application/vincular_servicio_recepcion_use_case.dart';
+import 'package:cliente_feedback_tecnico/features/fabrica/application/devolver_recepcion_use_case.dart';
+import 'package:cliente_feedback_tecnico/features/fabrica/application/crear_ingreso_use_case.dart';
+import 'package:cliente_feedback_tecnico/features/fabrica/application/obtener_ingresos_use_case.dart';
+import 'package:cliente_feedback_tecnico/features/fabrica/application/obtener_ingreso_use_case.dart';
+import 'package:cliente_feedback_tecnico/features/fabrica/application/derivar_ingreso_use_case.dart';
+import 'package:cliente_feedback_tecnico/features/fabrica/application/cargar_falla_ingreso_use_case.dart';
+import 'package:cliente_feedback_tecnico/features/fabrica/application/cargar_reparacion_ingreso_use_case.dart';
+import 'package:cliente_feedback_tecnico/features/fabrica/domain/repositories/i_fabrica_repository.dart';
+import 'package:cliente_feedback_tecnico/features/fabrica/infrastructure/repositories/fabrica_repository_impl.dart';
 import 'package:http/http.dart' as http;
 
 class AppDependencies {
@@ -38,6 +58,7 @@ class AppDependencies {
 	final ICatalogoRepository catalogoRepository;
 	final IServicioRepository servicioRepository;
 	final ILiquidacionRepository liquidacionRepository;
+	final IFabricaRepository fabricaRepository;
 
 	final LoginUseCase loginUseCase;
 	final RestaurarSesionUseCase restaurarSesionUseCase;
@@ -58,6 +79,24 @@ class AppDependencies {
 	final DescargarPdfDocumentoUseCase descargarPdfDocumentoUseCase;
 	final ObtenerMisLiquidacionesUseCase obtenerMisLiquidacionesUseCase;
 	final ObtenerItemsLiquidacionUseCase obtenerItemsLiquidacionUseCase;
+	final ObtenerComponentesUseCase obtenerComponentesUseCase;
+	final ObtenerCausasUseCase obtenerCausasUseCase;
+	final BuscarUnidadesUseCase buscarUnidadesUseCase;
+	final ObtenerUnidadUseCase obtenerUnidadUseCase;
+	final ObtenerHistorialUnidadUseCase obtenerHistorialUnidadUseCase;
+	final AsignarUnidadUseCase asignarUnidadUseCase;
+	final CrearRecepcionUseCase crearRecepcionUseCase;
+	final ObtenerRecepcionesUseCase obtenerRecepcionesUseCase;
+	final ObtenerRecepcionUseCase obtenerRecepcionUseCase;
+	final CambiarEstadoRecepcionUseCase cambiarEstadoRecepcionUseCase;
+	final VincularServicioRecepcionUseCase vincularServicioRecepcionUseCase;
+	final DevolverRecepcionUseCase devolverRecepcionUseCase;
+	final CrearIngresoUseCase crearIngresoUseCase;
+	final ObtenerIngresosUseCase obtenerIngresosUseCase;
+	final ObtenerIngresoUseCase obtenerIngresoUseCase;
+	final DerivarIngresoUseCase derivarIngresoUseCase;
+	final CargarFallaIngresoUseCase cargarFallaIngresoUseCase;
+	final CargarReparacionIngresoUseCase cargarReparacionIngresoUseCase;
 
 	AppDependencies._({
 		required this.secureStorage,
@@ -66,6 +105,7 @@ class AppDependencies {
 		required this.catalogoRepository,
 		required this.servicioRepository,
 		required this.liquidacionRepository,
+		required this.fabricaRepository,
 		required this.loginUseCase,
 		required this.restaurarSesionUseCase,
 		required this.cerrarSesionUseCase,
@@ -85,6 +125,24 @@ class AppDependencies {
 		required this.descargarPdfDocumentoUseCase,
 		required this.obtenerMisLiquidacionesUseCase,
 		required this.obtenerItemsLiquidacionUseCase,
+		required this.obtenerComponentesUseCase,
+		required this.obtenerCausasUseCase,
+		required this.buscarUnidadesUseCase,
+		required this.obtenerUnidadUseCase,
+		required this.obtenerHistorialUnidadUseCase,
+		required this.asignarUnidadUseCase,
+		required this.crearRecepcionUseCase,
+		required this.obtenerRecepcionesUseCase,
+		required this.obtenerRecepcionUseCase,
+		required this.cambiarEstadoRecepcionUseCase,
+		required this.vincularServicioRecepcionUseCase,
+		required this.devolverRecepcionUseCase,
+		required this.crearIngresoUseCase,
+		required this.obtenerIngresosUseCase,
+		required this.obtenerIngresoUseCase,
+		required this.derivarIngresoUseCase,
+		required this.cargarFallaIngresoUseCase,
+		required this.cargarReparacionIngresoUseCase,
 	});
 
 	factory AppDependencies.create() {
@@ -96,6 +154,7 @@ class AppDependencies {
 		final servicioRepository = ServicioRepositoryImpl(apiClient, secureStorage);
 		final liquidacionRemoteDataSource = LiquidacionRemoteDataSource(apiClient);
 		final liquidacionRepository = LiquidacionRepositoryImpl(liquidacionRemoteDataSource);
+		final fabricaRepository = FabricaRepositoryImpl(apiClient);
 
 		return AppDependencies._(
 			secureStorage: secureStorage,
@@ -104,6 +163,7 @@ class AppDependencies {
 			catalogoRepository: catalogoRepository,
 			servicioRepository: servicioRepository,
 			liquidacionRepository: liquidacionRepository,
+			fabricaRepository: fabricaRepository,
 			loginUseCase: LoginUseCase(authRepository),
 			restaurarSesionUseCase: RestaurarSesionUseCase(authRepository),
 			cerrarSesionUseCase: CerrarSesionUseCase(authRepository),
@@ -134,6 +194,24 @@ class AppDependencies {
 					ObtenerMisLiquidacionesUseCase(liquidacionRepository),
 			obtenerItemsLiquidacionUseCase:
 					ObtenerItemsLiquidacionUseCase(liquidacionRepository),
+			obtenerComponentesUseCase: ObtenerComponentesUseCase(fabricaRepository),
+			obtenerCausasUseCase: ObtenerCausasUseCase(fabricaRepository),
+			buscarUnidadesUseCase: BuscarUnidadesUseCase(fabricaRepository),
+			obtenerUnidadUseCase: ObtenerUnidadUseCase(fabricaRepository),
+			obtenerHistorialUnidadUseCase: ObtenerHistorialUnidadUseCase(fabricaRepository),
+			asignarUnidadUseCase: AsignarUnidadUseCase(fabricaRepository),
+			crearRecepcionUseCase: CrearRecepcionUseCase(fabricaRepository),
+			obtenerRecepcionesUseCase: ObtenerRecepcionesUseCase(fabricaRepository),
+			obtenerRecepcionUseCase: ObtenerRecepcionUseCase(fabricaRepository),
+			cambiarEstadoRecepcionUseCase: CambiarEstadoRecepcionUseCase(fabricaRepository),
+			vincularServicioRecepcionUseCase: VincularServicioRecepcionUseCase(fabricaRepository),
+			devolverRecepcionUseCase: DevolverRecepcionUseCase(fabricaRepository),
+			crearIngresoUseCase: CrearIngresoUseCase(fabricaRepository),
+			obtenerIngresosUseCase: ObtenerIngresosUseCase(fabricaRepository),
+			obtenerIngresoUseCase: ObtenerIngresoUseCase(fabricaRepository),
+			derivarIngresoUseCase: DerivarIngresoUseCase(fabricaRepository),
+			cargarFallaIngresoUseCase: CargarFallaIngresoUseCase(fabricaRepository),
+			cargarReparacionIngresoUseCase: CargarReparacionIngresoUseCase(fabricaRepository),
 		);
 	}
 }

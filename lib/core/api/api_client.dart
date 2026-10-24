@@ -54,6 +54,18 @@ class ApiClient {
 		);
 	}
 
+	Future<http.Response> put(String path, Map<String, dynamic> body) async {
+		final token = await _storage.obtenerToken();
+		return _revisarSesion(
+			path,
+			await _client.put(
+				Uri.parse('${ApiConstants.baseUrl}$path'),
+				headers: _buildHeaders(token),
+				body: jsonEncode(body),
+			),
+		);
+	}
+
 	Future<http.Response> postMultipart({
 		required String path,
 		required List<http.MultipartFile> archivos,
