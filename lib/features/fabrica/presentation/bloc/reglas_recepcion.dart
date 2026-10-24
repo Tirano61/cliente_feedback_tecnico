@@ -58,8 +58,20 @@ class ReglasRecepcion {
 		return _transiciones[actual] ?? const [];
 	}
 
+	static bool tieneServicio(Recepcion recepcion) {
+		return (recepcion.servicioId ?? '').trim().isNotEmpty;
+	}
+
+	/// Se puede cargar el servicio de fabrica mientras el equipo siga en
+	/// fabrica y no tenga uno vinculado.
+	static bool admiteServicio(Recepcion recepcion) {
+		return !tieneServicio(recepcion) &&
+				recepcion.estado != EstadoRecepcion.devuelto &&
+				recepcion.estado != EstadoRecepcion.desconocido;
+	}
+
 	static List<AccionEstadoRecepcion> acciones(Recepcion recepcion) {
-		final tieneServicio = (recepcion.servicioId ?? '').trim().isNotEmpty;
+		final tieneServicio = ReglasRecepcion.tieneServicio(recepcion);
 		return [
 			for (final destino in estadosPermitidos(recepcion.estado))
 				AccionEstadoRecepcion(

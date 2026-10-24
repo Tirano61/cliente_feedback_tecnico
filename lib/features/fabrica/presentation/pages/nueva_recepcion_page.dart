@@ -1,3 +1,4 @@
+import 'package:cliente_feedback_tecnico/core/widgets/alta_rapida_cliente_dialogo.dart';
 import 'package:cliente_feedback_tecnico/features/catalogos/domain/entities/producto.dart';
 import 'package:cliente_feedback_tecnico/features/catalogos/presentation/bloc/catalogo_bloc.dart';
 import 'package:cliente_feedback_tecnico/features/catalogos/presentation/bloc/catalogo_event.dart';
@@ -82,6 +83,16 @@ class _NuevaRecepcionPageState extends State<NuevaRecepcionPage> {
 									),
 								),
 							);
+						},
+					),
+					BlocListener<NuevaRecepcionBloc, NuevaRecepcionState>(
+						listenWhen: (_, actual) => actual.clienteCreado != null,
+						listener: (context, state) {
+							ScaffoldMessenger.of(context)
+								..hideCurrentSnackBar()
+								..showSnackBar(
+									SnackBar(content: Text('Cliente ${state.clienteCreado!.nombre} creado y seleccionado.')),
+								);
 						},
 					),
 					BlocListener<NuevaRecepcionBloc, NuevaRecepcionState>(
@@ -199,6 +210,18 @@ class _NuevaRecepcionPageState extends State<NuevaRecepcionPage> {
 					),
 					onSubmitted: (_) => _buscarCliente(),
 				),
+				const SizedBox(height: 8),
+				OutlinedButton.icon(
+					onPressed: state.creandoCliente ? null : _mostrarAltaRapidaCliente,
+					icon: state.creandoCliente
+							? const SizedBox(
+									height: 14,
+									width: 14,
+									child: CircularProgressIndicator(strokeWidth: 2),
+								)
+							: const Icon(Icons.person_add_alt_1),
+					label: const Text('Alta rapida cliente'),
+				),
 				if (state.clientesEncontrados.isNotEmpty) ...[
 					const SizedBox(height: 8),
 					Wrap(
@@ -239,6 +262,40 @@ class _NuevaRecepcionPageState extends State<NuevaRecepcionPage> {
 					),
 				],
 			],
+		);
+	}
+
+	/// Se cierra solo cuando el cliente quedo creado; si el backend lo rechaza,
+	/// queda abierto con lo cargado y el mensaje.
+	Future<void> _mostrarAltaRapidaCliente() {
+		final bloc = context.read<NuevaRecepcionBloc>();
+		return showDialog<void>(
+			context: context,
+			builder: (dialogContext) {
+				return BlocConsumer<NuevaRecepcionBloc, NuevaRecepcionState>(
+					bloc: bloc,
+					listenWhen: (_, actual) => actual.clienteCreado != null,
+					listener: (_, _) => Navigator.of(dialogContext).pop(),
+					builder: (_, state) {
+						return AltaRapidaClienteDialogo(
+							creando: state.creandoCliente,
+							mensaje: state.errorAltaCliente,
+							esError: true,
+							onCrear: (datos) {
+								bloc.add(
+									NuevaRecepcionClienteRapidoSolicitado(
+										cuit: datos.cuit,
+										nombre: datos.nombre,
+										contacto: datos.contacto,
+										telefono: datos.telefono,
+										localidad: datos.localidad,
+									),
+								);
+							},
+						);
+					},
+				);
+			},
 		);
 	}
 

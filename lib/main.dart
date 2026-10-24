@@ -9,6 +9,7 @@ import 'package:cliente_feedback_tecnico/features/auth/presentation/pages/login_
 import 'package:cliente_feedback_tecnico/features/fabrica/presentation/bloc/nueva_recepcion_bloc.dart';
 import 'package:cliente_feedback_tecnico/features/fabrica/presentation/bloc/recepcion_detalle_bloc.dart';
 import 'package:cliente_feedback_tecnico/features/fabrica/presentation/bloc/recepciones_bloc.dart';
+import 'package:cliente_feedback_tecnico/features/fabrica/presentation/bloc/servicio_fabrica_bloc.dart';
 import 'package:cliente_feedback_tecnico/features/liquidaciones/presentation/bloc/liquidaciones_bloc.dart';
 import 'package:cliente_feedback_tecnico/features/servicios/presentation/bloc/servicio_bloc.dart';
 import 'package:cliente_feedback_tecnico/features/servicios/presentation/pages/nueva_orden_servicio_page.dart';
@@ -75,12 +76,31 @@ class App extends StatelessWidget {
             deps.obtenerRecepcionUseCase,
             deps.cambiarEstadoRecepcionUseCase,
             deps.devolverRecepcionUseCase,
+            deps.vincularServicioRecepcionUseCase,
           ),
         ),
         BlocProvider(
           create: (_) => NuevaRecepcionBloc(
             deps.crearRecepcionUseCase,
             deps.buscarClientesUseCase,
+            deps.crearClienteRapidoUseCase,
+          ),
+        ),
+        BlocProvider(
+          create: (_) => ServicioFabricaBloc(
+            deps.cargarServicioUseCase,
+            deps.obtenerMisServiciosUseCase,
+            deps.buscarClientesUseCase,
+            deps.crearClienteRapidoUseCase,
+            deps.obtenerCotizacionActualUseCase,
+            deps.buscarRepuestosUseCase,
+            deps.generarPdfOrdenServicioUseCase,
+            deps.subirDocumentoFirmadoUseCase,
+            deps.encolarDocumentoPendienteUseCase,
+            deps.obtenerDocumentosPendientesUseCase,
+            deps.quitarDocumentoPendienteUseCase,
+            deps.obtenerEnlacePdfDocumentoUseCase,
+            deps.descargarPdfDocumentoUseCase,
           ),
         ),
       ],

@@ -5,11 +5,13 @@ import 'package:cliente_feedback_tecnico/features/fabrica/domain/errors/regla_fa
 import 'package:cliente_feedback_tecnico/features/fabrica/presentation/bloc/nueva_recepcion_event.dart';
 import 'package:cliente_feedback_tecnico/features/fabrica/presentation/bloc/nueva_recepcion_state.dart';
 import 'package:cliente_feedback_tecnico/features/servicios/application/buscar_clientes_use_case.dart';
+import 'package:cliente_feedback_tecnico/features/servicios/application/crear_cliente_rapido_use_case.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
 class NuevaRecepcionBloc extends Bloc<NuevaRecepcionEvent, NuevaRecepcionState> {
 	final CrearRecepcionUseCase _crearRecepcionUseCase;
 	final BuscarClientesUseCase _buscarClientesUseCase;
+	final CrearClienteRapidoUseCase _crearClienteRapidoUseCase;
 
 	/// Una busqueda nueva deja sin efecto la que siga en vuelo.
 	int _secuenciaClientes = 0;
@@ -17,10 +19,12 @@ class NuevaRecepcionBloc extends Bloc<NuevaRecepcionEvent, NuevaRecepcionState> 
 	NuevaRecepcionBloc(
 		this._crearRecepcionUseCase,
 		this._buscarClientesUseCase,
+		this._crearClienteRapidoUseCase,
 	) : super(const NuevaRecepcionState()) {
 		on<NuevaRecepcionIniciada>(_onIniciada);
 		on<NuevaRecepcionBuscarClienteSolicitado>(_onBuscarCliente);
 		on<NuevaRecepcionClienteSeleccionado>(_onClienteSeleccionado);
+		on<NuevaRecepcionClienteRapidoSolicitado>(_onClienteRapidoSolicitado);
 		on<NuevaRecepcionCambiada>(_onCambiada);
 		on<NuevaRecepcionGuardada>(_onGuardada);
 	}
@@ -84,6 +88,61 @@ class NuevaRecepcionBloc extends Bloc<NuevaRecepcionEvent, NuevaRecepcionState> 
 				buscandoClientes: false,
 			),
 		);
+	}
+
+	Future<void> _onClienteRapidoSolicitado(
+		NuevaRecepcionClienteRapidoSolicitado event,
+		Emitter<NuevaRecepcionState> emit,
+	) async {
+		if (state.creandoCliente) {
+			return;
+		}
+
+		final cuit = event.cuit.trim();
+		final nombre = event.nombre.trim();
+		final faltantes = [
+			if (cuit.isEmpty) 'CUIT',
+			if (nombre.isEmpty) 'nombre',
+		];
+		if (faltantes.isNotEmpty) {
+			emit(state.copyWith(errorAltaCliente: 'Falta completar: ${faltantes.join(', ')}.'));
+			return;
+		}
+
+		// Body de POST /clientes: los opcionales vacios no se mandan.
+		final payload = <String, dynamic>{
+			'cuit': cuit,
+			'nombre': nombre,
+			if (event.contacto.trim().isNotEmpty) 'contacto': event.contacto.trim(),
+			if (event.telefono.trim().isNotEmpty) 'telefono': event.telefono.trim(),
+			if (event.localidad.trim().isNotEmpty) 'localidad': event.localidad.trim(),
+		};
+		emit(state.copyWith(creandoCliente: true, limpiarErrorAltaCliente: true));
+
+		String error;
+		try {
+			final cliente = await _crearClienteRapidoUseCase.ejecutar(payload);
+			// Una busqueda que siga en vuelo ya no corresponde.
+			_secuenciaClientes++;
+			emit(
+				state.copyWith(
+					creandoCliente: false,
+					clienteSeleccionado: cliente,
+					clientesEncontrados: const [],
+					buscandoClientes: false,
+					clienteCreado: cliente,
+				),
+			);
+			return;
+		} on ServerException catch (e) {
+			final yaExiste =
+					e.statusCode == 400 && e.mensaje.toLowerCase().contains('cliente ya existe');
+			error = yaExiste ? 'El cliente con el CUIT: $cuit ya existe.' : e.mensaje;
+		} catch (_) {
+			error = 'No se pudo crear el cliente.';
+		}
+
+		emit(state.copyWith(creandoCliente: false, errorAltaCliente: error));
 	}
 
 	void _onCambiada(

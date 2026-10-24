@@ -7,6 +7,7 @@ import 'package:cliente_feedback_tecnico/features/fabrica/presentation/bloc/rece
 import 'package:cliente_feedback_tecnico/features/fabrica/presentation/bloc/recepcion_detalle_state.dart';
 import 'package:cliente_feedback_tecnico/features/fabrica/presentation/bloc/reglas_recepcion.dart';
 import 'package:cliente_feedback_tecnico/features/fabrica/presentation/bloc/textos_recepcion.dart';
+import 'package:cliente_feedback_tecnico/features/fabrica/presentation/pages/servicio_fabrica_page.dart';
 import 'package:cliente_feedback_tecnico/features/fabrica/presentation/widgets/estado_recepcion_badge.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -131,6 +132,8 @@ class _RecepcionDetallePageState extends State<RecepcionDetallePage> {
 								_Encabezado(recepcion: recepcion, dias: state.diasEnFabrica),
 								const SizedBox(height: 12),
 								_SeccionAcciones(state: state),
+								const SizedBox(height: 12),
+								_SeccionServicio(state: state),
 								const SizedBox(height: 12),
 								_SeccionDatos(recepcion: recepcion),
 								const SizedBox(height: 12),
@@ -473,6 +476,117 @@ class _ErrorAccion extends StatelessWidget {
 	}
 }
 
+/// El servicio de fabrica (diagnostico, resolucion y facturacion) de la
+/// recepcion: vinculado, esperando la vinculacion o para cargar.
+class _SeccionServicio extends StatelessWidget {
+	final RecepcionDetalleState state;
+
+	const _SeccionServicio({required this.state});
+
+	@override
+	Widget build(BuildContext context) {
+		final vinculadoId = state.servicioVinculadoId;
+		final porVincular = state.servicioPorVincular;
+		final textTheme = Theme.of(context).textTheme;
+		final colorScheme = Theme.of(context).colorScheme;
+
+		return _Seccion(
+			titulo: 'Servicio de fábrica',
+			children: [
+				if (vinculadoId != null)
+					ListTile(
+						dense: true,
+						contentPadding: EdgeInsets.zero,
+						leading: Icon(Icons.link, color: colorScheme.primary),
+						title: const Text('Vinculado a la recepción'),
+						subtitle: Text('Servicio $vinculadoId'),
+					)
+				else if (porVincular != null) ...[
+					Container(
+						width: double.infinity,
+						padding: const EdgeInsets.all(10),
+						decoration: BoxDecoration(
+							color: state.errorVinculacion == null
+									? colorScheme.surfaceContainerHighest
+									: colorScheme.errorContainer,
+							borderRadius: BorderRadius.circular(8),
+						),
+						child: Column(
+							crossAxisAlignment: CrossAxisAlignment.start,
+							children: [
+								Text(
+									state.vinculando
+											? 'Vinculando el servicio $porVincular...'
+											: 'El servicio $porVincular se guardó pero no quedó vinculado a la recepción.',
+									style: TextStyle(
+										color: state.errorVinculacion == null
+												? colorScheme.onSurface
+												: colorScheme.onErrorContainer,
+									),
+								),
+								if (state.errorVinculacion != null && !state.vinculando) ...[
+									const SizedBox(height: 4),
+									Text(
+										state.errorVinculacion!,
+										style: textTheme.bodySmall?.copyWith(color: colorScheme.onErrorContainer),
+									),
+								],
+							],
+						),
+					),
+					const SizedBox(height: 8),
+					ElevatedButton.icon(
+						onPressed: state.puedeReintentarVinculacion
+								? () {
+										context.read<RecepcionDetalleBloc>().add(
+											const RecepcionVinculacionReintentada(),
+										);
+									}
+								: null,
+						icon: state.vinculando
+								? const SizedBox(
+										height: 16,
+										width: 16,
+										child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+									)
+								: const Icon(Icons.link),
+						label: const Text('Reintentar vinculación'),
+					),
+				] else if (state.puedeCargarServicio) ...[
+					const Text(
+						'Todavía no tiene servicio de fábrica. Ahí se cargan el diagnóstico, '
+						'el trabajo realizado y la facturación.',
+					),
+					const SizedBox(height: 8),
+					ElevatedButton.icon(
+						onPressed: () => _cargarServicio(context),
+						icon: const Icon(Icons.build_circle_outlined),
+						label: const Text('Cargar servicio de fábrica'),
+					),
+				] else
+					const Text('Sin servicio de fábrica vinculado.'),
+			],
+		);
+	}
+
+	void _cargarServicio(BuildContext context) {
+		final recepcion = state.recepcion;
+		final precarga = state.precargaServicio;
+		if (recepcion == null || precarga == null) {
+			return;
+		}
+		Navigator.of(context).push(
+			MaterialPageRoute<void>(
+				builder: (_) => ServicioFabricaPage(
+					recepcionId: recepcion.id,
+					numeroRecepcion: recepcion.numero,
+					precarga: precarga,
+				),
+			),
+		);
+	}
+}
+
 class _SeccionDatos extends StatelessWidget {
 	final Recepcion recepcion;
 
@@ -493,10 +607,6 @@ class _SeccionDatos extends StatelessWidget {
 				_Fila(label: 'Observaciones', valor: _textoSeguro(recepcion.observaciones)),
 				_Fila(label: 'Recibió', valor: _textoSeguro(recepcion.tecnicoRecepcion?.fullName)),
 				_Fila(label: 'Fecha de recepción', valor: _formatearFecha(recepcion.fechaRecepcion)),
-				_Fila(
-					label: 'Servicio de fábrica',
-					valor: (recepcion.servicioId ?? '').trim().isEmpty ? 'Sin vincular' : 'Vinculado',
-				),
 				if (recepcion.fechaDevolucion != null)
 					_Fila(label: 'Fecha de devolución', valor: _formatearFecha(recepcion.fechaDevolucion)),
 				if (formaDevolucion != null)

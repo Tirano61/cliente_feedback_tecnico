@@ -52,6 +52,27 @@ class RecepcionDevolucionSolicitada extends RecepcionDetalleEvent {
 	List<Object?> get props => [forma, observacion];
 }
 
+/// Se guardo el servicio de fabrica de la recepcion (`POST /servicios`): hay
+/// que vincularlo. El servicio ya existe, asi que si la vinculacion falla se
+/// reintenta con este mismo `servicioId`, nunca creando otro.
+class RecepcionServicioGuardado extends RecepcionDetalleEvent {
+	final String recepcionId;
+	final String servicioId;
+
+	const RecepcionServicioGuardado({
+		required this.recepcionId,
+		required this.servicioId,
+	});
+
+	@override
+	List<Object?> get props => [recepcionId, servicioId];
+}
+
+/// Vuelve a pedir la vinculacion del servicio que quedo sin vincular.
+class RecepcionVinculacionReintentada extends RecepcionDetalleEvent {
+	const RecepcionVinculacionReintentada();
+}
+
 /// Al abrir el dialogo de una accion: el error de un intento anterior ya no
 /// corresponde.
 class RecepcionErrorAccionDescartado extends RecepcionDetalleEvent {
