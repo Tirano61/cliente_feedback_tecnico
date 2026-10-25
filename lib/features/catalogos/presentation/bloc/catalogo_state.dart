@@ -89,6 +89,27 @@ class CatalogoLoaded extends CatalogoState {
 				.toList();
 	}
 
+	/// Modelos activos de una pieza (`palabra`: "placa", "celda"): productos de
+	/// una categoria con esa palabra o con la palabra en el nombre. Si ninguno
+	/// coincide, todos los activos, para que igual se pueda elegir el modelo.
+	List<Producto> modelosActivosDe(String palabra) {
+		final buscada = palabra.toLowerCase();
+		final categoriasIds = categorias
+				.where((categoria) => categoria.activo && categoria.nombre.toLowerCase().contains(buscada))
+				.map((categoria) => categoria.id)
+				.toSet();
+
+		final activos = productos.where((producto) => producto.activo).toList();
+		final coinciden = activos
+				.where(
+					(producto) =>
+							categoriasIds.contains(producto.categoriaId) ||
+							producto.nombre.toLowerCase().contains(buscada),
+				)
+				.toList();
+		return coinciden.isEmpty ? activos : coinciden;
+	}
+
 	bool get tieneBasicos =>
 			diagnosticos.isNotEmpty || resoluciones.isNotEmpty || zonas.isNotEmpty || categorias.isNotEmpty;
 

@@ -10,6 +10,7 @@ import 'package:cliente_feedback_tecnico/features/fabrica/application/cargar_rep
 import 'package:cliente_feedback_tecnico/features/fabrica/application/crear_ingreso_use_case.dart';
 import 'package:cliente_feedback_tecnico/features/fabrica/application/crear_recepcion_use_case.dart';
 import 'package:cliente_feedback_tecnico/features/fabrica/application/derivar_ingreso_use_case.dart';
+import 'package:cliente_feedback_tecnico/features/fabrica/application/guardar_vinculacion_pendiente_use_case.dart';
 import 'package:cliente_feedback_tecnico/features/fabrica/application/devolver_recepcion_use_case.dart';
 import 'package:cliente_feedback_tecnico/features/fabrica/application/obtener_causas_use_case.dart';
 import 'package:cliente_feedback_tecnico/features/fabrica/application/obtener_componentes_use_case.dart';
@@ -18,10 +19,15 @@ import 'package:cliente_feedback_tecnico/features/fabrica/application/obtener_in
 import 'package:cliente_feedback_tecnico/features/fabrica/application/obtener_ingresos_use_case.dart';
 import 'package:cliente_feedback_tecnico/features/fabrica/application/obtener_recepcion_use_case.dart';
 import 'package:cliente_feedback_tecnico/features/fabrica/application/obtener_recepciones_use_case.dart';
+import 'package:cliente_feedback_tecnico/features/fabrica/application/obtener_servicio_vinculado_use_case.dart';
 import 'package:cliente_feedback_tecnico/features/fabrica/application/obtener_unidad_use_case.dart';
+import 'package:cliente_feedback_tecnico/features/fabrica/application/obtener_vinculaciones_pendientes_use_case.dart';
+import 'package:cliente_feedback_tecnico/features/fabrica/application/quitar_vinculacion_pendiente_use_case.dart';
+import 'package:cliente_feedback_tecnico/features/fabrica/application/recibir_de_desarrollo_use_case.dart';
 import 'package:cliente_feedback_tecnico/features/fabrica/application/vincular_servicio_recepcion_use_case.dart';
 import 'package:cliente_feedback_tecnico/features/fabrica/domain/entities/estados_fabrica.dart';
 import 'package:cliente_feedback_tecnico/features/fabrica/domain/entities/solicitudes_fabrica.dart';
+import 'package:cliente_feedback_tecnico/features/fabrica/domain/entities/vinculacion_pendiente.dart';
 import 'package:cliente_feedback_tecnico/features/fabrica/domain/errors/regla_fabrica_exception.dart';
 import 'package:cliente_feedback_tecnico/features/fabrica/infrastructure/repositories/fabrica_repository_impl.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -147,6 +153,7 @@ http.Response _regla(int status, String codigo, String mensaje, [Map<String, dyn
 class _Escenario {
 	final http.Response Function(http.Request request) responder;
 	final List<http.Request> requests = [];
+	final SecureStorageEnMemoria storage = SecureStorageEnMemoria();
 
 	late final ApiClient _apiClient;
 	late final FabricaRepositoryImpl repositorio;
@@ -157,9 +164,9 @@ class _Escenario {
 				requests.add(request);
 				return responder(request);
 			}),
-			SecureStorageEnMemoria(),
+			storage,
 		);
-		repositorio = FabricaRepositoryImpl(_apiClient);
+		repositorio = FabricaRepositoryImpl(_apiClient, storage);
 	}
 
 	http.Request get unico => requests.single;
@@ -500,6 +507,168 @@ void main() {
 			expect(ingreso.estado, EstadoIngreso.descartado);
 			expect(ingreso.reparacion!.resultado, ResultadoReparacion.irreparable);
 			expect(ingreso.reparacion!.trabajoRealizado, isNull);
+		});
+	});
+
+	group('vuelta de desarrollo', () {
+		test('PATCH a vuelta-servicio-tecnico sin body cuando no hay observacion', () async {
+			final escenario = _Escenario(
+				(_) => _json(_ingresoJson(estado: 'devuelto_a_servicio_tecnico')),
+			);
+
+			final ingreso = await RecibirDeDesarrolloUseCase(escenario.repositorio)
+					.ejecutar(ingresoId: _ingresoId);
+			await escenario.cerrar();
+
+			expect(escenario.unico.method, 'PATCH');
+			expect(
+				escenario.unico.url.path,
+				endsWith('/fabrica/ingresos/$_ingresoId/vuelta-servicio-tecnico'),
+			);
+			expect(escenario.body, isEmpty);
+			expect(ingreso.estado, EstadoIngreso.devueltoAServicioTecnico);
+		});
+
+		test('con observacion la manda', () async {
+			final escenario = _Escenario(
+				(_) => _json(_ingresoJson(estado: 'devuelto_a_servicio_tecnico')),
+			);
+
+			await RecibirDeDesarrolloUseCase(escenario.repositorio)
+					.ejecutar(ingresoId: _ingresoId, observacion: 'Probada 24 h');
+			await escenario.cerrar();
+
+			expect(escenario.body, {'observacion': 'Probada 24 h'});
+		});
+	});
+
+	group('servicio vinculado a la recepcion', () {
+		test('GET /servicios/:id: fecha, tecnico, diagnostico y resoluciones', () async {
+			final escenario = _Escenario(
+				(_) => _json({
+					'id': _servicioId,
+					'canal': 'fabrica',
+					'fecha': '2026-10-25T12:00:00.000Z',
+					'fechaHoraServicio': '2026-10-25T09:30:00.000Z',
+					'sintoma': 'No enciende',
+					'diagnosticoDetalle': 'Fuente sin salida de 5 V',
+					'tecnico': {'id': _tecnicoId, 'email': 'tecnico@empresa.com', 'fullName': 'Juan Tecnico'},
+					'diagnosticoCat': [
+						{'id': 'diag-1', 'nombre': 'Fuente', 'activo': true},
+						{'id': 'diag-2', 'nombre': 'Conector', 'activo': true},
+					],
+					'resolucion': [
+						{'id': 'res-1', 'nombre': 'Cambio de fuente', 'activo': true},
+					],
+					'aprobado': false,
+				}),
+			);
+
+			final servicio = await ObtenerServicioVinculadoUseCase(escenario.repositorio).ejecutar(_servicioId);
+			await escenario.cerrar();
+
+			expect(escenario.unico.method, 'GET');
+			expect(escenario.unico.url.path, endsWith('/servicios/$_servicioId'));
+			expect(servicio.id, _servicioId);
+			expect(servicio.fecha, DateTime.utc(2026, 10, 25, 9, 30));
+			expect(servicio.tecnicoNombre, 'Juan Tecnico');
+			expect(servicio.diagnosticos, ['Fuente', 'Conector']);
+			expect(servicio.diagnosticoDetalle, 'Fuente sin salida de 5 V');
+			expect(servicio.resoluciones, ['Cambio de fuente']);
+		});
+
+		test('sin fecha del servicio usa la de carga; sin relaciones quedan vacias', () async {
+			final escenario = _Escenario(
+				(_) => _json({'id': _servicioId, 'fecha': '2026-10-25T12:00:00.000Z', 'tecnico': null}),
+			);
+
+			final servicio = await ObtenerServicioVinculadoUseCase(escenario.repositorio).ejecutar(_servicioId);
+			await escenario.cerrar();
+
+			expect(servicio.fecha, DateTime.utc(2026, 10, 25, 12));
+			expect(servicio.tecnicoNombre, isNull);
+			expect(servicio.diagnosticos, isEmpty);
+			expect(servicio.resoluciones, isEmpty);
+		});
+
+		test('servicio de otro tecnico: ServerException con el 403', () async {
+			final escenario = _Escenario(
+				(_) => _json({'statusCode': 403, 'message': 'No tienes permisos para ver este servicio'}, 403),
+			);
+
+			await expectLater(
+				ObtenerServicioVinculadoUseCase(escenario.repositorio).ejecutar(_servicioId),
+				throwsA(
+					isA<ServerException>()
+							.having((e) => e.statusCode, 'statusCode', 403)
+							.having((e) => e, 'no es regla', isNot(isA<ReglaFabricaException>())),
+				),
+			);
+			await escenario.cerrar();
+		});
+	});
+
+	group('vinculaciones pendientes en el dispositivo', () {
+		const pendiente = VinculacionPendiente(recepcionId: _recepcionId, servicioId: _servicioId);
+
+		test('se guardan, se leen y se quitan por recepcion', () async {
+			final escenario = _Escenario((_) => _json({}));
+			final repositorio = escenario.repositorio;
+
+			await GuardarVinculacionPendienteUseCase(repositorio).ejecutar(pendiente);
+			await GuardarVinculacionPendienteUseCase(repositorio).ejecutar(
+				const VinculacionPendiente(recepcionId: 'otra-recepcion', servicioId: 'otro-servicio'),
+			);
+			expect(await ObtenerVinculacionesPendientesUseCase(repositorio).ejecutar(), hasLength(2));
+
+			await QuitarVinculacionPendienteUseCase(repositorio).ejecutar(_recepcionId);
+			expect(
+				await ObtenerVinculacionesPendientesUseCase(repositorio).ejecutar(),
+				[const VinculacionPendiente(recepcionId: 'otra-recepcion', servicioId: 'otro-servicio')],
+			);
+			await escenario.cerrar();
+
+			// No hablan con el backend.
+			expect(escenario.requests, isEmpty);
+		});
+
+		test('una recepcion tiene una sola: la nueva reemplaza a la anterior', () async {
+			final escenario = _Escenario((_) => _json({}));
+			final repositorio = escenario.repositorio;
+
+			await GuardarVinculacionPendienteUseCase(repositorio).ejecutar(
+				const VinculacionPendiente(recepcionId: _recepcionId, servicioId: 'servicio-viejo'),
+			);
+			await GuardarVinculacionPendienteUseCase(repositorio).ejecutar(pendiente);
+			await escenario.cerrar();
+
+			expect(await ObtenerVinculacionesPendientesUseCase(repositorio).ejecutar(), [pendiente]);
+		});
+
+		test('lo guardado sobrevive a otra instancia del repositorio (la app se cerro)', () async {
+			final antes = _Escenario((_) => _json({}));
+			await GuardarVinculacionPendienteUseCase(antes.repositorio).ejecutar(pendiente);
+			await antes.cerrar();
+
+			final despues = FabricaRepositoryImpl(
+				ApiClient(MockClient((_) async => _json({})), antes.storage),
+				antes.storage,
+			);
+
+			expect(await ObtenerVinculacionesPendientesUseCase(despues).ejecutar(), [pendiente]);
+		});
+
+		test('un valor ilegible en el dispositivo se descarta', () async {
+			final escenario = _Escenario((_) => _json({}));
+			escenario.storage.valores['fabrica_vinculaciones_pendientes_v1'] = '{roto';
+			final repositorio = escenario.repositorio;
+
+			expect(await ObtenerVinculacionesPendientesUseCase(repositorio).ejecutar(), isEmpty);
+
+			escenario.storage.valores['fabrica_vinculaciones_pendientes_v1'] =
+					'[{"recepcionId":"$_recepcionId"},{"recepcionId":"$_recepcionId","servicioId":"$_servicioId"}]';
+			expect(await ObtenerVinculacionesPendientesUseCase(repositorio).ejecutar(), [pendiente]);
+			await escenario.cerrar();
 		});
 	});
 

@@ -4,6 +4,9 @@ import 'package:cliente_feedback_tecnico/core/auth/secure_storage.dart';
 class SecureStorageEnMemoria implements SecureStorage {
 	final Map<String, String> valores = {};
 
+	/// Simula un dispositivo donde no se puede escribir (`guardarValor` falla).
+	bool fallarEscrituras = false;
+
 	@override
 	Future<void> guardarToken(String token) async => valores['jwt_token'] = token;
 
@@ -24,8 +27,12 @@ class SecureStorageEnMemoria implements SecureStorage {
 	Future<void> borrarUsuario() async => valores.remove('usuario_sesion');
 
 	@override
-	Future<void> guardarValor({required String key, required String value}) async =>
-			valores[key] = value;
+	Future<void> guardarValor({required String key, required String value}) async {
+		if (fallarEscrituras) {
+			throw Exception('No se puede escribir en el dispositivo');
+		}
+		valores[key] = value;
+	}
 
 	@override
 	Future<String?> obtenerValor(String key) async => valores[key];

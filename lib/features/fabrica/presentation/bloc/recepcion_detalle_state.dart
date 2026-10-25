@@ -1,5 +1,7 @@
 import 'package:cliente_feedback_tecnico/features/fabrica/domain/entities/estados_fabrica.dart';
 import 'package:cliente_feedback_tecnico/features/fabrica/domain/entities/recepcion.dart';
+import 'package:cliente_feedback_tecnico/features/fabrica/domain/entities/servicio_vinculado.dart';
+import 'package:cliente_feedback_tecnico/features/fabrica/presentation/bloc/nuevo_ingreso_state.dart';
 import 'package:cliente_feedback_tecnico/features/fabrica/presentation/bloc/reglas_recepcion.dart';
 import 'package:cliente_feedback_tecnico/features/servicios/domain/entities/cliente.dart';
 import 'package:cliente_feedback_tecnico/features/servicios/domain/entities/servicio.dart';
@@ -30,6 +32,17 @@ class RecepcionDetalleState extends Equatable {
 	/// Por que fallo la ultima vinculacion (queda a la vista con "Reintentar").
 	final String? errorVinculacion;
 
+	/// Resumen del servicio vinculado (`GET /servicios/:id`).
+	final ServicioVinculado? servicioVinculado;
+	final bool cargandoServicioVinculado;
+
+	/// El backend no deja ver el servicio (403: es de otro tecnico) o ya no
+	/// existe (404): se muestra solo el id, sin error.
+	final bool servicioVinculadoNoDisponible;
+
+	/// Cualquier otro error al traer el resumen (queda con "Reintentar").
+	final String? errorServicioVinculado;
+
 	/// Mensajes de un solo uso para el snackbar.
 	final String? exitoMensaje;
 	final String? errorMensaje;
@@ -48,6 +61,10 @@ class RecepcionDetalleState extends Equatable {
 		this.servicioPorVincular,
 		this.vinculando = false,
 		this.errorVinculacion,
+		this.servicioVinculado,
+		this.cargandoServicioVinculado = false,
+		this.servicioVinculadoNoDisponible = false,
+		this.errorServicioVinculado,
 		this.exitoMensaje,
 		this.errorMensaje,
 		this.fechaReferencia,
@@ -84,6 +101,34 @@ class RecepcionDetalleState extends Equatable {
 	}
 
 	bool get puedeReintentarVinculacion => servicioPorVincular != null && !vinculando;
+
+	/// El resumen, solo si es del servicio que hoy figura vinculado.
+	ServicioVinculado? get resumenServicioVinculado {
+		final resumen = servicioVinculado;
+		return resumen != null && resumen.id == servicioVinculadoId ? resumen : null;
+	}
+
+	/// "Ingresar pieza retirada": mientras el equipo siga en fabrica.
+	bool get puedeIngresarPieza {
+		final actual = recepcion;
+		return actual != null && ReglasRecepcion.admiteIngresos(actual);
+	}
+
+	/// Con que arranca el ingreso de una pieza retirada: la recepcion y las
+	/// piezas que figuran en el indicador.
+	PrecargaIngresoRecepcion? get precargaIngreso {
+		final actual = recepcion;
+		if (actual == null) {
+			return null;
+		}
+		return PrecargaIngresoRecepcion(
+			recepcionId: actual.id,
+			numero: actual.numero,
+			clienteNombre: actual.cliente.nombre,
+			indicadorNroSerie: actual.indicador.nroSerie,
+			piezasInstaladas: actual.piezasInstaladas,
+		);
+	}
 
 	/// Con que arranca el formulario de servicio: canal fabrica fijo, el
 	/// cliente, el indicador y lo que reporto el cliente.
@@ -132,6 +177,11 @@ class RecepcionDetalleState extends Equatable {
 		bool? vinculando,
 		String? errorVinculacion,
 		bool limpiarErrorVinculacion = false,
+		ServicioVinculado? servicioVinculado,
+		bool? cargandoServicioVinculado,
+		bool? servicioVinculadoNoDisponible,
+		String? errorServicioVinculado,
+		bool limpiarErrorServicioVinculado = false,
 		String? exitoMensaje,
 		String? errorMensaje,
 		DateTime? fechaReferencia,
@@ -150,6 +200,13 @@ class RecepcionDetalleState extends Equatable {
 			vinculando: vinculando ?? this.vinculando,
 			errorVinculacion:
 					limpiarErrorVinculacion ? null : (errorVinculacion ?? this.errorVinculacion),
+			servicioVinculado: servicioVinculado ?? this.servicioVinculado,
+			cargandoServicioVinculado: cargandoServicioVinculado ?? this.cargandoServicioVinculado,
+			servicioVinculadoNoDisponible:
+					servicioVinculadoNoDisponible ?? this.servicioVinculadoNoDisponible,
+			errorServicioVinculado: limpiarErrorServicioVinculado
+					? null
+					: (errorServicioVinculado ?? this.errorServicioVinculado),
 			exitoMensaje: exitoMensaje,
 			errorMensaje: errorMensaje,
 			fechaReferencia: fechaReferencia ?? this.fechaReferencia,
@@ -168,6 +225,10 @@ class RecepcionDetalleState extends Equatable {
 				servicioPorVincular,
 				vinculando,
 				errorVinculacion,
+				servicioVinculado,
+				cargandoServicioVinculado,
+				servicioVinculadoNoDisponible,
+				errorServicioVinculado,
 				exitoMensaje,
 				errorMensaje,
 				fechaReferencia,

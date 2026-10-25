@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:cliente_feedback_tecnico/core/api/api_client.dart';
 import 'package:cliente_feedback_tecnico/core/api/api_constants.dart';
+import 'package:cliente_feedback_tecnico/core/auth/secure_storage.dart';
 import 'package:cliente_feedback_tecnico/core/error/failures.dart';
 import 'package:cliente_feedback_tecnico/features/fabrica/domain/entities/causa.dart';
 import 'package:cliente_feedback_tecnico/features/fabrica/domain/entities/componente.dart';
@@ -11,8 +12,10 @@ import 'package:cliente_feedback_tecnico/features/fabrica/domain/entities/movimi
 import 'package:cliente_feedback_tecnico/features/fabrica/domain/entities/pagina_fabrica.dart';
 import 'package:cliente_feedback_tecnico/features/fabrica/domain/entities/recepcion.dart';
 import 'package:cliente_feedback_tecnico/features/fabrica/domain/entities/resultado_asignacion.dart';
+import 'package:cliente_feedback_tecnico/features/fabrica/domain/entities/servicio_vinculado.dart';
 import 'package:cliente_feedback_tecnico/features/fabrica/domain/entities/solicitudes_fabrica.dart';
 import 'package:cliente_feedback_tecnico/features/fabrica/domain/entities/unidad.dart';
+import 'package:cliente_feedback_tecnico/features/fabrica/domain/entities/vinculacion_pendiente.dart';
 import 'package:cliente_feedback_tecnico/features/fabrica/domain/errors/regla_fabrica_exception.dart';
 import 'package:cliente_feedback_tecnico/features/fabrica/domain/repositories/i_fabrica_repository.dart';
 import 'package:cliente_feedback_tecnico/features/fabrica/infrastructure/dtos/catalogos_fabrica_dto.dart';
@@ -21,12 +24,17 @@ import 'package:cliente_feedback_tecnico/features/fabrica/infrastructure/dtos/hi
 import 'package:cliente_feedback_tecnico/features/fabrica/infrastructure/dtos/ingreso_dto.dart';
 import 'package:cliente_feedback_tecnico/features/fabrica/infrastructure/dtos/recepcion_dto.dart';
 import 'package:cliente_feedback_tecnico/features/fabrica/infrastructure/dtos/resultado_asignacion_dto.dart';
+import 'package:cliente_feedback_tecnico/features/fabrica/infrastructure/dtos/servicio_vinculado_dto.dart';
 import 'package:cliente_feedback_tecnico/features/fabrica/infrastructure/dtos/solicitudes_fabrica_dto.dart';
 import 'package:cliente_feedback_tecnico/features/fabrica/infrastructure/dtos/unidad_dto.dart';
 import 'package:http/http.dart' as http;
 
 class FabricaRepositoryImpl implements IFabricaRepository {
 	final ApiClient apiClient;
+	final SecureStorage secureStorage;
+
+	static const String _vinculacionesPendientesStorageKey =
+			'fabrica_vinculaciones_pendientes_v1';
 
 	/// Claves del body de error que no son datos extra de la regla.
 	static const Set<String> _clavesBaseError = {
@@ -37,7 +45,7 @@ class FabricaRepositoryImpl implements IFabricaRepository {
 		'message',
 	};
 
-	FabricaRepositoryImpl(this.apiClient);
+	FabricaRepositoryImpl(this.apiClient, this.secureStorage);
 
 	@override
 	Future<List<Componente>> obtenerComponentes({required String productoId}) async {
@@ -280,6 +288,81 @@ class FabricaRepositoryImpl implements IFabricaRepository {
 			SolicitudReparacionDto.desdeEntidad(solicitud).toJson(),
 		);
 		return IngresoDto.fromJson(_objeto(response, 'cargar la reparacion')).aEntidad();
+	}
+
+	@override
+	Future<Ingreso> recibirDeDesarrollo({
+		required String ingresoId,
+		String? observacion,
+	}) async {
+		final response = await apiClient.patch(
+			ApiConstants.fabricaIngresoVueltaServicioTecnico(ingresoId),
+			{'observacion': ?observacion},
+		);
+		return IngresoDto.fromJson(
+			_objeto(response, 'recibir la placa de desarrollo'),
+		).aEntidad();
+	}
+
+	@override
+	Future<ServicioVinculado> obtenerServicioVinculado(String servicioId) async {
+		final response = await apiClient.get(ApiConstants.servicio(servicioId));
+		final servicio = ServicioVinculadoDto.fromJson(
+			_objeto(response, 'obtener el servicio vinculado'),
+		);
+		if (servicio.id.isEmpty) {
+			throw const ServerException('Respuesta invalida al obtener el servicio vinculado.');
+		}
+		return servicio.aEntidad();
+	}
+
+	@override
+	Future<void> guardarVinculacionPendiente(VinculacionPendiente vinculacion) async {
+		final pendientes = await obtenerVinculacionesPendientes();
+		await _guardarVinculacionesPendientes([
+			...pendientes.where((p) => p.recepcionId != vinculacion.recepcionId),
+			vinculacion,
+		]);
+	}
+
+	@override
+	Future<List<VinculacionPendiente>> obtenerVinculacionesPendientes() async {
+		final jsonCrudo = await secureStorage.obtenerValor(_vinculacionesPendientesStorageKey);
+		if (jsonCrudo == null || jsonCrudo.trim().isEmpty) {
+			return const [];
+		}
+
+		// Un valor ilegible no impide trabajar: se descarta.
+		final json = _decodeJsonSeguro(jsonCrudo);
+		if (json is! List) {
+			return const [];
+		}
+		return json
+				.whereType<Map<String, dynamic>>()
+				.map(VinculacionPendienteDto.fromJson)
+				.whereType<VinculacionPendienteDto>()
+				.map((dto) => dto.aEntidad())
+				.toList();
+	}
+
+	@override
+	Future<void> quitarVinculacionPendiente(String recepcionId) async {
+		final pendientes = await obtenerVinculacionesPendientes();
+		if (!pendientes.any((p) => p.recepcionId == recepcionId)) {
+			return;
+		}
+		await _guardarVinculacionesPendientes(
+			pendientes.where((p) => p.recepcionId != recepcionId).toList(),
+		);
+	}
+
+	Future<void> _guardarVinculacionesPendientes(List<VinculacionPendiente> pendientes) {
+		return secureStorage.guardarValor(
+			key: _vinculacionesPendientesStorageKey,
+			value: jsonEncode(
+				pendientes.map((p) => VinculacionPendienteDto.desdeEntidad(p).toJson()).toList(),
+			),
+		);
 	}
 
 	String _conQuery(String path, Map<String, String> parametros) {

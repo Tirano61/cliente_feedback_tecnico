@@ -78,3 +78,9 @@ class RecepcionVinculacionReintentada extends RecepcionDetalleEvent {
 class RecepcionErrorAccionDescartado extends RecepcionDetalleEvent {
 	const RecepcionErrorAccionDescartado();
 }
+
+/// Resumen del servicio vinculado (`GET /servicios/:id`). Lo pide el BLoC al
+/// ver un servicio vinculado; tambien "Reintentar" si fallo.
+class RecepcionServicioVinculadoSolicitado extends RecepcionDetalleEvent {
+	const RecepcionServicioVinculadoSolicitado();
+}

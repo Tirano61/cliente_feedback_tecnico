@@ -5,8 +5,13 @@ import 'package:cliente_feedback_tecnico/features/fabrica/application/cambiar_es
 import 'package:cliente_feedback_tecnico/features/fabrica/application/crear_recepcion_use_case.dart';
 import 'package:cliente_feedback_tecnico/features/fabrica/application/devolver_recepcion_use_case.dart';
 import 'package:cliente_feedback_tecnico/features/fabrica/application/obtener_recepcion_use_case.dart';
+import 'package:cliente_feedback_tecnico/features/fabrica/application/guardar_vinculacion_pendiente_use_case.dart';
+import 'package:cliente_feedback_tecnico/features/fabrica/application/obtener_servicio_vinculado_use_case.dart';
+import 'package:cliente_feedback_tecnico/features/fabrica/application/obtener_vinculaciones_pendientes_use_case.dart';
+import 'package:cliente_feedback_tecnico/features/fabrica/application/quitar_vinculacion_pendiente_use_case.dart';
 import 'package:cliente_feedback_tecnico/features/fabrica/application/vincular_servicio_recepcion_use_case.dart';
 import 'package:cliente_feedback_tecnico/features/fabrica/domain/entities/estados_fabrica.dart';
+import 'package:cliente_feedback_tecnico/features/fabrica/domain/entities/vinculacion_pendiente.dart';
 import 'package:cliente_feedback_tecnico/features/fabrica/infrastructure/repositories/fabrica_repository_impl.dart';
 import 'package:cliente_feedback_tecnico/features/fabrica/presentation/bloc/nueva_recepcion_bloc.dart';
 import 'package:cliente_feedback_tecnico/features/fabrica/presentation/bloc/nueva_recepcion_event.dart';
@@ -104,6 +109,35 @@ final Map<String, dynamic> _ordenCreada = {
 	'servicio': {'canal': 'fabrica', 'clienteId': _clienteId},
 };
 
+// GET /servicios/:id: el servicio con sus relaciones (tecnico, diagnosticoCat
+// y resolucion como listas de { id, nombre }).
+Map<String, dynamic> _servicioJson() => {
+			'id': _servicioId,
+			'canal': 'fabrica',
+			'fecha': '2026-10-25T12:00:00.000Z',
+			'fechaHoraServicio': '2026-10-25T09:30:00.000Z',
+			'clienteId': _clienteId,
+			'equipoNroSerie': 'IND-1001',
+			'sintoma': 'No enciende',
+			'diagnosticoDetalle': 'Fuente sin salida de 5 V',
+			'estadoOrden': 'cerrada',
+			'tecnico': {
+				'id': _tecnicoId,
+				'email': 'tecnico@empresa.com',
+				'fullName': 'Juan Tecnico',
+				'roles': ['tecnico'],
+			},
+			'diagnosticoCat': [
+				{'id': _diagnosticoId, 'nombre': 'Fuente', 'activo': true},
+			],
+			'resolucion': [
+				{'id': _resolucionId, 'nombre': 'Cambio de fuente', 'activo': true},
+				{'id': '67676767-6767-4767-8767-676767676767', 'nombre': 'Prueba 24 h', 'activo': true},
+			],
+			'cliente': {'id': _clienteId, 'cuit': '20304050607', 'nombre': 'Agro SRL'},
+			'aprobado': false,
+		};
+
 http.Response _json(Object body, [int status = 200]) => http.Response(jsonEncode(body), status);
 
 http.Response _regla(int status, String codigo, String mensaje) {
@@ -118,16 +152,24 @@ http.Response _regla(int status, String codigo, String mensaje) {
 
 /// Backend simulado: `responder` decide por request; cotizacion y tarifa
 /// siempre responden. Guarda cada request (salvo esas dos).
+///
+/// El resumen del servicio vinculado (`GET /servicios/:id`) lo responde
+/// `responderServicio` y queda aparte, en `consultasServicio`.
+///
+/// Con `storage` de otro backend simula volver a abrir la app en el mismo
+/// dispositivo.
 class _Backend {
 	http.Response Function(http.Request request) responder;
+	http.Response Function(http.Request request) responderServicio = (_) => _json(_servicioJson());
 	final List<http.Request> requests = [];
+	final List<http.Request> consultasServicio = [];
 	late final SecureStorageEnMemoria storage;
 	late final ApiClient apiClient;
 	late final FabricaRepositoryImpl fabrica;
 	late final ServicioRepositoryImpl servicios;
 
-	_Backend(this.responder) {
-		storage = SecureStorageEnMemoria()..valores['jwt_token'] = 'token';
+	_Backend(this.responder, {SecureStorageEnMemoria? storage}) {
+		this.storage = storage ?? (SecureStorageEnMemoria()..valores['jwt_token'] = 'token');
 		apiClient = ApiClient(
 			MockClient((request) async {
 				final path = request.url.path;
@@ -137,13 +179,17 @@ class _Backend {
 				if (request.method == 'GET' && path.endsWith('/tarifa-km')) {
 					return _json({'valorKmUsd': 0.75});
 				}
+				if (request.method == 'GET' && path.endsWith('/servicios/$_servicioId')) {
+					consultasServicio.add(request);
+					return responderServicio(request);
+				}
 				requests.add(request);
 				return responder(request);
 			}),
-			storage,
+			this.storage,
 		);
-		fabrica = FabricaRepositoryImpl(apiClient);
-		servicios = ServicioRepositoryImpl(apiClient, storage);
+		fabrica = FabricaRepositoryImpl(apiClient, this.storage);
+		servicios = ServicioRepositoryImpl(apiClient, this.storage);
 	}
 
 	List<http.Request> de(String metodo, String sufijo) => requests
@@ -181,6 +227,10 @@ RecepcionDetalleBloc _detalleBloc(_Backend backend) {
 		CambiarEstadoRecepcionUseCase(backend.fabrica),
 		DevolverRecepcionUseCase(backend.fabrica),
 		VincularServicioRecepcionUseCase(backend.fabrica),
+		ObtenerServicioVinculadoUseCase(backend.fabrica),
+		GuardarVinculacionPendienteUseCase(backend.fabrica),
+		ObtenerVinculacionesPendientesUseCase(backend.fabrica),
+		QuitarVinculacionPendienteUseCase(backend.fabrica),
 		ahora: () => DateTime(2026, 10, 27, 10),
 	);
 }
@@ -635,6 +685,249 @@ void main() {
 			expect(estado.clienteSeleccionado, isNull);
 			expect(estado.indicadorNroSerie, 'IND-1001');
 			expect(estado.queLlego, 'Indicador');
+		});
+	});
+
+	group('vinculacion pendiente guardada en el dispositivo', () {
+		final cerrar = <Future<void> Function()>[];
+
+		tearDown(() async {
+			for (final c in cerrar.reversed) {
+				await c();
+			}
+			cerrar.clear();
+		});
+
+		/// Una "sesion" de la app: backend y bloc nuevos sobre el mismo storage.
+		(_Backend, RecepcionDetalleBloc) abrirApp(
+			http.Response Function(http.Request request) responder, {
+			SecureStorageEnMemoria? storage,
+		}) {
+			final backend = _Backend(responder, storage: storage);
+			final bloc = _detalleBloc(backend);
+			cerrar
+				..add(backend.cerrar)
+				..add(bloc.close);
+			return (backend, bloc);
+		}
+
+		Future<RecepcionDetalleState> abrir(RecepcionDetalleBloc bloc) {
+			final listo = bloc.stream.firstWhere(
+				(s) => s.recepcionId == _recepcionId && !s.cargando && s.recepcion != null,
+			);
+			bloc.add(const RecepcionDetalleAbierto(recepcionId: _recepcionId));
+			return listo;
+		}
+
+		Future<RecepcionDetalleState> vincular(RecepcionDetalleBloc bloc, RecepcionDetalleEvent evento) {
+			final listo = bloc.stream.firstWhere(
+				(s) => !s.vinculando && (s.errorVinculacion != null || s.exitoMensaje != null),
+			);
+			bloc.add(evento);
+			return listo;
+		}
+
+		test('si la vinculacion falla y se cierra la app, al volver se reintenta con el mismo servicio', () async {
+			final (antes, blocAntes) = abrirApp((request) {
+				return request.method == 'PATCH'
+						? _json({'message': 'Error interno'}, 500)
+						: _json(_recepcionJson());
+			});
+			await abrir(blocAntes);
+			await vincular(
+				blocAntes,
+				const RecepcionServicioGuardado(recepcionId: _recepcionId, servicioId: _servicioId),
+			);
+			await blocAntes.close();
+
+			// La app se vuelve a abrir: otro bloc, mismo dispositivo.
+			final (despues, blocDespues) = abrirApp(
+				(_) => _json(_recepcionJson()),
+				storage: antes.storage,
+			);
+			final reabierta = await abrir(blocDespues);
+
+			expect(reabierta.servicioPorVincular, _servicioId);
+			expect(reabierta.puedeCargarServicio, isFalse);
+			expect(reabierta.puedeReintentarVinculacion, isTrue);
+
+			despues.responder = (_) => _json(_recepcionJson(servicioId: _servicioId));
+			final vinculada = await vincular(blocDespues, const RecepcionVinculacionReintentada());
+
+			final patch = despues.de('PATCH', '/fabrica/recepciones/$_recepcionId/servicio').single;
+			expect(despues.body(patch), {'servicioId': _servicioId});
+			expect(despues.de('POST', '/servicios'), isEmpty);
+			expect(vinculada.servicioVinculadoId, _servicioId);
+			expect(vinculada.servicioPorVincular, isNull);
+
+			// Ya vinculada, no queda nada pendiente en el dispositivo.
+			await blocDespues.close();
+			await pumpEventQueue();
+			expect(await despues.fabrica.obtenerVinculacionesPendientes(), isEmpty);
+		});
+
+		test('al vincular bien no queda nada guardado', () async {
+			final (backend, bloc) = abrirApp((_) => _json(_recepcionJson()));
+			await abrir(bloc);
+			backend.responder = (_) => _json(_recepcionJson(servicioId: _servicioId));
+
+			await vincular(
+				bloc,
+				const RecepcionServicioGuardado(recepcionId: _recepcionId, servicioId: _servicioId),
+			);
+			await bloc.close();
+			await pumpEventQueue();
+
+			expect(await backend.fabrica.obtenerVinculacionesPendientes(), isEmpty);
+		});
+
+		test('si al abrir la recepcion ya tiene el servicio, se borra lo guardado', () async {
+			final (antes, _) = abrirApp((_) => _json(_recepcionJson()));
+			await antes.fabrica.guardarVinculacionPendiente(
+				const VinculacionPendiente(recepcionId: _recepcionId, servicioId: _servicioId),
+			);
+
+			// La vinculacion llego al backend aunque la respuesta se perdio.
+			final (despues, bloc) = abrirApp(
+				(_) => _json(_recepcionJson(servicioId: _servicioId)),
+				storage: antes.storage,
+			);
+			final estado = await abrir(bloc);
+			await bloc.close();
+			await pumpEventQueue();
+
+			expect(estado.servicioPorVincular, isNull);
+			expect(estado.servicioVinculadoId, _servicioId);
+			expect(await despues.fabrica.obtenerVinculacionesPendientes(), isEmpty);
+		});
+
+		test('sin poder escribir en el dispositivo la vinculacion sigue funcionando', () async {
+			final (backend, bloc) = abrirApp((_) => _json(_recepcionJson()));
+			backend.storage.fallarEscrituras = true;
+			await abrir(bloc);
+			backend.responder = (request) => request.method == 'PATCH'
+					? _json({'message': 'Error interno'}, 500)
+					: _json(_recepcionJson());
+
+			final fallo = await vincular(
+				bloc,
+				const RecepcionServicioGuardado(recepcionId: _recepcionId, servicioId: _servicioId),
+			);
+
+			expect(fallo.servicioPorVincular, _servicioId);
+			expect(fallo.errorVinculacion, 'Error interno');
+			expect(fallo.puedeReintentarVinculacion, isTrue);
+		});
+	});
+
+	group('resumen del servicio vinculado', () {
+		late _Backend backend;
+		late RecepcionDetalleBloc bloc;
+
+		setUp(() {
+			backend = _Backend((_) => _json(_recepcionJson(servicioId: _servicioId)));
+			bloc = _detalleBloc(backend);
+		});
+
+		tearDown(() async {
+			await bloc.close();
+			await backend.cerrar();
+		});
+
+		/// Abre la recepcion y espera a que termine de pedir el resumen.
+		Future<RecepcionDetalleState> abrirConResumen() {
+			final listo = bloc.stream.firstWhere(
+				(s) =>
+						s.recepcion != null &&
+						!s.cargando &&
+						!s.cargandoServicioVinculado &&
+						(s.resumenServicioVinculado != null ||
+								s.servicioVinculadoNoDisponible ||
+								s.errorServicioVinculado != null),
+			);
+			bloc.add(const RecepcionDetalleAbierto(recepcionId: _recepcionId));
+			return listo;
+		}
+
+		test('con servicio vinculado trae fecha, tecnico, diagnostico y resoluciones', () async {
+			final estado = await abrirConResumen();
+
+			expect(backend.consultasServicio.single.url.path, endsWith('/servicios/$_servicioId'));
+			final resumen = estado.resumenServicioVinculado!;
+			expect(resumen.fecha, DateTime.utc(2026, 10, 25, 9, 30));
+			expect(resumen.tecnicoNombre, 'Juan Tecnico');
+			expect(resumen.diagnosticos, ['Fuente']);
+			expect(resumen.diagnosticoDetalle, 'Fuente sin salida de 5 V');
+			expect(resumen.resoluciones, ['Cambio de fuente', 'Prueba 24 h']);
+			expect(estado.servicioVinculadoId, _servicioId);
+		});
+
+		test('sin servicio vinculado no lo pide', () async {
+			backend.responder = (_) => _json(_recepcionJson());
+			final listo = bloc.stream.firstWhere((s) => s.recepcion != null && !s.cargando);
+			bloc.add(const RecepcionDetalleAbierto(recepcionId: _recepcionId));
+			final estado = await listo;
+			await pumpEventQueue();
+
+			expect(backend.consultasServicio, isEmpty);
+			expect(estado.resumenServicioVinculado, isNull);
+		});
+
+		for (final status in [403, 404]) {
+			test('si responde $status sigue mostrando el id, sin error', () async {
+				backend.responderServicio = (_) => _json({'statusCode': status, 'message': 'No disponible'}, status);
+
+				final estado = await abrirConResumen();
+
+				expect(estado.servicioVinculadoNoDisponible, isTrue);
+				expect(estado.servicioVinculadoId, _servicioId);
+				expect(estado.resumenServicioVinculado, isNull);
+				expect(estado.errorServicioVinculado, isNull);
+				expect(estado.errorMensaje, isNull);
+
+				// Actualizar la recepcion no lo vuelve a pedir.
+				final refrescada = bloc.stream.firstWhere((s) => !s.cargando);
+				bloc.add(const RecepcionDetalleRefrescado());
+				await refrescada;
+				await pumpEventQueue();
+				expect(backend.consultasServicio, hasLength(1));
+			});
+		}
+
+		test('otro error queda a la vista y se puede reintentar', () async {
+			backend.responderServicio = (_) => _json({'message': 'Error interno'}, 500);
+
+			final fallo = await abrirConResumen();
+			expect(fallo.errorServicioVinculado, 'Error interno');
+			expect(fallo.servicioVinculadoId, _servicioId);
+
+			backend.responderServicio = (_) => _json(_servicioJson());
+			final listo = bloc.stream.firstWhere(
+				(s) => !s.cargandoServicioVinculado && s.resumenServicioVinculado != null,
+			);
+			bloc.add(const RecepcionServicioVinculadoSolicitado());
+			final reintento = await listo;
+
+			expect(reintento.errorServicioVinculado, isNull);
+			expect(reintento.resumenServicioVinculado!.tecnicoNombre, 'Juan Tecnico');
+			expect(backend.consultasServicio, hasLength(2));
+		});
+
+		test('al vincular el servicio trae su resumen', () async {
+			backend.responder = (_) => _json(_recepcionJson());
+			final abierta = bloc.stream.firstWhere((s) => s.recepcion != null && !s.cargando);
+			bloc.add(const RecepcionDetalleAbierto(recepcionId: _recepcionId));
+			await abierta;
+			backend.responder = (_) => _json(_recepcionJson(servicioId: _servicioId));
+
+			final conResumen = bloc.stream.firstWhere((s) => s.resumenServicioVinculado != null);
+			bloc.add(
+				const RecepcionServicioGuardado(recepcionId: _recepcionId, servicioId: _servicioId),
+			);
+			final estado = await conResumen;
+
+			expect(estado.servicioVinculadoId, _servicioId);
+			expect(estado.resumenServicioVinculado!.resoluciones, ['Cambio de fuente', 'Prueba 24 h']);
 		});
 	});
 }

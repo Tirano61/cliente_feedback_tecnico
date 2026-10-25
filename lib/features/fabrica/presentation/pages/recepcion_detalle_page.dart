@@ -6,8 +6,13 @@ import 'package:cliente_feedback_tecnico/features/fabrica/presentation/bloc/rece
 import 'package:cliente_feedback_tecnico/features/fabrica/presentation/bloc/recepcion_detalle_event.dart';
 import 'package:cliente_feedback_tecnico/features/fabrica/presentation/bloc/recepcion_detalle_state.dart';
 import 'package:cliente_feedback_tecnico/features/fabrica/presentation/bloc/reglas_recepcion.dart';
+import 'package:cliente_feedback_tecnico/features/fabrica/presentation/bloc/textos_ingreso.dart';
 import 'package:cliente_feedback_tecnico/features/fabrica/presentation/bloc/textos_recepcion.dart';
+import 'package:cliente_feedback_tecnico/features/fabrica/presentation/pages/ingreso_detalle_page.dart';
+import 'package:cliente_feedback_tecnico/features/fabrica/presentation/pages/nuevo_ingreso_page.dart';
 import 'package:cliente_feedback_tecnico/features/fabrica/presentation/pages/servicio_fabrica_page.dart';
+import 'package:cliente_feedback_tecnico/features/fabrica/presentation/widgets/detalle_fabrica.dart';
+import 'package:cliente_feedback_tecnico/features/fabrica/presentation/widgets/estado_ingreso_badge.dart';
 import 'package:cliente_feedback_tecnico/features/fabrica/presentation/widgets/estado_recepcion_badge.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -141,7 +146,7 @@ class _RecepcionDetallePageState extends State<RecepcionDetallePage> {
 								const SizedBox(height: 12),
 								_SeccionPiezasInstaladas(piezas: recepcion.piezasInstaladas),
 								const SizedBox(height: 12),
-								_SeccionIngresos(ingresos: recepcion.ingresos),
+								_SeccionIngresos(state: state, ingresos: recepcion.ingresos),
 							],
 						),
 					),
@@ -206,7 +211,7 @@ class _SeccionAcciones extends StatelessWidget {
 				if (accion.motivoBloqueo != null) accion.motivoBloqueo!,
 		};
 
-		return _Seccion(
+		return SeccionDetalle(
 			titulo: 'Acciones',
 			children: [
 				Wrap(
@@ -321,7 +326,7 @@ class _DialogoCambioEstadoState extends State<_DialogoCambioEstado> {
 								maxLines: 4,
 								decoration: const InputDecoration(labelText: 'Observación (opcional)'),
 							),
-							_ErrorAccion(mensaje: state.errorAccion),
+							ErrorAccionDetalle(mensaje: state.errorAccion),
 						],
 					),
 					actions: [
@@ -417,7 +422,7 @@ class _DialogoDevolucionState extends State<_DialogoDevolucion> {
 									hintText: 'Ej: por Andreani',
 								),
 							),
-							_ErrorAccion(mensaje: state.errorAccion),
+							ErrorAccionDetalle(mensaje: state.errorAccion),
 						],
 					),
 					actions: [
@@ -451,31 +456,6 @@ class _DialogoDevolucionState extends State<_DialogoDevolucion> {
 	}
 }
 
-class _ErrorAccion extends StatelessWidget {
-	final String? mensaje;
-
-	const _ErrorAccion({required this.mensaje});
-
-	@override
-	Widget build(BuildContext context) {
-		final texto = mensaje;
-		if (texto == null) {
-			return const SizedBox.shrink();
-		}
-		final colorScheme = Theme.of(context).colorScheme;
-		return Container(
-			width: double.infinity,
-			margin: const EdgeInsets.only(top: 12),
-			padding: const EdgeInsets.all(10),
-			decoration: BoxDecoration(
-				color: colorScheme.errorContainer,
-				borderRadius: BorderRadius.circular(8),
-			),
-			child: Text(texto, style: TextStyle(color: colorScheme.onErrorContainer)),
-		);
-	}
-}
-
 /// El servicio de fabrica (diagnostico, resolucion y facturacion) de la
 /// recepcion: vinculado, esperando la vinculacion o para cargar.
 class _SeccionServicio extends StatelessWidget {
@@ -490,18 +470,19 @@ class _SeccionServicio extends StatelessWidget {
 		final textTheme = Theme.of(context).textTheme;
 		final colorScheme = Theme.of(context).colorScheme;
 
-		return _Seccion(
+		return SeccionDetalle(
 			titulo: 'Servicio de fábrica',
 			children: [
-				if (vinculadoId != null)
+				if (vinculadoId != null) ...[
 					ListTile(
 						dense: true,
 						contentPadding: EdgeInsets.zero,
 						leading: Icon(Icons.link, color: colorScheme.primary),
 						title: const Text('Vinculado a la recepción'),
 						subtitle: Text('Servicio $vinculadoId'),
-					)
-				else if (porVincular != null) ...[
+					),
+					_ResumenServicioVinculado(state: state),
+				] else if (porVincular != null) ...[
 					Container(
 						width: double.infinity,
 						padding: const EdgeInsets.all(10),
@@ -587,6 +568,69 @@ class _SeccionServicio extends StatelessWidget {
 	}
 }
 
+class _ResumenServicioVinculado extends StatelessWidget {
+	final RecepcionDetalleState state;
+
+	const _ResumenServicioVinculado({required this.state});
+
+	@override
+	Widget build(BuildContext context) {
+		final resumen = state.resumenServicioVinculado;
+		if (resumen != null) {
+			return Column(
+				children: [
+					FilaDetalle(label: 'Fecha', valor: formatearFechaFabrica(resumen.fecha)),
+					FilaDetalle(label: 'Técnico', valor: textoSeguro(resumen.tecnicoNombre)),
+					FilaDetalle(
+						label: 'Diagnóstico',
+						valor: resumen.diagnosticos.isEmpty ? 'Sin dato' : resumen.diagnosticos.join(', '),
+					),
+					if ((resumen.diagnosticoDetalle ?? '').trim().isNotEmpty)
+						FilaDetalle(label: 'Detalle técnico', valor: resumen.diagnosticoDetalle!.trim()),
+					FilaDetalle(
+						label: 'Trabajo realizado',
+						valor: resumen.resoluciones.isEmpty ? 'Sin dato' : resumen.resoluciones.join(', '),
+					),
+				],
+			);
+		}
+
+		if (state.cargandoServicioVinculado) {
+			return const Padding(
+				padding: EdgeInsets.symmetric(vertical: 8),
+				child: LinearProgressIndicator(),
+			);
+		}
+
+		// 403/404: queda el id, sin error.
+		final error = state.errorServicioVinculado;
+		if (error == null) {
+			return const SizedBox.shrink();
+		}
+		return Row(
+			children: [
+				Expanded(
+					child: Text(
+						error,
+						style: Theme.of(context).textTheme.bodySmall?.copyWith(
+									color: Theme.of(context).colorScheme.error,
+								),
+					),
+				),
+				TextButton.icon(
+					onPressed: () {
+						context.read<RecepcionDetalleBloc>().add(
+							const RecepcionServicioVinculadoSolicitado(),
+						);
+					},
+					icon: const Icon(Icons.refresh),
+					label: const Text('Reintentar'),
+				),
+			],
+		);
+	}
+}
+
 class _SeccionDatos extends StatelessWidget {
 	final Recepcion recepcion;
 
@@ -595,22 +639,22 @@ class _SeccionDatos extends StatelessWidget {
 	@override
 	Widget build(BuildContext context) {
 		final formaDevolucion = recepcion.formaDevolucion;
-		return _Seccion(
+		return SeccionDetalle(
 			titulo: 'Datos',
 			children: [
-				_Fila(label: 'Cliente', valor: recepcion.cliente.nombre),
-				_Fila(label: 'CUIT', valor: _textoSeguro(recepcion.cliente.cuit)),
-				_Fila(label: 'N° de serie del indicador', valor: recepcion.indicador.nroSerie),
-				_Fila(label: 'Modelo', valor: _textoSeguro(recepcion.indicador.producto?.nombre)),
-				_Fila(label: 'Qué llegó', valor: _textoSeguro(recepcion.queLlego)),
-				_Fila(label: 'Qué reporta el cliente', valor: _textoSeguro(recepcion.sintomaReportado)),
-				_Fila(label: 'Observaciones', valor: _textoSeguro(recepcion.observaciones)),
-				_Fila(label: 'Recibió', valor: _textoSeguro(recepcion.tecnicoRecepcion?.fullName)),
-				_Fila(label: 'Fecha de recepción', valor: _formatearFecha(recepcion.fechaRecepcion)),
+				FilaDetalle(label: 'Cliente', valor: recepcion.cliente.nombre),
+				FilaDetalle(label: 'CUIT', valor: textoSeguro(recepcion.cliente.cuit)),
+				FilaDetalle(label: 'N° de serie del indicador', valor: recepcion.indicador.nroSerie),
+				FilaDetalle(label: 'Modelo', valor: textoSeguro(recepcion.indicador.producto?.nombre)),
+				FilaDetalle(label: 'Qué llegó', valor: textoSeguro(recepcion.queLlego)),
+				FilaDetalle(label: 'Qué reporta el cliente', valor: textoSeguro(recepcion.sintomaReportado)),
+				FilaDetalle(label: 'Observaciones', valor: textoSeguro(recepcion.observaciones)),
+				FilaDetalle(label: 'Recibió', valor: textoSeguro(recepcion.tecnicoRecepcion?.fullName)),
+				FilaDetalle(label: 'Fecha de recepción', valor: formatearFechaFabrica(recepcion.fechaRecepcion)),
 				if (recepcion.fechaDevolucion != null)
-					_Fila(label: 'Fecha de devolución', valor: _formatearFecha(recepcion.fechaDevolucion)),
+					FilaDetalle(label: 'Fecha de devolución', valor: formatearFechaFabrica(recepcion.fechaDevolucion)),
 				if (formaDevolucion != null)
-					_Fila(label: 'Forma de devolución', valor: nombreFormaDevolucion(formaDevolucion)),
+					FilaDetalle(label: 'Forma de devolución', valor: nombreFormaDevolucion(formaDevolucion)),
 			],
 		);
 	}
@@ -623,7 +667,7 @@ class _SeccionHistorial extends StatelessWidget {
 
 	@override
 	Widget build(BuildContext context) {
-		return _Seccion(
+		return SeccionDetalle(
 			titulo: 'Historial de estados',
 			children: [
 				if (historial.isEmpty) const Text('Sin cambios registrados.'),
@@ -639,7 +683,7 @@ class _SeccionHistorial extends StatelessWidget {
 						title: Text(nombreEstadoRecepcion(cambio.estado)),
 						subtitle: Text(
 							[
-								_formatearFecha(cambio.fecha),
+								formatearFechaFabrica(cambio.fecha),
 								if ((cambio.usuarioNombre ?? '').trim().isNotEmpty) cambio.usuarioNombre!.trim(),
 								if ((cambio.observacion ?? '').trim().isNotEmpty) cambio.observacion!.trim(),
 							].join(' · '),
@@ -657,7 +701,7 @@ class _SeccionPiezasInstaladas extends StatelessWidget {
 
 	@override
 	Widget build(BuildContext context) {
-		return _Seccion(
+		return SeccionDetalle(
 			titulo: 'Piezas instaladas en el indicador',
 			children: [
 				if (piezas.isEmpty) const Text('No figuran piezas instaladas.'),
@@ -665,8 +709,8 @@ class _SeccionPiezasInstaladas extends StatelessWidget {
 					ListTile(
 						dense: true,
 						contentPadding: EdgeInsets.zero,
-						leading: Icon(_iconoTipo(pieza.tipo)),
-						title: Text('${_nombreTipo(pieza.tipo)} ${pieza.nroSerie}'),
+						leading: Icon(iconoTipoUnidad(pieza.tipo)),
+						title: Text('${nombreTipoUnidad(pieza.tipo)} ${pieza.nroSerie}'),
 						subtitle: pieza.producto == null ? null : Text(pieza.producto!.nombre),
 					),
 			],
@@ -675,13 +719,14 @@ class _SeccionPiezasInstaladas extends StatelessWidget {
 }
 
 class _SeccionIngresos extends StatelessWidget {
+	final RecepcionDetalleState state;
 	final List<Ingreso> ingresos;
 
-	const _SeccionIngresos({required this.ingresos});
+	const _SeccionIngresos({required this.state, required this.ingresos});
 
 	@override
 	Widget build(BuildContext context) {
-		return _Seccion(
+		return SeccionDetalle(
 			titulo: 'Piezas ingresadas desde esta recepción',
 			children: [
 				if (ingresos.isEmpty) const Text('Todavía no se ingresaron piezas.'),
@@ -689,104 +734,44 @@ class _SeccionIngresos extends StatelessWidget {
 					ListTile(
 						dense: true,
 						contentPadding: EdgeInsets.zero,
-						leading: Icon(_iconoTipo(ingreso.unidad.tipo)),
+						leading: Icon(iconoTipoUnidad(ingreso.unidad.tipo)),
 						title: Text(
-							'Ingreso N° ${ingreso.numero} · ${_nombreTipo(ingreso.unidad.tipo)} ${ingreso.unidad.nroSerie}',
+							'Ingreso N° ${ingreso.numero} · ${nombreTipoUnidad(ingreso.unidad.tipo)} ${ingreso.unidad.nroSerie}',
 						),
-						subtitle: Text(_formatearFecha(ingreso.fechaIngreso)),
+						subtitle: Text(formatearFechaFabrica(ingreso.fechaIngreso)),
+						trailing: EstadoIngresoBadge(estado: ingreso.estado),
+						onTap: () => _abrirIngreso(context, ingreso),
 					),
+				if (state.puedeIngresarPieza) ...[
+					const SizedBox(height: 8),
+					OutlinedButton.icon(
+						onPressed: () => _ingresarPieza(context),
+						icon: const Icon(Icons.move_to_inbox_outlined),
+						label: const Text('Ingresar pieza retirada'),
+					),
+				],
 			],
 		);
 	}
-}
 
-class _Seccion extends StatelessWidget {
-	final String titulo;
-	final List<Widget> children;
-
-	const _Seccion({required this.titulo, required this.children});
-
-	@override
-	Widget build(BuildContext context) {
-		return Card(
-			child: Padding(
-				padding: const EdgeInsets.all(14),
-				child: Column(
-					crossAxisAlignment: CrossAxisAlignment.start,
-					children: [
-						Text(
-							titulo,
-							style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
-						),
-						const SizedBox(height: 8),
-						...children,
-					],
-				),
-			),
+	Future<void> _abrirIngreso(BuildContext context, Ingreso ingreso) async {
+		final bloc = context.read<RecepcionDetalleBloc>();
+		await Navigator.of(context).push(
+			MaterialPageRoute<void>(builder: (_) => IngresoDetallePage(ingresoId: ingreso.id)),
 		);
+		bloc.add(const RecepcionDetalleRefrescado());
 	}
-}
 
-class _Fila extends StatelessWidget {
-	final String label;
-	final String valor;
-
-	const _Fila({required this.label, required this.valor});
-
-	@override
-	Widget build(BuildContext context) {
-		return Padding(
-			padding: const EdgeInsets.symmetric(vertical: 3),
-			child: Row(
-				crossAxisAlignment: CrossAxisAlignment.start,
-				children: [
-					Expanded(flex: 4, child: Text(label)),
-					Expanded(
-						flex: 6,
-						child: Text(
-							valor,
-							textAlign: TextAlign.right,
-							style: const TextStyle(fontWeight: FontWeight.w600),
-						),
-					),
-				],
-			),
+	Future<void> _ingresarPieza(BuildContext context) async {
+		final precarga = state.precargaIngreso;
+		if (precarga == null) {
+			return;
+		}
+		final bloc = context.read<RecepcionDetalleBloc>();
+		await Navigator.of(context).push(
+			MaterialPageRoute<void>(builder: (_) => NuevoIngresoPage(recepcion: precarga)),
 		);
+		bloc.add(const RecepcionDetalleRefrescado());
 	}
 }
 
-IconData _iconoTipo(TipoUnidad tipo) {
-	return switch (tipo) {
-		TipoUnidad.indicador => Icons.monitor_weight_outlined,
-		TipoUnidad.placa => Icons.memory,
-		TipoUnidad.celda => Icons.sensors,
-		TipoUnidad.desconocido => Icons.help_outline,
-	};
-}
-
-String _nombreTipo(TipoUnidad tipo) {
-	return switch (tipo) {
-		TipoUnidad.indicador => 'Indicador',
-		TipoUnidad.placa => 'Placa',
-		TipoUnidad.celda => 'Celda',
-		TipoUnidad.desconocido => 'Pieza',
-	};
-}
-
-String _textoSeguro(String? valor) {
-	final limpio = (valor ?? '').trim();
-	return limpio.isEmpty ? 'Sin dato' : limpio;
-}
-
-String _formatearFecha(DateTime? fecha) {
-	if (fecha == null) {
-		return 'Sin dato';
-	}
-
-	final local = fecha.toLocal();
-	final dia = local.day.toString().padLeft(2, '0');
-	final mes = local.month.toString().padLeft(2, '0');
-	final hora = local.hour.toString().padLeft(2, '0');
-	final minuto = local.minute.toString().padLeft(2, '0');
-	return '$dia/$mes/${local.year} $hora:$minuto';
-}

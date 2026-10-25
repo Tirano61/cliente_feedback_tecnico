@@ -6,7 +6,10 @@ import 'package:cliente_feedback_tecnico/features/auth/presentation/bloc/auth_bl
 import 'package:cliente_feedback_tecnico/features/auth/presentation/bloc/auth_event.dart';
 import 'package:cliente_feedback_tecnico/features/auth/presentation/bloc/auth_state.dart';
 import 'package:cliente_feedback_tecnico/features/auth/presentation/pages/login_page.dart';
+import 'package:cliente_feedback_tecnico/features/fabrica/presentation/bloc/ingreso_detalle_bloc.dart';
+import 'package:cliente_feedback_tecnico/features/fabrica/presentation/bloc/ingresos_bloc.dart';
 import 'package:cliente_feedback_tecnico/features/fabrica/presentation/bloc/nueva_recepcion_bloc.dart';
+import 'package:cliente_feedback_tecnico/features/fabrica/presentation/bloc/nuevo_ingreso_bloc.dart';
 import 'package:cliente_feedback_tecnico/features/fabrica/presentation/bloc/recepcion_detalle_bloc.dart';
 import 'package:cliente_feedback_tecnico/features/fabrica/presentation/bloc/recepciones_bloc.dart';
 import 'package:cliente_feedback_tecnico/features/fabrica/presentation/bloc/servicio_fabrica_bloc.dart';
@@ -77,6 +80,10 @@ class App extends StatelessWidget {
             deps.cambiarEstadoRecepcionUseCase,
             deps.devolverRecepcionUseCase,
             deps.vincularServicioRecepcionUseCase,
+            deps.obtenerServicioVinculadoUseCase,
+            deps.guardarVinculacionPendienteUseCase,
+            deps.obtenerVinculacionesPendientesUseCase,
+            deps.quitarVinculacionPendienteUseCase,
           ),
         ),
         BlocProvider(
@@ -84,6 +91,27 @@ class App extends StatelessWidget {
             deps.crearRecepcionUseCase,
             deps.buscarClientesUseCase,
             deps.crearClienteRapidoUseCase,
+          ),
+        ),
+        BlocProvider(
+          create: (_) => IngresosBloc(deps.obtenerIngresosUseCase),
+        ),
+        BlocProvider(
+          create: (_) => NuevoIngresoBloc(
+            deps.crearIngresoUseCase,
+            deps.buscarClientesUseCase,
+            deps.crearClienteRapidoUseCase,
+          ),
+        ),
+        BlocProvider(
+          create: (_) => IngresoDetalleBloc(
+            deps.obtenerIngresoUseCase,
+            deps.derivarIngresoUseCase,
+            deps.cargarFallaIngresoUseCase,
+            deps.cargarReparacionIngresoUseCase,
+            deps.recibirDeDesarrolloUseCase,
+            deps.obtenerComponentesUseCase,
+            deps.obtenerCausasUseCase,
           ),
         ),
         BlocProvider(

@@ -6,6 +6,10 @@ import 'package:cliente_feedback_tecnico/features/fabrica/application/crear_rece
 import 'package:cliente_feedback_tecnico/features/fabrica/application/devolver_recepcion_use_case.dart';
 import 'package:cliente_feedback_tecnico/features/fabrica/application/obtener_recepcion_use_case.dart';
 import 'package:cliente_feedback_tecnico/features/fabrica/application/obtener_recepciones_use_case.dart';
+import 'package:cliente_feedback_tecnico/features/fabrica/application/guardar_vinculacion_pendiente_use_case.dart';
+import 'package:cliente_feedback_tecnico/features/fabrica/application/obtener_servicio_vinculado_use_case.dart';
+import 'package:cliente_feedback_tecnico/features/fabrica/application/obtener_vinculaciones_pendientes_use_case.dart';
+import 'package:cliente_feedback_tecnico/features/fabrica/application/quitar_vinculacion_pendiente_use_case.dart';
 import 'package:cliente_feedback_tecnico/features/fabrica/application/vincular_servicio_recepcion_use_case.dart';
 import 'package:cliente_feedback_tecnico/features/fabrica/domain/entities/estados_fabrica.dart';
 import 'package:cliente_feedback_tecnico/features/fabrica/domain/entities/recepcion.dart';
@@ -114,6 +118,8 @@ http.Response _regla(int status, String codigo, String mensaje, [Map<String, dyn
 }
 
 /// Backend simulado: responde lo que diga `responder` y guarda cada request.
+/// El resumen del servicio vinculado (`GET /servicios/:id`) responde 404 y no
+/// se guarda: lo cubre servicio_fabrica_test.dart.
 class _Backend {
 	http.Response Function(http.Request request) responder;
 	final List<http.Request> requests = [];
@@ -125,12 +131,15 @@ class _Backend {
 		final storage = SecureStorageEnMemoria()..valores['jwt_token'] = 'token';
 		apiClient = ApiClient(
 			MockClient((request) async {
+				if (request.method == 'GET' && request.url.path.contains('/servicios/')) {
+					return _json({'message': 'No existe'}, 404);
+				}
 				requests.add(request);
 				return responder(request);
 			}),
 			storage,
 		);
-		fabrica = FabricaRepositoryImpl(apiClient);
+		fabrica = FabricaRepositoryImpl(apiClient, storage);
 		servicios = ServicioRepositoryImpl(apiClient, storage);
 	}
 
@@ -399,6 +408,10 @@ void main() {
 				CambiarEstadoRecepcionUseCase(backend.fabrica),
 				DevolverRecepcionUseCase(backend.fabrica),
 				VincularServicioRecepcionUseCase(backend.fabrica),
+				ObtenerServicioVinculadoUseCase(backend.fabrica),
+				GuardarVinculacionPendienteUseCase(backend.fabrica),
+				ObtenerVinculacionesPendientesUseCase(backend.fabrica),
+				QuitarVinculacionPendienteUseCase(backend.fabrica),
 				ahora: _hoy,
 			);
 		});
