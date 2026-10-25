@@ -8,8 +8,10 @@ import 'package:cliente_feedback_tecnico/features/fabrica/presentation/bloc/rece
 import 'package:cliente_feedback_tecnico/features/fabrica/presentation/bloc/reglas_recepcion.dart';
 import 'package:cliente_feedback_tecnico/features/fabrica/presentation/bloc/textos_ingreso.dart';
 import 'package:cliente_feedback_tecnico/features/fabrica/presentation/bloc/textos_recepcion.dart';
+import 'package:cliente_feedback_tecnico/features/fabrica/presentation/pages/asignar_unidad_page.dart';
 import 'package:cliente_feedback_tecnico/features/fabrica/presentation/pages/ingreso_detalle_page.dart';
 import 'package:cliente_feedback_tecnico/features/fabrica/presentation/pages/nuevo_ingreso_page.dart';
+import 'package:cliente_feedback_tecnico/features/fabrica/presentation/pages/pieza_detalle_page.dart';
 import 'package:cliente_feedback_tecnico/features/fabrica/presentation/pages/servicio_fabrica_page.dart';
 import 'package:cliente_feedback_tecnico/features/fabrica/presentation/widgets/detalle_fabrica.dart';
 import 'package:cliente_feedback_tecnico/features/fabrica/presentation/widgets/estado_ingreso_badge.dart';
@@ -144,7 +146,7 @@ class _RecepcionDetallePageState extends State<RecepcionDetallePage> {
 								const SizedBox(height: 12),
 								_SeccionHistorial(historial: recepcion.historialEstados),
 								const SizedBox(height: 12),
-								_SeccionPiezasInstaladas(piezas: recepcion.piezasInstaladas),
+								_SeccionPiezasInstaladas(state: state, piezas: recepcion.piezasInstaladas),
 								const SizedBox(height: 12),
 								_SeccionIngresos(state: state, ingresos: recepcion.ingresos),
 							],
@@ -695,9 +697,10 @@ class _SeccionHistorial extends StatelessWidget {
 }
 
 class _SeccionPiezasInstaladas extends StatelessWidget {
+	final RecepcionDetalleState state;
 	final List<Unidad> piezas;
 
-	const _SeccionPiezasInstaladas({required this.piezas});
+	const _SeccionPiezasInstaladas({required this.state, required this.piezas});
 
 	@override
 	Widget build(BuildContext context) {
@@ -712,9 +715,42 @@ class _SeccionPiezasInstaladas extends StatelessWidget {
 						leading: Icon(iconoTipoUnidad(pieza.tipo)),
 						title: Text('${nombreTipoUnidad(pieza.tipo)} ${pieza.nroSerie}'),
 						subtitle: pieza.producto == null ? null : Text(pieza.producto!.nombre),
+						trailing: const Icon(Icons.chevron_right),
+						onTap: () => _abrirPieza(context, pieza),
 					),
+				if (state.puedePonerPieza) ...[
+					const SizedBox(height: 8),
+					OutlinedButton.icon(
+						onPressed: () => _ponerPieza(context),
+						icon: const Icon(Icons.swap_horiz),
+						label: const Text('Poner placa/celda'),
+					),
+				],
 			],
 		);
+	}
+
+	Future<void> _abrirPieza(BuildContext context, Unidad pieza) async {
+		final bloc = context.read<RecepcionDetalleBloc>();
+		await Navigator.of(context).push(
+			MaterialPageRoute<void>(
+				builder: (_) => PiezaDetallePage(unidadId: pieza.id, unidadInicial: pieza),
+			),
+		);
+		bloc.add(const RecepcionDetalleRefrescado());
+	}
+
+	/// Al volver se refresca: la pieza puesta y la retirada cambian el indicador.
+	Future<void> _ponerPieza(BuildContext context) async {
+		final precarga = state.precargaAsignacion;
+		if (precarga == null) {
+			return;
+		}
+		final bloc = context.read<RecepcionDetalleBloc>();
+		await Navigator.of(context).push(
+			MaterialPageRoute<void>(builder: (_) => AsignarUnidadPage(precarga: precarga)),
+		);
+		bloc.add(const RecepcionDetalleRefrescado());
 	}
 }
 
@@ -768,9 +804,8 @@ class _SeccionIngresos extends StatelessWidget {
 			return;
 		}
 		final bloc = context.read<RecepcionDetalleBloc>();
-		await Navigator.of(context).push(
-			MaterialPageRoute<void>(builder: (_) => NuevoIngresoPage(recepcion: precarga)),
-		);
+		// Espera tambien al detalle del ingreso que reemplaza al alta.
+		await NuevoIngresoPage.abrir(context, recepcion: precarga);
 		bloc.add(const RecepcionDetalleRefrescado());
 	}
 }

@@ -111,6 +111,22 @@ IconData iconoTipoUnidad(TipoUnidad tipo) {
 	};
 }
 
+IconData iconoMovimiento(TipoMovimiento tipo) {
+	return switch (tipo) {
+		TipoMovimiento.alta => Icons.fiber_new_outlined,
+		TipoMovimiento.instalacion => Icons.login,
+		TipoMovimiento.retiro => Icons.logout,
+		TipoMovimiento.recepcion => Icons.inventory_2_outlined,
+		TipoMovimiento.devolucionCliente => Icons.local_shipping_outlined,
+		TipoMovimiento.ingresoFabrica => Icons.move_to_inbox_outlined,
+		TipoMovimiento.derivacionDesarrollo => Icons.engineering_outlined,
+		TipoMovimiento.reparada => Icons.build_circle_outlined,
+		TipoMovimiento.descartada => Icons.delete_outline,
+		TipoMovimiento.vueltaAServicioTecnico => Icons.recycling,
+		TipoMovimiento.desconocido => Icons.circle_outlined,
+	};
+}
+
 String textoSeguro(String? valor) {
 	final limpio = (valor ?? '').trim();
 	return limpio.isEmpty ? 'Sin dato' : limpio;

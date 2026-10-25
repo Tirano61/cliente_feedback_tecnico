@@ -1,14 +1,13 @@
 import 'package:cliente_feedback_tecnico/core/widgets/alta_rapida_cliente_dialogo.dart';
-import 'package:cliente_feedback_tecnico/features/catalogos/domain/entities/producto.dart';
 import 'package:cliente_feedback_tecnico/features/catalogos/presentation/bloc/catalogo_bloc.dart';
 import 'package:cliente_feedback_tecnico/features/catalogos/presentation/bloc/catalogo_event.dart';
-import 'package:cliente_feedback_tecnico/features/catalogos/presentation/bloc/catalogo_state.dart';
 import 'package:cliente_feedback_tecnico/features/fabrica/presentation/bloc/nuevo_ingreso_bloc.dart';
 import 'package:cliente_feedback_tecnico/features/fabrica/presentation/bloc/nuevo_ingreso_event.dart';
 import 'package:cliente_feedback_tecnico/features/fabrica/presentation/bloc/nuevo_ingreso_state.dart';
 import 'package:cliente_feedback_tecnico/features/fabrica/presentation/bloc/textos_ingreso.dart';
 import 'package:cliente_feedback_tecnico/features/fabrica/presentation/pages/ingreso_detalle_page.dart';
 import 'package:cliente_feedback_tecnico/features/fabrica/presentation/widgets/detalle_fabrica.dart';
+import 'package:cliente_feedback_tecnico/features/fabrica/presentation/widgets/selector_modelo_pieza.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
@@ -19,6 +18,15 @@ class NuevoIngresoPage extends StatefulWidget {
 	final PrecargaIngresoRecepcion? recepcion;
 
 	const NuevoIngresoPage({this.recepcion, super.key});
+
+	/// Abre el alta y espera a que se cierre, incluido el detalle del ingreso
+	/// que la reemplaza al registrar: quien la abre refresca recien al volver.
+	static Future<void> abrir(BuildContext context, {PrecargaIngresoRecepcion? recepcion}) async {
+		final cierreDetalle = await Navigator.of(context).push<Future<void>>(
+			MaterialPageRoute<Future<void>>(builder: (_) => NuevoIngresoPage(recepcion: recepcion)),
+		);
+		await cierreDetalle;
+	}
 
 	@override
 	State<NuevoIngresoPage> createState() => _NuevoIngresoPageState();
@@ -55,6 +63,14 @@ class _NuevoIngresoPageState extends State<NuevoIngresoPage> {
 
 	void _cambiar(NuevoIngresoCambiado evento) {
 		context.read<NuevoIngresoBloc>().add(evento);
+	}
+
+	/// El alta se reemplaza por el detalle. Al reemplazarla, la ruta del alta
+	/// se completa enseguida: devuelve el cierre del detalle para que
+	/// [NuevoIngresoPage.abrir] espere hasta que el tecnico vuelva.
+	void _reemplazarPorDetalle(IngresoDetallePage detalle) {
+		final ruta = MaterialPageRoute<void>(builder: (_) => detalle);
+		Navigator.of(context).pushReplacement<void, Future<void>>(ruta, result: ruta.popped);
 	}
 
 	void _mostrarMensaje(String mensaje) {
@@ -94,13 +110,8 @@ class _NuevoIngresoPageState extends State<NuevoIngresoPage> {
 						listener: (context, state) {
 							final ingreso = state.ingresoCreado!;
 							_mostrarMensaje('Ingreso N° ${ingreso.numero} registrado.');
-							Navigator.of(context).pushReplacement(
-								MaterialPageRoute<void>(
-									builder: (_) => IngresoDetallePage(
-										ingresoId: ingreso.id,
-										ingresoInicial: ingreso,
-									),
-								),
+							_reemplazarPorDetalle(
+								IngresoDetallePage(ingresoId: ingreso.id, ingresoInicial: ingreso),
 							);
 						},
 					),
@@ -343,44 +354,11 @@ class _NuevoIngresoPageState extends State<NuevoIngresoPage> {
 	}
 
 	Widget _selectorModelo(NuevoIngresoState state) {
-		return BlocBuilder<CatalogoBloc, CatalogoState>(
-			builder: (context, catalogoState) {
-				final palabra = state.palabraModelo;
-				final modelos = catalogoState is CatalogoLoaded && palabra != null
-						? catalogoState.modelosActivosDe(palabra)
-						: const <Producto>[];
-				final cargando = catalogoState is CatalogoLoaded && catalogoState.cargandoProductos;
-				final seleccionado =
-						modelos.any((p) => p.id == state.productoId) ? state.productoId : null;
-
-				return DropdownButtonFormField<String?>(
-					// Al llegar el catalogo o cambiar el tipo se reconstruye con el valor vigente.
-					key: ValueKey('modelo-$palabra-${modelos.length}-$seleccionado'),
-					initialValue: seleccionado,
-					isExpanded: true,
-					decoration: InputDecoration(
-						labelText: palabra == null
-								? 'Modelo (elegí primero el tipo)'
-								: cargando
-										? 'Modelo (cargando...)'
-										: 'Modelo (opcional)',
-					),
-					items: [
-						const DropdownMenuItem<String?>(value: null, child: Text('Sin especificar')),
-						for (final producto in modelos)
-							DropdownMenuItem<String?>(
-								value: producto.id,
-								child: Text(producto.nombre, overflow: TextOverflow.ellipsis),
-							),
-					],
-					onChanged: palabra == null
-							? null
-							: (valor) {
-									_cambiar(
-										NuevoIngresoCambiado(productoId: valor, limpiarProducto: valor == null),
-									);
-								},
-				);
+		return SelectorModeloPieza(
+			palabra: state.palabraModelo,
+			productoId: state.productoId,
+			onChanged: (valor) {
+				_cambiar(NuevoIngresoCambiado(productoId: valor, limpiarProducto: valor == null));
 			},
 		);
 	}
@@ -409,11 +387,7 @@ class _NuevoIngresoPageState extends State<NuevoIngresoPage> {
 		);
 
 		if (verExistente == true && mounted) {
-			Navigator.of(context).pushReplacement(
-				MaterialPageRoute<void>(
-					builder: (_) => IngresoDetallePage(ingresoId: existente.ingresoId),
-				),
-			);
+			_reemplazarPorDetalle(IngresoDetallePage(ingresoId: existente.ingresoId));
 		}
 	}
 }
