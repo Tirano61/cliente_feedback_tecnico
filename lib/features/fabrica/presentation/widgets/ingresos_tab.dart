@@ -48,9 +48,7 @@ class _IngresosTabState extends State<IngresosTab> {
 
 	Future<void> _abrirNuevoIngreso() async {
 		final bloc = context.read<IngresosBloc>();
-		await Navigator.of(context).push(
-			MaterialPageRoute<void>(builder: (_) => const NuevoIngresoPage()),
-		);
+		await NuevoIngresoPage.abrir(context);
 		bloc.add(const IngresosRefrescados());
 	}
 

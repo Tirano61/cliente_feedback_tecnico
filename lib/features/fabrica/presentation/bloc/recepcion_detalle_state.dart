@@ -1,6 +1,7 @@
 import 'package:cliente_feedback_tecnico/features/fabrica/domain/entities/estados_fabrica.dart';
 import 'package:cliente_feedback_tecnico/features/fabrica/domain/entities/recepcion.dart';
 import 'package:cliente_feedback_tecnico/features/fabrica/domain/entities/servicio_vinculado.dart';
+import 'package:cliente_feedback_tecnico/features/fabrica/presentation/bloc/asignacion_unidad_state.dart';
 import 'package:cliente_feedback_tecnico/features/fabrica/presentation/bloc/nuevo_ingreso_state.dart';
 import 'package:cliente_feedback_tecnico/features/fabrica/presentation/bloc/reglas_recepcion.dart';
 import 'package:cliente_feedback_tecnico/features/servicios/domain/entities/cliente.dart';
@@ -127,6 +128,29 @@ class RecepcionDetalleState extends Equatable {
 			clienteNombre: actual.cliente.nombre,
 			indicadorNroSerie: actual.indicador.nroSerie,
 			piezasInstaladas: actual.piezasInstaladas,
+		);
+	}
+
+	/// "Poner placa/celda": como los ingresos, mientras el equipo siga en
+	/// fabrica.
+	bool get puedePonerPieza => puedeIngresarPieza;
+
+	/// Con que arranca "Poner placa/celda": el indicador, la recepcion y las
+	/// piezas que figuran instaladas (para elegir la que sale).
+	PrecargaAsignacionRecepcion? get precargaAsignacion {
+		final actual = recepcion;
+		if (actual == null) {
+			return null;
+		}
+		return PrecargaAsignacionRecepcion(
+			recepcionId: actual.id,
+			numero: actual.numero,
+			clienteNombre: actual.cliente.nombre,
+			indicadorId: actual.indicadorId,
+			indicadorNroSerie: actual.indicador.nroSerie,
+			piezasInstaladas: actual.piezasInstaladas
+					.where((p) => AsignacionUnidadState.tiposAsignables.contains(p.tipo))
+					.toList(),
 		);
 	}
 
