@@ -9,12 +9,14 @@ import 'package:cliente_feedback_tecnico/features/servicios/application/crear_cl
 import 'package:cliente_feedback_tecnico/features/servicios/application/descargar_pdf_documento_use_case.dart';
 import 'package:cliente_feedback_tecnico/features/servicios/application/encolar_documento_pendiente_use_case.dart';
 import 'package:cliente_feedback_tecnico/features/servicios/application/generar_pdf_orden_servicio_use_case.dart';
+import 'package:cliente_feedback_tecnico/features/servicios/application/obtener_cliente_use_case.dart';
 import 'package:cliente_feedback_tecnico/features/servicios/application/obtener_cotizacion_actual_use_case.dart';
 import 'package:cliente_feedback_tecnico/features/servicios/application/obtener_documentos_pendientes_use_case.dart';
 import 'package:cliente_feedback_tecnico/features/servicios/application/obtener_enlace_pdf_documento_use_case.dart';
 import 'package:cliente_feedback_tecnico/features/servicios/application/obtener_mis_servicios_use_case.dart';
 import 'package:cliente_feedback_tecnico/features/servicios/application/quitar_documento_pendiente_use_case.dart';
 import 'package:cliente_feedback_tecnico/features/servicios/application/subir_documento_firmado_use_case.dart';
+import 'package:cliente_feedback_tecnico/features/servicios/domain/entities/cliente.dart';
 import 'package:cliente_feedback_tecnico/features/servicios/domain/entities/facturacion.dart';
 import 'package:cliente_feedback_tecnico/features/servicios/domain/entities/facturacion_item.dart';
 import 'package:cliente_feedback_tecnico/features/servicios/domain/entities/orden_servicio_respuesta.dart';
@@ -24,12 +26,16 @@ import 'package:cliente_feedback_tecnico/features/servicios/domain/entities/repu
 import 'package:cliente_feedback_tecnico/features/servicios/domain/entities/servicio.dart';
 import 'package:cliente_feedback_tecnico/features/servicios/domain/entities/solicitud_documento_firmado.dart';
 import 'package:cliente_feedback_tecnico/features/servicios/domain/errors/valores_orden_rechazados_exception.dart';
+import 'package:cliente_feedback_tecnico/features/servicios/presentation/bloc/campos_formulario_servicio.dart';
 import 'package:cliente_feedback_tecnico/features/servicios/presentation/bloc/filtro_estado_servicio.dart';
 import 'package:cliente_feedback_tecnico/features/servicios/presentation/bloc/precarga_formulario_servicio.dart';
 import 'package:cliente_feedback_tecnico/features/servicios/presentation/bloc/servicio_event.dart';
 import 'package:cliente_feedback_tecnico/features/servicios/presentation/bloc/servicio_state.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:uuid/uuid.dart';
+
+/// Lo primero que falta para guardar la orden.
+typedef _Faltante = ({CampoFormularioServicio campo, String mensaje});
 
 class ServicioBloc extends Bloc<ServicioEvent, ServicioState> {
 	static const Set<String> _partesFallaronPermitidas = {
@@ -62,6 +68,7 @@ class ServicioBloc extends Bloc<ServicioEvent, ServicioState> {
 	final QuitarDocumentoPendienteUseCase _quitarDocumentoPendienteUseCase;
 	final ObtenerEnlacePdfDocumentoUseCase _obtenerEnlacePdfDocumentoUseCase;
 	final DescargarPdfDocumentoUseCase _descargarPdfDocumentoUseCase;
+	final ObtenerClienteUseCase _obtenerClienteUseCase;
 	final List<SolicitudDocumentoFirmado> _documentosPendientes = <SolicitudDocumentoFirmado>[];
 
 	/// Ordenes cuyo PDF confirmo el backend aunque el listado no lo traiga.
@@ -70,6 +77,9 @@ class ServicioBloc extends Bloc<ServicioEvent, ServicioState> {
 	/// Ordenes ya consultadas en esta carga del listado, para no repetir el GET.
 	final Set<String> _serviciosPdfVerificados = <String>{};
 	int _secuenciaEfectoPdf = 0;
+
+	/// Cada "Guardar" rechazado por validacion lleva un token distinto.
+	int _secuenciaAvisoValidacion = 0;
 
 	/// Cada consulta nueva de mis servicios (recarga, busqueda o filtro) deja
 	/// sin efecto las respuestas que sigan en vuelo: si el tecnico tipeo otra
@@ -93,6 +103,7 @@ class ServicioBloc extends Bloc<ServicioEvent, ServicioState> {
 		this._quitarDocumentoPendienteUseCase,
 		this._obtenerEnlacePdfDocumentoUseCase,
 		this._descargarPdfDocumentoUseCase,
+		this._obtenerClienteUseCase,
 	) : super(_crearEstadoFormularioInicial()) {
 		on<ServicioFormularioCambiado>(_onServicioFormularioCambiado);
 		on<ServicioBuscarClienteSolicitado>(_onServicioBuscarClienteSolicitado);
@@ -387,7 +398,7 @@ class ServicioBloc extends Bloc<ServicioEvent, ServicioState> {
 						? rechazo.mensaje
 						: 'Cambiaron valores con los que se calculo la orden. La orden ya se actualizo con los valores vigentes: mostrale el total nuevo al cliente y volve a guardar.',
 				cambios: cambios.isEmpty
-						? const ['Toca "Actualizar valores" en Facturacion para traer los valores vigentes.']
+						? const ['Toca "Actualizar valores" en Facturación para traer los valores vigentes.']
 						: cambios,
 				totalAnteriorArs: estado.totalFinalArs,
 				totalNuevoArs: recalculado.totalFinalArs,
@@ -682,9 +693,20 @@ class ServicioBloc extends Bloc<ServicioEvent, ServicioState> {
 			utcOffsetMinutos: utcOffsetMinutos,
 		);
 
-		final errorValidacion = _validarFormulario(estadoConClave);
-		if (errorValidacion != null) {
-			emit(estadoConClave.copyWith(errorMensaje: errorValidacion, exitoMensaje: null));
+		final faltante = _validarFormulario(estadoConClave);
+		if (faltante != null) {
+			// El token nuevo hace que el mismo error, tocando "Guardar" otra vez,
+			// se vuelva a avisar (el estado ya no es igual al anterior).
+			emit(
+				estadoConClave.copyWith(
+					errorMensaje: faltante.mensaje,
+					avisoValidacion: AvisoValidacionFormulario(
+						token: ++_secuenciaAvisoValidacion,
+						campo: faltante.campo,
+						mensaje: faltante.mensaje,
+					),
+				),
+			);
 			return;
 		}
 
@@ -1471,23 +1493,9 @@ class ServicioBloc extends Bloc<ServicioEvent, ServicioState> {
 			),
 		);
 
-		final fechaServicio = servicio.fechaHoraServicio ?? servicio.fecha;
-		final ordenGenerada = OrdenServicioRespuesta(
-			replayed: false,
-			servicioId: servicioId,
-			idempotencyKey:
-					(servicio.idempotencyKey ?? '').trim().isEmpty
-							? _generarIdempotencyKey()
-							: servicio.idempotencyKey!.trim(),
-			estadoOrden: 'cerrada',
-			version: 1,
-			fechaHoraServicio: fechaServicio,
-			timezoneIana: servicio.timezoneIana,
-			utcOffsetMinutos: servicio.utcOffsetMinutos,
-			servicio: servicio,
-			facturacion: servicio.facturacion,
-			facturacionItems: servicio.facturacionItems,
-			documento: servicio.documento,
+		final ordenGenerada = OrdenServicioRespuesta.desdeServicio(
+			servicio,
+			idempotencyKeyRespaldo: _generarIdempotencyKey(),
 		);
 
 		Uint8List pdfBytes;
@@ -1600,6 +1608,37 @@ class ServicioBloc extends Bloc<ServicioEvent, ServicioState> {
 		final precarga = event.precarga;
 		emit(precarga == null ? inicial : _aplicarPrecarga(inicial, precarga));
 		add(const ServicioFacturacionInicializada());
+		await _completarClientePrecargado(emit, precarga?.cliente);
+	}
+
+	/// La precarga trae el cliente como lo conoce quien abrio el formulario (en
+	/// una recepcion: id, nombre y CUIT). Se completa con `GET /clientes/:id`
+	/// para que el resumen y el PDF tengan contacto, telefono y localidad. Si
+	/// falla queda lo que vino; si el tecnico ya eligio otro cliente, no se toca.
+	Future<void> _completarClientePrecargado(
+		Emitter<ServicioState> emit,
+		Cliente? cliente,
+	) async {
+		final clienteId = (cliente?.id ?? '').trim();
+		if (clienteId.isEmpty) {
+			return;
+		}
+
+		Cliente completo;
+		try {
+			completo = await _obtenerClienteUseCase.ejecutar(clienteId);
+		} catch (_) {
+			return;
+		}
+
+		final actual = state;
+		if (emit.isDone ||
+				actual is! ServicioFormularioState ||
+				actual.clienteSeleccionado?.id != clienteId ||
+				completo.id != clienteId) {
+			return;
+		}
+		emit(actual.copyWith(clienteSeleccionado: completo));
 	}
 
 	ServicioFormularioState _aplicarPrecarga(
@@ -1659,48 +1698,50 @@ class ServicioBloc extends Bloc<ServicioEvent, ServicioState> {
 		);
 	}
 
-	String? _validarFormulario(ServicioFormularioState estado) {
+	/// Lo primero que falta para guardar: el campo (dice en que paso esta) y
+	/// el mensaje. Null si se puede guardar.
+	_Faltante? _validarFormulario(ServicioFormularioState estado) {
 		if (estado.canal == null) {
-			return 'Selecciona el canal del servicio.';
+			return (campo: CampoFormularioServicio.canal, mensaje: 'Selecciona el canal del servicio.');
 		}
 		if (estado.clienteId.trim().isEmpty) {
-			return 'Debes seleccionar un cliente.';
+			return (campo: CampoFormularioServicio.cliente, mensaje: 'Debes seleccionar un cliente.');
 		}
 		if (estado.requiereDatosDeCampo) {
 			if (estado.lugarProvinciaId.trim().isEmpty) {
-				return 'Selecciona la provincia/zona del servicio.';
+				return (campo: CampoFormularioServicio.zona, mensaje: 'Selecciona la provincia/zona del servicio.');
 			}
 			if (estado.lugarDetalle.trim().isEmpty) {
-				return 'Completa el detalle del lugar.';
+				return (campo: CampoFormularioServicio.lugarDetalle, mensaje: 'Completa el detalle del lugar.');
 			}
 		}
 		if (estado.equipoNroSerie.trim().isEmpty) {
-			return 'Completa el numero de serie del equipo.';
+			return (campo: CampoFormularioServicio.equipoNroSerie, mensaje: 'Completa el numero de serie del equipo.');
 		}
 		if (estado.equipoModelo.trim().isEmpty) {
-			return 'Completa el modelo del equipo.';
+			return (campo: CampoFormularioServicio.equipoModelo, mensaje: 'Completa el modelo del equipo.');
 		}
 		if (estado.equipoUbicacion.trim().isEmpty) {
-			return 'Completa la ubicacion del equipo.';
+			return (campo: CampoFormularioServicio.equipoUbicacion, mensaje: 'Completa la ubicación del equipo.');
 		}
 		final equipoAnio = int.tryParse(estado.equipoAnio.trim());
 		if (equipoAnio == null || equipoAnio <= 0) {
-			return 'Completa un anio de equipo valido.';
+			return (campo: CampoFormularioServicio.equipoAnio, mensaje: 'Completa un año de equipo válido.');
 		}
 		if (_partesFallaronDesdeTexto(estado.partesFallaronTexto).isEmpty) {
-			return 'Indica al menos una parte que fallo.';
+			return (campo: CampoFormularioServicio.partesFallaron, mensaje: 'Indica al menos una parte que fallo.');
 		}
 		if (estado.requiereDatosDeCampo && estado.km.trim().isEmpty) {
-			return 'Completa los kilometros recorridos.';
+			return (campo: CampoFormularioServicio.km, mensaje: 'Completa los kilometros recorridos.');
 		}
 		final km = _doubleDesdeTexto(estado.km, valorPorDefecto: 0);
 		if (km < 0) {
-			return 'Completa los kilometros con un valor numerico valido.';
+			return (campo: CampoFormularioServicio.km, mensaje: 'Completa los kilometros con un valor numerico valido.');
 		}
 		// En campo el backend genera la liquidacion del tecnico por tipo de
 		// salida segun los km: con 0 km rechaza la orden.
 		if (estado.requiereDatosDeCampo && _kmFacturables(estado) <= 0) {
-			return 'En un servicio de campo los kilometros tienen que ser mayores a 0.';
+			return (campo: CampoFormularioServicio.km, mensaje: 'En un servicio de campo los kilometros tienen que ser mayores a 0.');
 		}
 		final precioServicioUsd = _doubleDesdeTexto(
 			estado.precioServicioUsd,
@@ -1709,32 +1750,32 @@ class ServicioBloc extends Bloc<ServicioEvent, ServicioState> {
 		final hayFacturacionAdicional =
 				km > 0 || estado.repuestosSeleccionados.isNotEmpty;
 		if (precioServicioUsd < 0) {
-			return 'Completa el precio del servicio con un valor numerico valido.';
+			return (campo: CampoFormularioServicio.precioServicio, mensaje: 'Completa el precio del servicio con un valor numerico valido.');
 		}
 		if (hayFacturacionAdicional && precioServicioUsd <= 0) {
-			return 'Ingresa el precio del servicio para incluir el item mano de obra en la facturacion.';
+			return (campo: CampoFormularioServicio.precioServicio, mensaje: 'Ingresa el precio del servicio para incluir el item mano de obra en la facturacion.');
 		}
 		final hayFacturacion = precioServicioUsd > 0 || hayFacturacionAdicional;
 		if (hayFacturacion && estado.cotizacionDolarSnapshot <= 0) {
-			return 'No se cargo la cotizacion del dolar. Toca "Actualizar valores" en Facturacion antes de guardar.';
+			return (campo: CampoFormularioServicio.valoresFacturacion, mensaje: 'No se cargo la cotizacion del dolar. Toca "Actualizar valores" en Facturación antes de guardar.');
 		}
 		if (km > 0 && estado.valorKmUsdSnapshot <= 0) {
-			return 'No se cargo el valor del km. Toca "Actualizar valores" en Facturacion antes de guardar.';
+			return (campo: CampoFormularioServicio.valoresFacturacion, mensaje: 'No se cargo el valor del km. Toca "Actualizar valores" en Facturación antes de guardar.');
 		}
 		if (estado.sintoma.trim().isEmpty) {
-			return 'Completa el sintoma reportado.';
+			return (campo: CampoFormularioServicio.sintoma, mensaje: 'Completa el sintoma reportado.');
 		}
 		if (estado.diagnosticoDetalle.trim().isEmpty) {
-			return 'Completa el detalle tecnico del diagnostico.';
+			return (campo: CampoFormularioServicio.diagnosticoDetalle, mensaje: 'Completa el detalle tecnico del diagnostico.');
 		}
 		if (estado.diagnosticoCatIdsSeleccionados.isEmpty) {
-			return 'Selecciona al menos una categoria de diagnostico.';
+			return (campo: CampoFormularioServicio.diagnosticoCategoria, mensaje: 'Selecciona al menos una categoria de diagnostico.');
 		}
 		if (estado.resolucionIdsSeleccionados.isEmpty) {
-			return 'Selecciona al menos una resolucion.';
+			return (campo: CampoFormularioServicio.resolucion, mensaje: 'Selecciona al menos una resolucion.');
 		}
 		if (_productosFallaNormalizados(estado.productosFallaSeleccionados).isEmpty) {
-			return 'Selecciona al menos un producto en Partes que mostraban falla.';
+			return (campo: CampoFormularioServicio.productosFalla, mensaje: 'Selecciona al menos un producto en Partes que mostraban falla.');
 		}
 		return null;
 	}

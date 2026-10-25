@@ -22,6 +22,7 @@ import 'package:cliente_feedback_tecnico/features/servicios/infrastructure/repos
 import 'package:cliente_feedback_tecnico/features/servicios/presentation/bloc/servicio_bloc.dart';
 import 'package:cliente_feedback_tecnico/features/servicios/presentation/bloc/servicio_event.dart';
 import 'package:cliente_feedback_tecnico/features/servicios/presentation/bloc/servicio_state.dart';
+import 'package:cliente_feedback_tecnico/features/servicios/application/obtener_cliente_use_case.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
@@ -88,6 +89,7 @@ Future<Map<String, dynamic>> _guardarOrden({
 		QuitarDocumentoPendienteUseCase(repositorio),
 		ObtenerEnlacePdfDocumentoUseCase(repositorio),
 		DescargarPdfDocumentoUseCase(repositorio),
+		ObtenerClienteUseCase(repositorio),
 	);
 
 	// Como en la app: la facturacion arranca con la cotizacion y el valor del

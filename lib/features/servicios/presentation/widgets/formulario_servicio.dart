@@ -10,6 +10,7 @@ import 'package:cliente_feedback_tecnico/features/servicios/domain/entities/orde
 import 'package:cliente_feedback_tecnico/features/servicios/domain/entities/politica_firma_canal.dart';
 import 'package:cliente_feedback_tecnico/features/servicios/domain/entities/producto_falla.dart';
 import 'package:cliente_feedback_tecnico/features/servicios/domain/entities/servicio.dart';
+import 'package:cliente_feedback_tecnico/features/servicios/presentation/bloc/campos_formulario_servicio.dart';
 import 'package:cliente_feedback_tecnico/features/servicios/presentation/bloc/servicio_bloc.dart';
 import 'package:cliente_feedback_tecnico/features/servicios/presentation/bloc/servicio_event.dart';
 import 'package:cliente_feedback_tecnico/features/servicios/presentation/bloc/precarga_formulario_servicio.dart';
@@ -605,9 +606,16 @@ class _FormularioServicioState extends State<FormularioServicio> {
 				}
 
 				if (state.errorMensaje != null && state.errorMensaje!.isNotEmpty) {
-					ScaffoldMessenger.of(context).showSnackBar(
-						SnackBar(content: Text(state.errorMensaje!)),
-					);
+					// Cada intento reemplaza el aviso anterior en lugar de encolarse.
+					ScaffoldMessenger.of(context)
+						..hideCurrentSnackBar()
+						..showSnackBar(SnackBar(content: Text(state.errorMensaje!)));
+				}
+
+				// Lo que falta esta en otro paso: se lleva al tecnico ahi.
+				final avisoValidacion = state.avisoValidacion;
+				if (avisoValidacion != null && avisoValidacion.paso.index != _pasoActivo) {
+					_cambiarPaso(avisoValidacion.paso.index);
 				}
 
 				final avisoValores = state.avisoValores;
@@ -772,7 +780,12 @@ class _FormularioServicioState extends State<FormularioServicio> {
 													),
 													const SizedBox(height: 10),
 													_buildSelectorPasos(context),
-													const SizedBox(height: 10),
+													const SizedBox(height: 4),
+													Text(
+														'Los campos con * son obligatorios.',
+														style: _estiloTextoCompacto(context),
+													),
+													const SizedBox(height: 6),
 													_buildAccionesPasos(context),
 													const SizedBox(height: 12),
 													if (cargandoPasoActual) ...[
@@ -944,7 +957,7 @@ class _FormularioServicioState extends State<FormularioServicio> {
 			'Tipo',
 			'Datos',
 			'Falla',
-			'Facturacion',
+			'Facturación',
 			'Observaciones',
 		];
 
@@ -1079,7 +1092,7 @@ class _FormularioServicioState extends State<FormularioServicio> {
 			case 4:
 				return _buildZonaVisual(
 					context: context,
-					titulo: '4. Observaciones y cierre',
+					titulo: '5. Observaciones y cierre',
 					icono: Icons.rate_review_outlined,
 					child: TextField(
 						controller: _observacionesController,
@@ -1118,7 +1131,11 @@ class _FormularioServicioState extends State<FormularioServicio> {
 								controller: _buscarClienteController,
 								decoration: _decoracionCampoCompacta(
 									context,
-									labelText: 'Cliente (buscar por nombre o CUIT)',
+									labelText: _obligatorio(
+										'Cliente (buscar por nombre o CUIT)',
+										estadoFormulario,
+										CampoFormularioServicio.cliente,
+									),
 									suffixIcon: estadoFormulario.buscandoClientes
 											? const Padding(
 												padding: EdgeInsets.all(10),
@@ -1208,7 +1225,11 @@ class _FormularioServicioState extends State<FormularioServicio> {
 							controller: _lugarDetalleController,
 							decoration: _decoracionCampoCompacta(
 								context,
-								labelText: _labelLugarDetalle(estadoFormulario.canal),
+								labelText: _obligatorio(
+									_labelLugarDetalle(estadoFormulario.canal),
+									estadoFormulario,
+									CampoFormularioServicio.lugarDetalle,
+								),
 							),
 							onChanged: (valor) {
 								context.read<ServicioBloc>().add(
@@ -1226,6 +1247,7 @@ class _FormularioServicioState extends State<FormularioServicio> {
 				const SizedBox(height: 8),
 				_builderSeleccionEquipoDesdeIndicadores(
 					context,
+					estadoFormulario,
 					indicadoresActivos,
 				),
 				const SizedBox(height: 12),
@@ -1234,7 +1256,11 @@ class _FormularioServicioState extends State<FormularioServicio> {
 						controller: _equipoUbicacionController,
 						decoration: _decoracionCampoCompacta(
 							context,
-							labelText: 'Equipo ubicacion',
+							labelText: _obligatorio(
+								'Equipo ubicación',
+								estadoFormulario,
+								CampoFormularioServicio.equipoUbicacion,
+							),
 						),
 						onChanged: (valor) {
 							context.read<ServicioBloc>().add(
@@ -1247,7 +1273,11 @@ class _FormularioServicioState extends State<FormularioServicio> {
 						keyboardType: TextInputType.number,
 						decoration: _decoracionCampoCompacta(
 							context,
-							labelText: 'Equipo anio',
+							labelText: _obligatorio(
+								'Equipo año',
+								estadoFormulario,
+								CampoFormularioServicio.equipoAnio,
+							),
 						),
 						onChanged: (valor) {
 							context.read<ServicioBloc>().add(
@@ -1344,7 +1374,11 @@ class _FormularioServicioState extends State<FormularioServicio> {
 					children: [
 						Expanded(
 							child: Text(
-								'Partes que mostraban falla',
+								_obligatorio(
+									'Partes que mostraban falla',
+									estadoFormulario,
+									CampoFormularioServicio.partesFallaron,
+								),
 								style: Theme.of(context).textTheme.titleSmall?.copyWith(fontSize: 13),
 							),
 						),
@@ -1450,7 +1484,11 @@ class _FormularioServicioState extends State<FormularioServicio> {
 					style: _estiloTextoCompacto(context),
 					decoration: _decoracionCampoCompacta(
 						context,
-						labelText: 'Escriba los detalles del síntoma',
+						labelText: _obligatorio(
+							'Escriba los detalles del síntoma',
+							estadoFormulario,
+							CampoFormularioServicio.sintoma,
+						),
 					),
 					onChanged: (valor) {
 						context.read<ServicioBloc>().add(
@@ -1459,6 +1497,15 @@ class _FormularioServicioState extends State<FormularioServicio> {
 					},
 				),
 				const SizedBox(height: 12),
+				Text(
+					_obligatorio(
+						'Categoría de diagnóstico',
+						estadoFormulario,
+						CampoFormularioServicio.diagnosticoCategoria,
+					),
+					style: Theme.of(context).textTheme.titleSmall?.copyWith(fontSize: 11),
+				),
+				const SizedBox(height: 8),
 				SingleChildScrollView(
 					scrollDirection: Axis.horizontal,
 					child: Row(
@@ -1503,7 +1550,11 @@ class _FormularioServicioState extends State<FormularioServicio> {
 					style: _estiloTextoCompacto(context),
 					decoration: _decoracionCampoCompacta(
 						context,
-						labelText: 'Escriba los detalles del diagnóstico',
+						labelText: _obligatorio(
+							'Escriba los detalles del diagnóstico',
+							estadoFormulario,
+							CampoFormularioServicio.diagnosticoDetalle,
+						),
 					),
 					onChanged: (valor) {
 						context.read<ServicioBloc>().add(
@@ -1513,7 +1564,7 @@ class _FormularioServicioState extends State<FormularioServicio> {
 				),
 				const SizedBox(height: 12),
 				Text(
-					resolucionLabel,
+					_obligatorio(resolucionLabel, estadoFormulario, CampoFormularioServicio.resolucion),
 					style: Theme.of(context).textTheme.titleSmall?.copyWith(fontSize: 11),
 				),
 				const SizedBox(height: 8),
@@ -1599,7 +1650,7 @@ class _FormularioServicioState extends State<FormularioServicio> {
 						children: [
 							Expanded(
 								child: Text(
-									'Facturacion (opcional)',
+									'Facturación (opcional)',
 									style: Theme.of(context).textTheme.titleSmall,
 								),
 							),
@@ -1672,7 +1723,11 @@ class _FormularioServicioState extends State<FormularioServicio> {
 								style: _estiloTextoCompacto(context),
 								decoration: _decoracionCampoCompacta(
 									context,
-									labelText: 'Kilometros (km)',
+									labelText: _obligatorio(
+										'Kilometros (km)',
+										estado,
+										CampoFormularioServicio.km,
+									),
 								),
 								onChanged: (valor) {
 									context.read<ServicioBloc>().add(
@@ -2471,6 +2526,7 @@ class _FormularioServicioState extends State<FormularioServicio> {
 
 	Widget _builderSeleccionEquipoDesdeIndicadores(
 		BuildContext context,
+		ServicioFormularioState estado,
 		List<Producto> indicadores,
 	) {
 		final opciones = indicadores;
@@ -2502,7 +2558,11 @@ class _FormularioServicioState extends State<FormularioServicio> {
 				isExpanded: true,
 				decoration: _decoracionCampoCompacta(
 					context,
-					labelText: 'Equipo modelo (desde indicadores)',
+					labelText: _obligatorio(
+						'Equipo modelo (desde indicadores)',
+						estado,
+						CampoFormularioServicio.equipoModelo,
+					),
 				),
 				items: opciones
 						.map(
@@ -2551,7 +2611,11 @@ class _FormularioServicioState extends State<FormularioServicio> {
 				controller: _equipoNroSerieController,
 				decoration: _decoracionCampoCompacta(
 					context,
-					labelText: 'Equipo nro de serie',
+					labelText: _obligatorio(
+						'Equipo nro de serie',
+						estado,
+						CampoFormularioServicio.equipoNroSerie,
+					),
 				),
 				onChanged: (valor) {
 					context.read<ServicioBloc>().add(
@@ -2560,6 +2624,15 @@ class _FormularioServicioState extends State<FormularioServicio> {
 				},
 			),
 		);
+	}
+
+	/// Etiqueta con * si el BLoC exige el campo para guardar.
+	String _obligatorio(
+		String etiqueta,
+		ServicioFormularioState estado,
+		CampoFormularioServicio campo,
+	) {
+		return estado.esObligatorio(campo) ? '$etiqueta *' : etiqueta;
 	}
 
 	Widget _filaDosCampos({required Widget izquierda, required Widget derecha}) {
@@ -2583,7 +2656,7 @@ class _FormularioServicioState extends State<FormularioServicio> {
 			isExpanded: true,
 			decoration: _decoracionCampoCompacta(
 				context,
-				labelText: 'Zona / Provincia',
+				labelText: _obligatorio('Zona / Provincia', estado, CampoFormularioServicio.zona),
 			),
 			items: catalogos.zonas
 					.where((zona) => zona.activo)

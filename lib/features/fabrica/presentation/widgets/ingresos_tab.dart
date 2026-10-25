@@ -245,6 +245,7 @@ class _FiltroTipo extends StatelessWidget {
 							padding: const EdgeInsets.only(right: 8),
 							child: ChoiceChip(
 								avatar: Icon(iconoTipoUnidad(tipo), size: 18),
+								showCheckmark: false,
 								label: Text(nombreTipoUnidad(tipo)),
 								selected: filtroTipo == tipo,
 								onSelected: (_) {

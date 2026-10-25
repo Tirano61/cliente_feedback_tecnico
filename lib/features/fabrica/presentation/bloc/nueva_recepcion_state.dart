@@ -60,6 +60,19 @@ class NuevaRecepcionState extends Equatable {
 		this.clienteCreado,
 	});
 
+	/// Hay algo cargado que se perderia al salir sin registrar.
+	bool get tieneDatosCargados =>
+			clienteSeleccionado != null ||
+			indicadorProductoId != null ||
+			indicadorNroSerie.trim().isNotEmpty ||
+			queLlego.trim().isNotEmpty ||
+			sintomaReportado.trim().isNotEmpty ||
+			observaciones.trim().isNotEmpty;
+
+	/// Al salir con Atras se pide confirmacion si hay datos y no se esta
+	/// guardando (mientras guarda no se sale).
+	bool get pideConfirmarSalida => tieneDatosCargados && !guardando;
+
 	NuevaRecepcionState copyWith({
 		List<Cliente>? clientesEncontrados,
 		bool? buscandoClientes,

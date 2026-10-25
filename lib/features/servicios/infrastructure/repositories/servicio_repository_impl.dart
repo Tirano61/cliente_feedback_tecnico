@@ -140,6 +140,48 @@ class ServicioRepositoryImpl implements IServicioRepository {
 	}
 
 	@override
+	Future<Cliente> obtenerCliente(String clienteId) async {
+		final response = await apiClient.get(
+			'${ApiConstants.clientes}/${Uri.encodeComponent(clienteId)}',
+		);
+
+		if (response.statusCode != 200) {
+			final mensajeBackend = _extraerMensajeError(response.body);
+			throw ServerException(
+				mensajeBackend ?? 'No se pudo obtener el cliente.',
+				statusCode: response.statusCode,
+			);
+		}
+
+		final payload = _extraerMapa(_decodeJsonSeguro(response.body));
+		if (payload == null) {
+			throw const ServerException('Respuesta invalida al obtener el cliente.');
+		}
+		return ClienteDto.fromJson(payload);
+	}
+
+	@override
+	Future<Servicio> obtenerServicio(String servicioId) async {
+		final response = await apiClient.get(
+			'${ApiConstants.servicios}/${Uri.encodeComponent(servicioId)}',
+		);
+
+		if (response.statusCode != 200) {
+			final mensajeBackend = _extraerMensajeError(response.body);
+			throw ServerException(
+				mensajeBackend ?? 'No se pudo obtener el servicio.',
+				statusCode: response.statusCode,
+			);
+		}
+
+		final payload = _extraerMapa(_decodeJsonSeguro(response.body));
+		if (payload == null) {
+			throw const ServerException('Respuesta invalida al obtener el servicio.');
+		}
+		return ServicioDto.fromJson(payload).aEntidad();
+	}
+
+	@override
 	Future<CotizacionActual> obtenerCotizacionActual() async {
 		final responseCotizacion = await apiClient.get(ApiConstants.cotizacion);
 		final responseTarifaKm = await apiClient.get(ApiConstants.tarifaKm);

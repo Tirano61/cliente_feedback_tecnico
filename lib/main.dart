@@ -66,6 +66,7 @@ class App extends StatelessWidget {
             deps.quitarDocumentoPendienteUseCase,
             deps.obtenerEnlacePdfDocumentoUseCase,
             deps.descargarPdfDocumentoUseCase,
+            deps.obtenerClienteUseCase,
           ),
         ),
         BlocProvider(
@@ -87,6 +88,7 @@ class App extends StatelessWidget {
             deps.guardarVinculacionPendienteUseCase,
             deps.obtenerVinculacionesPendientesUseCase,
             deps.quitarVinculacionPendienteUseCase,
+            deps.generarPdfServicioGuardadoUseCase,
           ),
         ),
         BlocProvider(
@@ -148,6 +150,7 @@ class App extends StatelessWidget {
             deps.quitarDocumentoPendienteUseCase,
             deps.obtenerEnlacePdfDocumentoUseCase,
             deps.descargarPdfDocumentoUseCase,
+            deps.obtenerClienteUseCase,
           ),
         ),
       ],

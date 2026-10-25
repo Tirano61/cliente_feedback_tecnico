@@ -409,6 +409,12 @@ class _DialogoFallaState extends State<_DialogoFalla> {
 		super.dispose();
 	}
 
+	/// Al corregir algo, el aviso del intento anterior ya no corresponde.
+	void _cambiar(VoidCallback cambio) {
+		setState(cambio);
+		context.read<IngresoDetalleBloc>().add(const IngresoErrorAccionDescartado());
+	}
+
 	@override
 	Widget build(BuildContext context) {
 		return BlocConsumer<IngresoDetalleBloc, IngresoDetalleState>(
@@ -457,7 +463,7 @@ class _DialogoFallaState extends State<_DialogoFalla> {
 												label: Text(componente.nombre),
 												selected: !_usarOtro && _componenteId == componente.id,
 												onSelected: habilitado
-														? (_) => setState(() {
+														? (_) => _cambiar(() {
 																_componenteId = componente.id;
 																_usarOtro = false;
 															})
@@ -467,7 +473,7 @@ class _DialogoFallaState extends State<_DialogoFalla> {
 											label: const Text('Otro'),
 											selected: _usarOtro,
 											onSelected: habilitado
-													? (_) => setState(() {
+													? (_) => _cambiar(() {
 															_usarOtro = true;
 															_componenteId = null;
 														})
@@ -481,6 +487,7 @@ class _DialogoFallaState extends State<_DialogoFalla> {
 										controller: _otroController,
 										enabled: habilitado,
 										decoration: const InputDecoration(labelText: '¿Qué componente?'),
+										onChanged: (_) => _cambiar(() {}),
 									),
 								],
 								const SizedBox(height: 12),
@@ -494,7 +501,7 @@ class _DialogoFallaState extends State<_DialogoFalla> {
 											ChoiceChip(
 												label: Text(causa.nombre),
 												selected: _causaId == causa.id,
-												onSelected: habilitado ? (_) => setState(() => _causaId = causa.id) : null,
+												onSelected: habilitado ? (_) => _cambiar(() => _causaId = causa.id) : null,
 											),
 									],
 								),
@@ -517,6 +524,7 @@ class _DialogoFallaState extends State<_DialogoFalla> {
 						onConfirmar: () {
 							context.read<IngresoDetalleBloc>().add(
 								IngresoFallaSolicitada(
+									usaOtro: _usarOtro,
 									componenteId: _usarOtro ? null : _componenteId,
 									componenteOtro: _usarOtro ? _otroController.text : '',
 									causaId: _causaId,
@@ -561,6 +569,12 @@ class _DialogoReparacionState extends State<_DialogoReparacion> {
 		super.dispose();
 	}
 
+	/// Al corregir algo, el aviso del intento anterior ya no corresponde.
+	void _cambiar(VoidCallback cambio) {
+		setState(cambio);
+		context.read<IngresoDetalleBloc>().add(const IngresoErrorAccionDescartado());
+	}
+
 	@override
 	Widget build(BuildContext context) {
 		return BlocConsumer<IngresoDetalleBloc, IngresoDetalleState>(
@@ -584,7 +598,7 @@ class _DialogoReparacionState extends State<_DialogoReparacion> {
 											ChoiceChip(
 												label: Text(nombreResultadoReparacion(resultado)),
 												selected: _resultado == resultado,
-												onSelected: habilitado ? (_) => setState(() => _resultado = resultado) : null,
+												onSelected: habilitado ? (_) => _cambiar(() => _resultado = resultado) : null,
 											),
 									],
 								),
@@ -595,6 +609,7 @@ class _DialogoReparacionState extends State<_DialogoReparacion> {
 									minLines: 2,
 									maxLines: 5,
 									decoration: const InputDecoration(labelText: 'Trabajo realizado'),
+									onChanged: (_) => _cambiar(() {}),
 								),
 								const SizedBox(height: 12),
 								TextField(

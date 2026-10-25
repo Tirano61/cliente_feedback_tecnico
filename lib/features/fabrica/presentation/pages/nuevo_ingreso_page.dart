@@ -165,6 +165,7 @@ class _NuevoIngresoPageState extends State<NuevoIngresoPage> {
 										for (final tipo in NuevoIngresoState.tiposIngresables)
 											ChoiceChip(
 												avatar: Icon(iconoTipoUnidad(tipo), size: 18),
+												showCheckmark: false,
 												label: Text(nombreTipoUnidad(tipo)),
 												selected: state.tipo == tipo,
 												onSelected: (_) => _cambiar(NuevoIngresoCambiado(tipo: tipo)),

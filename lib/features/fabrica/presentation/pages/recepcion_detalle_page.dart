@@ -18,6 +18,7 @@ import 'package:cliente_feedback_tecnico/features/fabrica/presentation/widgets/e
 import 'package:cliente_feedback_tecnico/features/fabrica/presentation/widgets/estado_recepcion_badge.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:printing/printing.dart';
 
 class RecepcionDetallePage extends StatefulWidget {
 	final String recepcionId;
@@ -47,8 +48,62 @@ class _RecepcionDetallePageState extends State<RecepcionDetallePage> {
 		);
 	}
 
+	/// Se ofrece despues del cuadro del cambio de estado, que se cierra con
+	/// el mismo estado: si se abriera antes, ese cierre se llevaria este.
+	void _ofrecerPdfServicio() {
+		WidgetsBinding.instance.addPostFrameCallback((_) async {
+			if (!mounted) {
+				return;
+			}
+			final generar = await showDialog<bool>(
+				context: context,
+				builder: (dialogContext) {
+					return AlertDialog(
+						title: const Text('PDF de la orden'),
+						content: const Text(
+							'El equipo quedó listo para devolver. ¿Generar el PDF de la orden del '
+							'servicio de fábrica para compartirlo con el cliente?',
+						),
+						actions: [
+							TextButton(
+								onPressed: () => Navigator.of(dialogContext).pop(false),
+								child: const Text('Ahora no'),
+							),
+							ElevatedButton(
+								onPressed: () => Navigator.of(dialogContext).pop(true),
+								child: const Text('Generar y compartir'),
+							),
+						],
+					);
+				},
+			);
+			if (generar == true && mounted) {
+				context.read<RecepcionDetalleBloc>().add(const RecepcionPdfServicioSolicitado());
+			}
+		});
+	}
+
 	@override
 	Widget build(BuildContext context) {
+		return MultiBlocListener(
+			listeners: [
+				BlocListener<RecepcionDetalleBloc, RecepcionDetalleState>(
+					listenWhen: (_, actual) => actual.ofrecerPdfServicio,
+					listener: (_, _) => _ofrecerPdfServicio(),
+				),
+				BlocListener<RecepcionDetalleBloc, RecepcionDetalleState>(
+					listenWhen: (_, actual) => actual.pdfParaCompartir != null,
+					listener: (_, state) {
+						final pdf = state.pdfParaCompartir!;
+						Printing.sharePdf(bytes: pdf.bytes, filename: pdf.nombreArchivo);
+					},
+				),
+			],
+			child: _pantalla(context),
+		);
+	}
+
+	Widget _pantalla(BuildContext context) {
 		return BlocConsumer<RecepcionDetalleBloc, RecepcionDetalleState>(
 			listenWhen: (anterior, actual) =>
 					actual.exitoMensaje != null || actual.errorMensaje != null,
@@ -144,7 +199,7 @@ class _RecepcionDetallePageState extends State<RecepcionDetallePage> {
 								const SizedBox(height: 12),
 								_SeccionDatos(recepcion: recepcion),
 								const SizedBox(height: 12),
-								_SeccionHistorial(historial: recepcion.historialEstados),
+								_SeccionHistorial(pasos: state.pasosHistorial),
 								const SizedBox(height: 12),
 								_SeccionPiezasInstaladas(state: state, piezas: recepcion.piezasInstaladas),
 								const SizedBox(height: 12),
@@ -409,7 +464,13 @@ class _DialogoDevolucionState extends State<_DialogoDevolucion> {
 											selected: _forma == forma,
 											onSelected: state.procesandoAccion
 													? null
-													: (_) => setState(() => _forma = forma),
+													: (_) {
+															setState(() => _forma = forma);
+															// Ya eligio: el aviso del intento anterior no corresponde.
+															context.read<RecepcionDetalleBloc>().add(
+																const RecepcionErrorAccionDescartado(),
+															);
+														},
 										),
 								],
 							),
@@ -480,10 +541,28 @@ class _SeccionServicio extends StatelessWidget {
 						dense: true,
 						contentPadding: EdgeInsets.zero,
 						leading: Icon(Icons.link, color: colorScheme.primary),
-						title: const Text('Vinculado a la recepción'),
-						subtitle: Text('Servicio $vinculadoId'),
+						title: Text(state.tituloServicio),
+						subtitle: const Text('Vinculado a la recepción'),
 					),
 					_ResumenServicioVinculado(state: state),
+					const SizedBox(height: 8),
+					OutlinedButton.icon(
+						onPressed: state.puedeGenerarPdfServicio
+								? () {
+										context.read<RecepcionDetalleBloc>().add(
+											const RecepcionPdfServicioSolicitado(),
+										);
+									}
+								: null,
+						icon: state.generandoPdfServicio
+								? const SizedBox(
+										height: 16,
+										width: 16,
+										child: CircularProgressIndicator(strokeWidth: 2),
+									)
+								: const Icon(Icons.picture_as_pdf_outlined),
+						label: const Text('Compartir PDF de la orden'),
+					),
 				] else if (porVincular != null) ...[
 					Container(
 						width: double.infinity,
@@ -499,8 +578,8 @@ class _SeccionServicio extends StatelessWidget {
 							children: [
 								Text(
 									state.vinculando
-											? 'Vinculando el servicio $porVincular...'
-											: 'El servicio $porVincular se guardó pero no quedó vinculado a la recepción.',
+											? 'Vinculando el servicio de fábrica...'
+											: 'El servicio de fábrica se guardó pero no quedó vinculado a la recepción.',
 									style: TextStyle(
 										color: state.errorVinculacion == null
 												? colorScheme.onSurface
@@ -663,31 +742,31 @@ class _SeccionDatos extends StatelessWidget {
 }
 
 class _SeccionHistorial extends StatelessWidget {
-	final List<CambioEstadoRecepcion> historial;
+	final List<PasoHistorialRecepcion> pasos;
 
-	const _SeccionHistorial({required this.historial});
+	const _SeccionHistorial({required this.pasos});
 
 	@override
 	Widget build(BuildContext context) {
 		return SeccionDetalle(
 			titulo: 'Historial de estados',
 			children: [
-				if (historial.isEmpty) const Text('Sin cambios registrados.'),
-				for (final cambio in historial)
+				if (pasos.isEmpty) const Text('Sin cambios registrados.'),
+				for (final paso in pasos)
 					ListTile(
 						dense: true,
 						contentPadding: EdgeInsets.zero,
 						leading: Icon(
 							Icons.circle,
 							size: 12,
-							color: EstadoRecepcionBadge.color(cambio.estado),
+							color: EstadoRecepcionBadge.color(paso.estado),
 						),
-						title: Text(nombreEstadoRecepcion(cambio.estado)),
+						title: Text(paso.titulo),
 						subtitle: Text(
 							[
-								formatearFechaFabrica(cambio.fecha),
-								if ((cambio.usuarioNombre ?? '').trim().isNotEmpty) cambio.usuarioNombre!.trim(),
-								if ((cambio.observacion ?? '').trim().isNotEmpty) cambio.observacion!.trim(),
+								formatearFechaFabrica(paso.fecha),
+								?paso.usuario,
+								?paso.observacion,
 							].join(' · '),
 						),
 					),

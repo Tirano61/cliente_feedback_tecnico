@@ -12,6 +12,8 @@ import 'package:cliente_feedback_tecnico/features/servicios/application/crear_cl
 import 'package:cliente_feedback_tecnico/features/servicios/application/descargar_pdf_documento_use_case.dart';
 import 'package:cliente_feedback_tecnico/features/servicios/application/encolar_documento_pendiente_use_case.dart';
 import 'package:cliente_feedback_tecnico/features/servicios/application/generar_pdf_orden_servicio_use_case.dart';
+import 'package:cliente_feedback_tecnico/features/servicios/application/generar_pdf_servicio_guardado_use_case.dart';
+import 'package:cliente_feedback_tecnico/features/servicios/application/obtener_cliente_use_case.dart';
 import 'package:cliente_feedback_tecnico/features/servicios/application/obtener_cotizacion_actual_use_case.dart';
 import 'package:cliente_feedback_tecnico/features/servicios/application/obtener_documentos_pendientes_use_case.dart';
 import 'package:cliente_feedback_tecnico/features/servicios/application/obtener_enlace_pdf_documento_use_case.dart';
@@ -82,6 +84,8 @@ class AppDependencies {
 	final QuitarDocumentoPendienteUseCase quitarDocumentoPendienteUseCase;
 	final ObtenerEnlacePdfDocumentoUseCase obtenerEnlacePdfDocumentoUseCase;
 	final DescargarPdfDocumentoUseCase descargarPdfDocumentoUseCase;
+	final ObtenerClienteUseCase obtenerClienteUseCase;
+	final GenerarPdfServicioGuardadoUseCase generarPdfServicioGuardadoUseCase;
 	final ObtenerMisLiquidacionesUseCase obtenerMisLiquidacionesUseCase;
 	final ObtenerItemsLiquidacionUseCase obtenerItemsLiquidacionUseCase;
 	final ObtenerComponentesUseCase obtenerComponentesUseCase;
@@ -133,6 +137,8 @@ class AppDependencies {
 		required this.quitarDocumentoPendienteUseCase,
 		required this.obtenerEnlacePdfDocumentoUseCase,
 		required this.descargarPdfDocumentoUseCase,
+		required this.obtenerClienteUseCase,
+		required this.generarPdfServicioGuardadoUseCase,
 		required this.obtenerMisLiquidacionesUseCase,
 		required this.obtenerItemsLiquidacionUseCase,
 		required this.obtenerComponentesUseCase,
@@ -170,6 +176,7 @@ class AppDependencies {
 		final liquidacionRemoteDataSource = LiquidacionRemoteDataSource(apiClient);
 		final liquidacionRepository = LiquidacionRepositoryImpl(liquidacionRemoteDataSource);
 		final fabricaRepository = FabricaRepositoryImpl(apiClient, secureStorage);
+		final generarPdfOrdenServicioUseCase = GenerarPdfOrdenServicioUseCase();
 
 		return AppDependencies._(
 			secureStorage: secureStorage,
@@ -192,7 +199,7 @@ class AppDependencies {
 			obtenerCotizacionActualUseCase:
 					ObtenerCotizacionActualUseCase(servicioRepository),
 			buscarRepuestosUseCase: BuscarRepuestosUseCase(servicioRepository),
-			generarPdfOrdenServicioUseCase: GenerarPdfOrdenServicioUseCase(),
+			generarPdfOrdenServicioUseCase: generarPdfOrdenServicioUseCase,
 			subirDocumentoFirmadoUseCase:
 					SubirDocumentoFirmadoUseCase(servicioRepository),
 			encolarDocumentoPendienteUseCase:
@@ -205,6 +212,11 @@ class AppDependencies {
 					ObtenerEnlacePdfDocumentoUseCase(servicioRepository),
 			descargarPdfDocumentoUseCase:
 					DescargarPdfDocumentoUseCase(servicioRepository),
+			obtenerClienteUseCase: ObtenerClienteUseCase(servicioRepository),
+			generarPdfServicioGuardadoUseCase: GenerarPdfServicioGuardadoUseCase(
+				servicioRepository,
+				generarPdfOrdenServicioUseCase,
+			),
 			obtenerMisLiquidacionesUseCase:
 					ObtenerMisLiquidacionesUseCase(liquidacionRepository),
 			obtenerItemsLiquidacionUseCase:

@@ -13,6 +13,16 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 class NuevaRecepcionPage extends StatefulWidget {
 	const NuevaRecepcionPage({super.key});
 
+	/// Abre el alta y espera a que se cierre, incluido el detalle de la
+	/// recepcion que la reemplaza (la creada o la que ya estaba abierta): quien
+	/// la abre refresca recien al volver.
+	static Future<void> abrir(BuildContext context) async {
+		final cierreDetalle = await Navigator.of(context).push<Future<void>>(
+			MaterialPageRoute<Future<void>>(builder: (_) => const NuevaRecepcionPage()),
+		);
+		await cierreDetalle;
+	}
+
 	@override
 	State<NuevaRecepcionPage> createState() => _NuevaRecepcionPageState();
 }
@@ -52,8 +62,58 @@ class _NuevaRecepcionPageState extends State<NuevaRecepcionPage> {
 		context.read<NuevaRecepcionBloc>().add(evento);
 	}
 
+	/// El alta se reemplaza por el detalle. Al reemplazarla, la ruta del alta
+	/// se completa enseguida: devuelve el cierre del detalle para que
+	/// [NuevaRecepcionPage.abrir] espere hasta que el tecnico vuelva.
+	void _reemplazarPorDetalle(RecepcionDetallePage detalle) {
+		final ruta = MaterialPageRoute<void>(builder: (_) => detalle);
+		Navigator.of(context).pushReplacement<void, Future<void>>(ruta, result: ruta.popped);
+	}
+
+	Future<void> _confirmarSalida() async {
+		final salir = await showDialog<bool>(
+			context: context,
+			builder: (dialogContext) {
+				return AlertDialog(
+					title: const Text('¿Salir sin registrar?'),
+					content: const Text('Se pierde lo que cargaste en esta recepción.'),
+					actions: [
+						TextButton(
+							onPressed: () => Navigator.of(dialogContext).pop(false),
+							child: const Text('Seguir cargando'),
+						),
+						ElevatedButton(
+							onPressed: () => Navigator.of(dialogContext).pop(true),
+							child: const Text('Salir'),
+						),
+					],
+				);
+			},
+		);
+		if (salir == true && mounted) {
+			Navigator.of(context).pop();
+		}
+	}
+
 	@override
 	Widget build(BuildContext context) {
+		return BlocBuilder<NuevaRecepcionBloc, NuevaRecepcionState>(
+			buildWhen: (anterior, actual) => anterior.pideConfirmarSalida != actual.pideConfirmarSalida,
+			builder: (context, state) {
+				return PopScope<Object?>(
+					canPop: !state.pideConfirmarSalida,
+					onPopInvokedWithResult: (didPop, _) {
+						if (!didPop) {
+							_confirmarSalida();
+						}
+					},
+					child: _pantalla(context),
+				);
+			},
+		);
+	}
+
+	Widget _pantalla(BuildContext context) {
 		return Scaffold(
 			appBar: AppBar(title: const Text('Nueva recepción')),
 			body: MultiBlocListener(
@@ -75,12 +135,10 @@ class _NuevaRecepcionPageState extends State<NuevaRecepcionPage> {
 								..showSnackBar(
 									SnackBar(content: Text('Recepción N° ${recepcion.numero} registrada.')),
 								);
-							Navigator.of(context).pushReplacement(
-								MaterialPageRoute<void>(
-									builder: (_) => RecepcionDetallePage(
-										recepcionId: recepcion.id,
-										recepcionInicial: recepcion,
-									),
+							_reemplazarPorDetalle(
+								RecepcionDetallePage(
+									recepcionId: recepcion.id,
+									recepcionInicial: recepcion,
 								),
 							);
 						},
@@ -364,11 +422,7 @@ class _NuevaRecepcionPageState extends State<NuevaRecepcionPage> {
 		);
 
 		if (verExistente == true && mounted) {
-			Navigator.of(context).pushReplacement(
-				MaterialPageRoute<void>(
-					builder: (_) => RecepcionDetallePage(recepcionId: existente.recepcionId),
-				),
-			);
+			_reemplazarPorDetalle(RecepcionDetallePage(recepcionId: existente.recepcionId));
 		}
 	}
 }

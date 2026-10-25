@@ -48,9 +48,8 @@ class _RecepcionesTabState extends State<RecepcionesTab> {
 
 	Future<void> _abrirNuevaRecepcion() async {
 		final bloc = context.read<RecepcionesBloc>();
-		await Navigator.of(context).push(
-			MaterialPageRoute<void>(builder: (_) => const NuevaRecepcionPage()),
-		);
+		// Espera tambien al detalle de la recepcion que reemplaza al alta.
+		await NuevaRecepcionPage.abrir(context);
 		bloc.add(const RecepcionesRefrescadas());
 	}
 
@@ -273,6 +272,7 @@ class _Filtros extends StatelessWidget {
 					const SizedBox(width: 8),
 					FilterChip(
 						avatar: const Icon(Icons.history, size: 18),
+						showCheckmark: false,
 						label: const Text('Ver devueltas'),
 						selected: verDevueltas,
 						onSelected: (valor) {

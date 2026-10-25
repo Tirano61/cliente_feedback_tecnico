@@ -84,3 +84,8 @@ class RecepcionErrorAccionDescartado extends RecepcionDetalleEvent {
 class RecepcionServicioVinculadoSolicitado extends RecepcionDetalleEvent {
 	const RecepcionServicioVinculadoSolicitado();
 }
+
+/// Generar el PDF de la orden del servicio vinculado para compartirlo.
+class RecepcionPdfServicioSolicitado extends RecepcionDetalleEvent {
+	const RecepcionPdfServicioSolicitado();
+}

@@ -41,6 +41,8 @@ import 'package:cliente_feedback_tecnico/features/servicios/presentation/bloc/pr
 import 'package:cliente_feedback_tecnico/features/servicios/presentation/bloc/servicio_bloc.dart';
 import 'package:cliente_feedback_tecnico/features/servicios/presentation/bloc/servicio_event.dart';
 import 'package:cliente_feedback_tecnico/features/servicios/presentation/bloc/servicio_state.dart';
+import 'package:cliente_feedback_tecnico/features/servicios/application/obtener_cliente_use_case.dart';
+import 'package:cliente_feedback_tecnico/features/servicios/application/generar_pdf_servicio_guardado_use_case.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
@@ -218,6 +220,7 @@ ServicioFabricaBloc _servicioBloc(_Backend backend) {
 		QuitarDocumentoPendienteUseCase(repositorio),
 		ObtenerEnlacePdfDocumentoUseCase(repositorio),
 		DescargarPdfDocumentoUseCase(repositorio),
+		ObtenerClienteUseCase(repositorio),
 	);
 }
 
@@ -231,6 +234,7 @@ RecepcionDetalleBloc _detalleBloc(_Backend backend) {
 		GuardarVinculacionPendienteUseCase(backend.fabrica),
 		ObtenerVinculacionesPendientesUseCase(backend.fabrica),
 		QuitarVinculacionPendienteUseCase(backend.fabrica),
+		GenerarPdfServicioGuardadoUseCase(backend.servicios, GenerarPdfOrdenServicioUseCase()),
 		ahora: () => DateTime(2026, 10, 27, 10),
 	);
 }
@@ -288,6 +292,46 @@ void main() {
 			expect(inicial.equipoNroSerie, 'IND-1001');
 			expect(inicial.equipoModelo, 'ST455');
 			expect(inicial.sintoma, 'No enciende');
+		});
+
+		test('completa el cliente de la recepcion con GET /clientes/:id', () async {
+			backend.responder = (request) {
+				if (request.method == 'GET' && request.url.path.endsWith('/clientes/$_clienteId')) {
+					return _json({
+						'id': _clienteId,
+						'cuit': '20304050607',
+						'nombre': 'Agro SRL',
+						'contacto': 'Juan Perez',
+						'telefono': '+54 9 11 5555-0001',
+						'localidad': 'Venado Tuerto',
+					});
+				}
+				return _json({}, 404);
+			};
+
+			final completo = bloc.stream.firstWhere(
+				(s) => s is ServicioFormularioState && s.clienteSeleccionado?.localidad != null,
+			);
+			bloc.add(const ServicioFormularioReiniciado(precarga: _precarga));
+			final estado = await completo as ServicioFormularioState;
+
+			expect(backend.de('GET', '/clientes/$_clienteId'), hasLength(1));
+			final cliente = estado.clienteSeleccionado!;
+			expect(cliente.id, _clienteId);
+			expect(cliente.localidad, 'Venado Tuerto');
+			expect(cliente.contacto, 'Juan Perez');
+			expect(cliente.telefono, '+54 9 11 5555-0001');
+			expect(estado.clienteId, _clienteId);
+		});
+
+		test('si no se puede traer el cliente queda el de la recepcion', () async {
+			await reiniciar(precarga: _precarga);
+			await pumpEventQueue();
+
+			expect(backend.de('GET', '/clientes/$_clienteId'), hasLength(1));
+			expect(estado().clienteSeleccionado!.nombre, 'Agro SRL');
+			expect(estado().clienteSeleccionado!.localidad, isNull);
+			expect(estado().errorMensaje, isNull, reason: 'no es un error para el tecnico');
 		});
 
 		test('el canal fijo no se puede cambiar; el resto si', () async {
@@ -860,6 +904,60 @@ void main() {
 			expect(resumen.diagnosticoDetalle, 'Fuente sin salida de 5 V');
 			expect(resumen.resoluciones, ['Cambio de fuente', 'Prueba 24 h']);
 			expect(estado.servicioVinculadoId, _servicioId);
+		});
+
+		test('el titulo del servicio vinculado lleva su fecha, no el id', () async {
+			final estado = await abrirConResumen();
+
+			expect(estado.tituloServicio, 'Servicio de fábrica del 25/10/2026');
+			expect(estado.tituloServicio, isNot(contains(_servicioId)));
+		});
+
+		test('genera el PDF de la orden con GET /servicios/:id para compartirlo', () async {
+			await abrirConResumen();
+			expect(bloc.state.puedeGenerarPdfServicio, isTrue);
+
+			final generado = bloc.stream.firstWhere((s) => s.pdfParaCompartir != null);
+			bloc.add(const RecepcionPdfServicioSolicitado());
+			final estado = await generado;
+
+			expect(backend.consultasServicio, hasLength(2));
+			final pdf = estado.pdfParaCompartir!;
+			expect(pdf.nombreArchivo, 'orden_servicio_$_servicioId.pdf');
+			expect(String.fromCharCodes(pdf.bytes.take(4)), '%PDF');
+			expect(estado.generandoPdfServicio, isFalse);
+
+			// De un solo uso: no se vuelve a compartir con el proximo estado.
+			final siguiente = bloc.stream.first;
+			bloc.add(const RecepcionDetalleRefrescado());
+			expect((await siguiente).pdfParaCompartir, isNull);
+		});
+
+		test('si no se puede traer la orden, avisa y no queda generando', () async {
+			await abrirConResumen();
+			backend.responderServicio = (_) => _json({'statusCode': 403, 'message': 'No tienes permisos para ver este servicio'}, 403);
+
+			final fallo = bloc.stream.firstWhere((s) => s.errorMensaje != null);
+			bloc.add(const RecepcionPdfServicioSolicitado());
+			final estado = await fallo;
+
+			expect(estado.errorMensaje, 'No tienes permisos para ver este servicio');
+			expect(estado.generandoPdfServicio, isFalse);
+			expect(estado.pdfParaCompartir, isNull);
+		});
+
+		test('sin servicio vinculado no genera PDF', () async {
+			backend.responder = (_) => _json(_recepcionJson());
+			final listo = bloc.stream.firstWhere((s) => s.recepcion != null && !s.cargando);
+			bloc.add(const RecepcionDetalleAbierto(recepcionId: _recepcionId));
+			final abierta = await listo;
+			expect(abierta.puedeGenerarPdfServicio, isFalse);
+
+			bloc.add(const RecepcionPdfServicioSolicitado());
+			await pumpEventQueue();
+
+			expect(backend.consultasServicio, isEmpty);
+			expect(bloc.state.generandoPdfServicio, isFalse);
 		});
 
 		test('sin servicio vinculado no lo pide', () async {

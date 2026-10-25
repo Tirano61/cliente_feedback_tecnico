@@ -34,6 +34,30 @@ class OrdenServicioRespuesta extends Equatable {
 		this.documento,
 	});
 
+	/// La orden de un servicio ya guardado (listado o `GET /servicios/:id`),
+	/// para generar su PDF. `idempotencyKeyRespaldo` va si el servicio no
+	/// trae la suya.
+	factory OrdenServicioRespuesta.desdeServicio(
+		Servicio servicio, {
+		String idempotencyKeyRespaldo = '',
+	}) {
+		final idempotencyKey = (servicio.idempotencyKey ?? '').trim();
+		return OrdenServicioRespuesta(
+			replayed: false,
+			servicioId: servicio.id.trim(),
+			idempotencyKey: idempotencyKey.isEmpty ? idempotencyKeyRespaldo : idempotencyKey,
+			estadoOrden: 'cerrada',
+			version: 1,
+			fechaHoraServicio: servicio.fechaHoraServicio ?? servicio.fecha,
+			timezoneIana: servicio.timezoneIana,
+			utcOffsetMinutos: servicio.utcOffsetMinutos,
+			servicio: servicio,
+			facturacion: servicio.facturacion,
+			facturacionItems: servicio.facturacionItems,
+			documento: servicio.documento,
+		);
+	}
+
 	@override
 	List<Object?> get props => [
 				replayed,

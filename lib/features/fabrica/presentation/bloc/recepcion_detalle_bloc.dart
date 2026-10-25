@@ -18,6 +18,7 @@ import 'package:cliente_feedback_tecnico/features/fabrica/presentation/bloc/rece
 import 'package:cliente_feedback_tecnico/features/fabrica/presentation/bloc/recepcion_detalle_state.dart';
 import 'package:cliente_feedback_tecnico/features/fabrica/presentation/bloc/reglas_recepcion.dart';
 import 'package:cliente_feedback_tecnico/features/fabrica/presentation/bloc/textos_recepcion.dart';
+import 'package:cliente_feedback_tecnico/features/servicios/application/generar_pdf_servicio_guardado_use_case.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
 class RecepcionDetalleBloc extends Bloc<RecepcionDetalleEvent, RecepcionDetalleState> {
@@ -38,6 +39,7 @@ class RecepcionDetalleBloc extends Bloc<RecepcionDetalleEvent, RecepcionDetalleS
 	final GuardarVinculacionPendienteUseCase _guardarVinculacionPendienteUseCase;
 	final ObtenerVinculacionesPendientesUseCase _obtenerVinculacionesPendientesUseCase;
 	final QuitarVinculacionPendienteUseCase _quitarVinculacionPendienteUseCase;
+	final GenerarPdfServicioGuardadoUseCase _generarPdfServicioGuardadoUseCase;
 	final DateTime Function() _ahora;
 
 	/// Cada apertura deja sin efecto las respuestas de la recepcion anterior.
@@ -64,7 +66,8 @@ class RecepcionDetalleBloc extends Bloc<RecepcionDetalleEvent, RecepcionDetalleS
 		this._obtenerServicioVinculadoUseCase,
 		this._guardarVinculacionPendienteUseCase,
 		this._obtenerVinculacionesPendientesUseCase,
-		this._quitarVinculacionPendienteUseCase, {
+		this._quitarVinculacionPendienteUseCase,
+		this._generarPdfServicioGuardadoUseCase, {
 		DateTime Function()? ahora,
 	})  : _ahora = ahora ?? DateTime.now,
 				super(const RecepcionDetalleState()) {
@@ -76,6 +79,7 @@ class RecepcionDetalleBloc extends Bloc<RecepcionDetalleEvent, RecepcionDetalleS
 		on<RecepcionVinculacionReintentada>(_onVinculacionReintentada);
 		on<RecepcionServicioVinculadoSolicitado>(_onServicioVinculadoSolicitado);
 		on<RecepcionErrorAccionDescartado>(_onErrorAccionDescartado);
+		on<RecepcionPdfServicioSolicitado>(_onPdfServicioSolicitado);
 	}
 
 	Future<void> _onAbierto(
@@ -216,6 +220,9 @@ class RecepcionDetalleBloc extends Bloc<RecepcionDetalleEvent, RecepcionDetalleS
 					recepcion: actualizada,
 					limpiarEstadoEnCurso: true,
 					exitoMensaje: 'Estado actualizado: ${nombreEstadoRecepcion(actualizada.estado)}.',
+					// Listo para devolver: es cuando se le entrega la orden al cliente.
+					ofrecerPdfServicio: actualizada.estado == EstadoRecepcion.listoParaDevolver &&
+							ReglasRecepcion.tieneServicio(actualizada),
 					fechaReferencia: _ahora(),
 				),
 			);
@@ -492,6 +499,49 @@ class RecepcionDetalleBloc extends Bloc<RecepcionDetalleEvent, RecepcionDetalleS
 
 		if (vigente()) {
 			emit(state.copyWith(cargandoServicioVinculado: false, errorServicioVinculado: error));
+		}
+	}
+
+	/// El PDF se genera con la orden guardada (`GET /servicios/:id`), igual que
+	/// al crearla; la vista lo comparte.
+	Future<void> _onPdfServicioSolicitado(
+		RecepcionPdfServicioSolicitado event,
+		Emitter<RecepcionDetalleState> emit,
+	) async {
+		final recepcionId = state.recepcionId;
+		final servicioId = state.servicioVinculadoId;
+		if (recepcionId == null || servicioId == null || state.generandoPdfServicio) {
+			return;
+		}
+
+		final consulta = _secuencia;
+		bool vigente() => consulta == _secuencia && state.recepcionId == recepcionId && !emit.isDone;
+
+		emit(state.copyWith(generandoPdfServicio: true));
+
+		String error;
+		try {
+			final bytes = await _generarPdfServicioGuardadoUseCase.ejecutar(servicioId);
+			if (vigente()) {
+				emit(
+					state.copyWith(
+						generandoPdfServicio: false,
+						pdfParaCompartir: PdfServicioRecepcion(
+							nombreArchivo: 'orden_servicio_$servicioId.pdf',
+							bytes: bytes,
+						),
+					),
+				);
+			}
+			return;
+		} on ServerException catch (e) {
+			error = e.mensaje;
+		} catch (_) {
+			error = 'No se pudo generar el PDF de la orden.';
+		}
+
+		if (vigente()) {
+			emit(state.copyWith(generandoPdfServicio: false, errorMensaje: error));
 		}
 	}
 

@@ -120,6 +120,7 @@ class _AsignarUnidadPageState extends State<AsignarUnidadPage> {
 						for (final tipo in AsignacionUnidadState.tiposAsignables)
 							ChoiceChip(
 								avatar: Icon(iconoTipoUnidad(tipo), size: 18),
+								showCheckmark: false,
 								label: Text(nombreTipoUnidad(tipo)),
 								selected: state.tipo == tipo,
 								onSelected: bloqueado ? null : (_) => _cambiar(AsignacionCambiada(tipo: tipo)),
@@ -163,6 +164,7 @@ class _AsignarUnidadPageState extends State<AsignarUnidadPage> {
 								for (final pieza in state.piezasParaRetirar)
 									FilterChip(
 										avatar: Icon(iconoTipoUnidad(pieza.tipo), size: 18),
+										showCheckmark: false,
 										label: Text(_etiquetaPieza(pieza)),
 										selected: normalizarSerie(state.retiradaNroSerie) ==
 												normalizarSerie(pieza.nroSerie),
@@ -288,6 +290,7 @@ class _Reacondicionadas extends StatelessWidget {
 							for (final unidad in state.reacondicionadas)
 								ChoiceChip(
 									avatar: const Icon(Icons.recycling, size: 18),
+									showCheckmark: false,
 									label: Text(_etiquetaPieza(unidad)),
 									selected: elegida?.id == unidad.id,
 									onSelected: state.guardando
