@@ -1,3 +1,4 @@
+import 'package:cliente_feedback_tecnico/features/fabrica/presentation/widgets/ingresos_tab.dart';
 import 'package:cliente_feedback_tecnico/features/fabrica/presentation/widgets/recepciones_tab.dart';
 import 'package:flutter/material.dart';
 
@@ -28,10 +29,7 @@ class FabricaPage extends StatelessWidget {
 				body: const TabBarView(
 					children: [
 						RecepcionesTab(),
-						_PestanaProximamente(
-							texto: 'Acá vas a poder ingresar placas y celdas, derivar placas a '
-									'desarrollo y cargar el resultado de las celdas.',
-						),
+						IngresosTab(),
 						_PestanaProximamente(
 							texto: 'Acá vas a poder buscar piezas por número de serie, ver las '
 									'placas reacondicionadas disponibles y el historial de cada pieza.',

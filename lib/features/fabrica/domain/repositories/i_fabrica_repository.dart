@@ -6,8 +6,10 @@ import 'package:cliente_feedback_tecnico/features/fabrica/domain/entities/movimi
 import 'package:cliente_feedback_tecnico/features/fabrica/domain/entities/pagina_fabrica.dart';
 import 'package:cliente_feedback_tecnico/features/fabrica/domain/entities/recepcion.dart';
 import 'package:cliente_feedback_tecnico/features/fabrica/domain/entities/resultado_asignacion.dart';
+import 'package:cliente_feedback_tecnico/features/fabrica/domain/entities/servicio_vinculado.dart';
 import 'package:cliente_feedback_tecnico/features/fabrica/domain/entities/solicitudes_fabrica.dart';
 import 'package:cliente_feedback_tecnico/features/fabrica/domain/entities/unidad.dart';
+import 'package:cliente_feedback_tecnico/features/fabrica/domain/entities/vinculacion_pendiente.dart';
 
 /// Modulo fabrica del backend (`/fabrica/...`).
 ///
@@ -101,4 +103,24 @@ abstract class IFabricaRepository {
 		required String ingresoId,
 		required SolicitudReparacion solicitud,
 	});
+
+	/// La placa reparada por desarrollo vuelve a servicio tecnico y queda
+	/// reacondicionada disponible.
+	Future<Ingreso> recibirDeDesarrollo({
+		required String ingresoId,
+		String? observacion,
+	});
+
+	/// Resumen del servicio vinculado a una recepcion (`GET /servicios/:id`).
+	/// Si el servicio es de otro tecnico responde 403, y 404 si no existe:
+	/// llegan como `ServerException` con su `statusCode`.
+	Future<ServicioVinculado> obtenerServicioVinculado(String servicioId);
+
+	// Vinculaciones pendientes, guardadas en el dispositivo (una por recepcion).
+
+	Future<void> guardarVinculacionPendiente(VinculacionPendiente vinculacion);
+
+	Future<List<VinculacionPendiente>> obtenerVinculacionesPendientes();
+
+	Future<void> quitarVinculacionPendiente(String recepcionId);
 }

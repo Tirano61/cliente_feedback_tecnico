@@ -20,6 +20,10 @@ class ApiConstants {
 	static const String serviciosMios = '/servicios/mios';
 	static const String liquidacionesMias = '/liquidaciones/mias';
 
+	static String servicio(String servicioId) {
+		return '/servicios/$servicioId';
+	}
+
 	static String servicioDocumento(String servicioId) {
 		return '/servicios/$servicioId/documento';
 	}
@@ -81,5 +85,9 @@ class ApiConstants {
 
 	static String fabricaIngresoReparacion(String ingresoId) {
 		return '/fabrica/ingresos/$ingresoId/reparacion';
+	}
+
+	static String fabricaIngresoVueltaServicioTecnico(String ingresoId) {
+		return '/fabrica/ingresos/$ingresoId/vuelta-servicio-tecnico';
 	}
 }

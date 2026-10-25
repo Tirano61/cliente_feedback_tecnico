@@ -70,6 +70,13 @@ class ReglasRecepcion {
 				recepcion.estado != EstadoRecepcion.desconocido;
 	}
 
+	/// Se ingresan piezas retiradas del indicador mientras el equipo siga en
+	/// fabrica.
+	static bool admiteIngresos(Recepcion recepcion) {
+		return recepcion.estado != EstadoRecepcion.devuelto &&
+				recepcion.estado != EstadoRecepcion.desconocido;
+	}
+
 	static List<AccionEstadoRecepcion> acciones(Recepcion recepcion) {
 		final tieneServicio = ReglasRecepcion.tieneServicio(recepcion);
 		return [

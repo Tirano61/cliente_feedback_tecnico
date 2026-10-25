@@ -46,6 +46,11 @@ import 'package:cliente_feedback_tecnico/features/fabrica/application/obtener_in
 import 'package:cliente_feedback_tecnico/features/fabrica/application/derivar_ingreso_use_case.dart';
 import 'package:cliente_feedback_tecnico/features/fabrica/application/cargar_falla_ingreso_use_case.dart';
 import 'package:cliente_feedback_tecnico/features/fabrica/application/cargar_reparacion_ingreso_use_case.dart';
+import 'package:cliente_feedback_tecnico/features/fabrica/application/recibir_de_desarrollo_use_case.dart';
+import 'package:cliente_feedback_tecnico/features/fabrica/application/obtener_servicio_vinculado_use_case.dart';
+import 'package:cliente_feedback_tecnico/features/fabrica/application/guardar_vinculacion_pendiente_use_case.dart';
+import 'package:cliente_feedback_tecnico/features/fabrica/application/obtener_vinculaciones_pendientes_use_case.dart';
+import 'package:cliente_feedback_tecnico/features/fabrica/application/quitar_vinculacion_pendiente_use_case.dart';
 import 'package:cliente_feedback_tecnico/features/fabrica/domain/repositories/i_fabrica_repository.dart';
 import 'package:cliente_feedback_tecnico/features/fabrica/infrastructure/repositories/fabrica_repository_impl.dart';
 import 'package:http/http.dart' as http;
@@ -97,6 +102,11 @@ class AppDependencies {
 	final DerivarIngresoUseCase derivarIngresoUseCase;
 	final CargarFallaIngresoUseCase cargarFallaIngresoUseCase;
 	final CargarReparacionIngresoUseCase cargarReparacionIngresoUseCase;
+	final RecibirDeDesarrolloUseCase recibirDeDesarrolloUseCase;
+	final ObtenerServicioVinculadoUseCase obtenerServicioVinculadoUseCase;
+	final GuardarVinculacionPendienteUseCase guardarVinculacionPendienteUseCase;
+	final ObtenerVinculacionesPendientesUseCase obtenerVinculacionesPendientesUseCase;
+	final QuitarVinculacionPendienteUseCase quitarVinculacionPendienteUseCase;
 
 	AppDependencies._({
 		required this.secureStorage,
@@ -143,6 +153,11 @@ class AppDependencies {
 		required this.derivarIngresoUseCase,
 		required this.cargarFallaIngresoUseCase,
 		required this.cargarReparacionIngresoUseCase,
+		required this.recibirDeDesarrolloUseCase,
+		required this.obtenerServicioVinculadoUseCase,
+		required this.guardarVinculacionPendienteUseCase,
+		required this.obtenerVinculacionesPendientesUseCase,
+		required this.quitarVinculacionPendienteUseCase,
 	});
 
 	factory AppDependencies.create() {
@@ -154,7 +169,7 @@ class AppDependencies {
 		final servicioRepository = ServicioRepositoryImpl(apiClient, secureStorage);
 		final liquidacionRemoteDataSource = LiquidacionRemoteDataSource(apiClient);
 		final liquidacionRepository = LiquidacionRepositoryImpl(liquidacionRemoteDataSource);
-		final fabricaRepository = FabricaRepositoryImpl(apiClient);
+		final fabricaRepository = FabricaRepositoryImpl(apiClient, secureStorage);
 
 		return AppDependencies._(
 			secureStorage: secureStorage,
@@ -212,6 +227,11 @@ class AppDependencies {
 			derivarIngresoUseCase: DerivarIngresoUseCase(fabricaRepository),
 			cargarFallaIngresoUseCase: CargarFallaIngresoUseCase(fabricaRepository),
 			cargarReparacionIngresoUseCase: CargarReparacionIngresoUseCase(fabricaRepository),
+			recibirDeDesarrolloUseCase: RecibirDeDesarrolloUseCase(fabricaRepository),
+			obtenerServicioVinculadoUseCase: ObtenerServicioVinculadoUseCase(fabricaRepository),
+			guardarVinculacionPendienteUseCase: GuardarVinculacionPendienteUseCase(fabricaRepository),
+			obtenerVinculacionesPendientesUseCase: ObtenerVinculacionesPendientesUseCase(fabricaRepository),
+			quitarVinculacionPendienteUseCase: QuitarVinculacionPendienteUseCase(fabricaRepository),
 		);
 	}
 }
