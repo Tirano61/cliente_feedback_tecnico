@@ -6,6 +6,7 @@ import 'package:cliente_feedback_tecnico/features/servicios/domain/entities/orde
 import 'package:cliente_feedback_tecnico/features/servicios/domain/entities/producto_falla.dart';
 import 'package:cliente_feedback_tecnico/features/servicios/domain/entities/repuesto.dart';
 import 'package:cliente_feedback_tecnico/features/servicios/domain/entities/servicio.dart';
+import 'package:cliente_feedback_tecnico/features/servicios/presentation/bloc/campos_formulario_servicio.dart';
 import 'package:cliente_feedback_tecnico/features/servicios/presentation/bloc/filtro_estado_servicio.dart';
 import 'package:equatable/equatable.dart';
 
@@ -83,6 +84,10 @@ class ServicioFormularioState extends ServicioState {
 	/// valores) porque cambio la cotizacion, el valor del km o algun repuesto.
 	final AvisoValoresOrden? avisoValores;
 
+	/// Aviso de un solo uso: "Guardar" con algo sin completar. Viene junto con
+	/// `errorMensaje` y dice en que paso esta lo que falta.
+	final AvisoValidacionFormulario? avisoValidacion;
+
 	const ServicioFormularioState({
 		this.idempotencyKey = '',
 		this.fechaHoraServicio,
@@ -138,11 +143,25 @@ class ServicioFormularioState extends ServicioState {
 		this.errorMensaje,
 		this.exitoMensaje,
 		this.avisoValores,
+		this.avisoValidacion,
 	});
 
 	/// Provincia, lugar de atencion y km solo aplican en `canal = campo`: en
 	/// remoto y fabrica el backend completa el lugar y esos campos viajan null.
 	bool get requiereDatosDeCampo => canal == Canal.campo;
+
+	/// Lo que el BLoC exige siempre para guardar (la vista lo marca con *). El
+	/// precio y los valores de facturacion dependen de lo cobrado: no se marcan.
+	bool esObligatorio(CampoFormularioServicio campo) {
+		return switch (campo) {
+			CampoFormularioServicio.zona ||
+			CampoFormularioServicio.lugarDetalle ||
+			CampoFormularioServicio.km => requiereDatosDeCampo,
+			CampoFormularioServicio.precioServicio ||
+			CampoFormularioServicio.valoresFacturacion => false,
+			_ => true,
+		};
+	}
 
 	ServicioFormularioState copyWith({
 		String? idempotencyKey,
@@ -202,6 +221,7 @@ class ServicioFormularioState extends ServicioState {
 		String? errorMensaje,
 		String? exitoMensaje,
 		AvisoValoresOrden? avisoValores,
+		AvisoValidacionFormulario? avisoValidacion,
 		bool limpiarMensajes = false,
 		bool limpiarClienteSeleccionado = false,
 		bool limpiarPdfOrden = false,
@@ -274,6 +294,7 @@ class ServicioFormularioState extends ServicioState {
 			errorMensaje: limpiarMensajes ? null : errorMensaje,
 			exitoMensaje: limpiarMensajes ? null : exitoMensaje,
 			avisoValores: limpiarMensajes ? null : avisoValores,
+			avisoValidacion: limpiarMensajes ? null : avisoValidacion,
 		);
 	}
 
@@ -343,6 +364,7 @@ class ServicioFormularioState extends ServicioState {
 				errorMensaje,
 				exitoMensaje,
 				avisoValores,
+				avisoValidacion,
 			];
 }
 

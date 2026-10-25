@@ -49,8 +49,10 @@ class AccionEstadoRecepcion extends Equatable {
 class ReglasRecepcion {
 	const ReglasRecepcion._();
 
-	static const String motivoFaltaServicio =
-			'Falta vincular el servicio de fábrica de esta recepción.';
+	/// Por que un boton que lleva a "Listo para devolver" (tambien "No aceptó
+	/// el presupuesto") esta bloqueado: dice cual es y que hace falta.
+	static String motivoFaltaServicio(String etiqueta) =>
+			'"$etiqueta" necesita primero cargar el servicio de fábrica.';
 
 	/// Estados a los que se puede pasar desde el estado actual. Vacio en
 	/// `devuelto` y en un estado que la app no conoce.
@@ -79,16 +81,16 @@ class ReglasRecepcion {
 
 	static List<AccionEstadoRecepcion> acciones(Recepcion recepcion) {
 		final tieneServicio = ReglasRecepcion.tieneServicio(recepcion);
-		return [
-			for (final destino in estadosPermitidos(recepcion.estado))
-				AccionEstadoRecepcion(
-					destino: destino,
-					etiqueta: _etiqueta(recepcion.estado, destino),
-					motivoBloqueo: destino == EstadoRecepcion.listoParaDevolver && !tieneServicio
-							? motivoFaltaServicio
-							: null,
-				),
-		];
+		return estadosPermitidos(recepcion.estado).map((destino) {
+			final etiqueta = _etiqueta(recepcion.estado, destino);
+			return AccionEstadoRecepcion(
+				destino: destino,
+				etiqueta: etiqueta,
+				motivoBloqueo: destino == EstadoRecepcion.listoParaDevolver && !tieneServicio
+						? motivoFaltaServicio(etiqueta)
+						: null,
+			);
+		}).toList();
 	}
 
 	/// La devolucion al cliente solo sale de `listo_para_devolver`.

@@ -36,6 +36,7 @@ import 'package:cliente_feedback_tecnico/features/fabrica/presentation/bloc/piez
 import 'package:cliente_feedback_tecnico/features/fabrica/presentation/bloc/piezas_event.dart';
 import 'package:cliente_feedback_tecnico/features/fabrica/presentation/bloc/piezas_state.dart';
 import 'package:cliente_feedback_tecnico/features/fabrica/presentation/bloc/recepcion_detalle_state.dart';
+import 'package:cliente_feedback_tecnico/features/fabrica/presentation/bloc/textos_ingreso.dart';
 import 'package:cliente_feedback_tecnico/features/fabrica/presentation/bloc/textos_unidad.dart';
 import 'package:cliente_feedback_tecnico/features/fabrica/presentation/pages/ingreso_detalle_page.dart';
 import 'package:cliente_feedback_tecnico/features/fabrica/presentation/pages/nuevo_ingreso_page.dart';
@@ -774,6 +775,14 @@ void main() {
 
 			expect(pasos.map((p) => p.titulo), ['Movimiento sin descripción', 'Descartada por irreparable']);
 			expect(pasos.last.observacion, isNull);
+		});
+
+		test('la placa en desarrollo se nombra igual en Piezas y en el ingreso', () {
+			expect(nombreEstadoUnidad(EstadoUnidad.enDesarrollo), 'Derivada a desarrollo');
+			expect(
+				nombreEstadoUnidad(EstadoUnidad.enDesarrollo),
+				nombreEstadoIngreso(EstadoIngreso.derivadoDesarrollo),
+			);
 		});
 	});
 

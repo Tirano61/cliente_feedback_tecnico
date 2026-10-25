@@ -29,6 +29,13 @@ abstract class IServicioRepository {
 
 	Future<List<Cliente>> buscarClientes(String query);
 
+	/// GET /clientes/:id: el cliente con todos sus datos (contacto, telefono,
+	/// localidad).
+	Future<Cliente> obtenerCliente(String clienteId);
+
+	/// GET /servicios/:id: la orden guardada, con lo necesario para el PDF.
+	Future<Servicio> obtenerServicio(String servicioId);
+
 	Future<CotizacionActual> obtenerCotizacionActual();
 
 	Future<List<Repuesto>> buscarRepuestos(String query);

@@ -10,7 +10,8 @@ String nombreEstadoUnidad(EstadoUnidad estado) {
 		EstadoUnidad.instalada => 'Instalada',
 		EstadoUnidad.retirada => 'Retirada',
 		EstadoUnidad.enServicioTecnico => 'En servicio técnico',
-		EstadoUnidad.enDesarrollo => 'En desarrollo',
+		// Igual que el ingreso de la placa: es la misma situacion.
+		EstadoUnidad.enDesarrollo => 'Derivada a desarrollo',
 		EstadoUnidad.reacondicionadaDisponible => 'Reacondicionada disponible',
 		EstadoUnidad.descartada => 'Descartada',
 		EstadoUnidad.desconocido => 'Sin dato',

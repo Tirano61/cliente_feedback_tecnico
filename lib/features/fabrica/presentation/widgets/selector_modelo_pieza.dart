@@ -32,6 +32,8 @@ class SelectorModeloPieza extends StatelessWidget {
 						? catalogoState.modelosActivosDe(palabra)
 						: const <Producto>[];
 				final cargando = catalogoState is CatalogoLoaded && catalogoState.cargandoProductos;
+				final sinModelos =
+						catalogoState is CatalogoLoaded && palabra != null && catalogoState.sinModelosDe(palabra);
 				final seleccionado = modelos.any((p) => p.id == productoId) ? productoId : null;
 
 				return DropdownButtonFormField<String?>(
@@ -45,6 +47,9 @@ class SelectorModeloPieza extends StatelessWidget {
 								: cargando
 										? 'Modelo (cargando...)'
 										: 'Modelo (opcional)',
+						helperText: sinModelos
+								? 'No hay modelos de $palabra cargados: se puede seguir sin modelo.'
+								: null,
 					),
 					items: [
 						const DropdownMenuItem<String?>(value: null, child: Text('Sin especificar')),

@@ -88,6 +88,7 @@ class _PiezasTabState extends State<PiezasTab> {
 						alignment: Alignment.centerLeft,
 						child: FilterChip(
 							avatar: const Icon(Icons.recycling, size: 18),
+							showCheckmark: false,
 							label: const Text('Placas reacondicionadas disponibles'),
 							selected: state.soloReacondicionadas,
 							onSelected: (activas) {

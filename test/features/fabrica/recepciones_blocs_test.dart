@@ -14,6 +14,7 @@ import 'package:cliente_feedback_tecnico/features/fabrica/application/vincular_s
 import 'package:cliente_feedback_tecnico/features/fabrica/domain/entities/estados_fabrica.dart';
 import 'package:cliente_feedback_tecnico/features/fabrica/domain/entities/recepcion.dart';
 import 'package:cliente_feedback_tecnico/features/fabrica/domain/entities/referencias_fabrica.dart';
+import 'package:cliente_feedback_tecnico/features/fabrica/domain/entities/servicio_vinculado.dart';
 import 'package:cliente_feedback_tecnico/features/fabrica/domain/entities/unidad.dart';
 import 'package:cliente_feedback_tecnico/features/fabrica/infrastructure/repositories/fabrica_repository_impl.dart';
 import 'package:cliente_feedback_tecnico/features/fabrica/presentation/bloc/nueva_recepcion_bloc.dart';
@@ -26,10 +27,13 @@ import 'package:cliente_feedback_tecnico/features/fabrica/presentation/bloc/rece
 import 'package:cliente_feedback_tecnico/features/fabrica/presentation/bloc/recepciones_event.dart';
 import 'package:cliente_feedback_tecnico/features/fabrica/presentation/bloc/recepciones_state.dart';
 import 'package:cliente_feedback_tecnico/features/fabrica/presentation/bloc/reglas_recepcion.dart';
+import 'package:cliente_feedback_tecnico/features/fabrica/presentation/bloc/textos_recepcion.dart';
 import 'package:cliente_feedback_tecnico/features/servicios/application/buscar_clientes_use_case.dart';
 import 'package:cliente_feedback_tecnico/features/servicios/application/crear_cliente_rapido_use_case.dart';
 import 'package:cliente_feedback_tecnico/features/servicios/domain/entities/cliente.dart';
 import 'package:cliente_feedback_tecnico/features/servicios/infrastructure/repositories/servicio_repository_impl.dart';
+import 'package:cliente_feedback_tecnico/features/servicios/application/generar_pdf_servicio_guardado_use_case.dart';
+import 'package:cliente_feedback_tecnico/features/servicios/application/generar_pdf_orden_servicio_use_case.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
@@ -56,6 +60,7 @@ Map<String, dynamic> _recepcionJson({
 	String? servicioId,
 	String? fechaDevolucion,
 	String? formaDevolucion,
+	List<Map<String, dynamic>>? historial,
 }) =>
 		{
 			'id': id,
@@ -74,15 +79,16 @@ Map<String, dynamic> _recepcionJson({
 			'tecnicoRecepcion': {'id': _tecnicoId, 'fullName': 'Juan Tecnico'},
 			'fechaRecepcion': '2026-10-24T13:00:00.000Z',
 			'estado': estado,
-			'historialEstados': [
-				{
-					'estado': 'recibido',
-					'fecha': '2026-10-24T13:00:00.000Z',
-					'usuarioId': _tecnicoId,
-					'usuarioNombre': 'Juan Tecnico',
-					'observacion': null,
-				},
-			],
+			'historialEstados': historial ??
+					[
+						{
+							'estado': 'recibido',
+							'fecha': '2026-10-24T13:00:00.000Z',
+							'usuarioId': _tecnicoId,
+							'usuarioNombre': 'Juan Tecnico',
+							'observacion': null,
+						},
+					],
 			'servicioId': servicioId,
 			'fechaDevolucion': fechaDevolucion,
 			'formaDevolucion': formaDevolucion,
@@ -220,7 +226,7 @@ void main() {
 			);
 			final listo = sinServicio.singleWhere((a) => a.destino == EstadoRecepcion.listoParaDevolver);
 			expect(listo.habilitada, isFalse);
-			expect(listo.motivoBloqueo, ReglasRecepcion.motivoFaltaServicio);
+			expect(listo.motivoBloqueo, '"Listo para devolver" necesita primero cargar el servicio de fábrica.');
 			expect(
 				sinServicio.singleWhere((a) => a.destino == EstadoRecepcion.esperandoPresupuesto).habilitada,
 				isTrue,
@@ -230,6 +236,54 @@ void main() {
 				_recepcion(estado: EstadoRecepcion.enReparacion, servicioId: _servicioId),
 			);
 			expect(conServicio.every((a) => a.habilitada), isTrue);
+		});
+
+		test('"No aceptó el presupuesto" dice que necesita el servicio de fabrica', () {
+			final esperando = ReglasRecepcion.acciones(
+				_recepcion(estado: EstadoRecepcion.esperandoPresupuesto),
+			);
+
+			final noAcepto = esperando.singleWhere((a) => a.destino == EstadoRecepcion.listoParaDevolver);
+			expect(noAcepto.motivoBloqueo, '"No aceptó el presupuesto" necesita primero cargar el servicio de fábrica.');
+			expect(
+				esperando.singleWhere((a) => a.destino == EstadoRecepcion.enReparacion).habilitada,
+				isTrue,
+			);
+		});
+
+		test('historial: lo que decidio el cliente sale del estado anterior', () {
+			const historial = [
+				CambioEstadoRecepcion(estado: EstadoRecepcion.recibido, usuarioNombre: ' Juan Tecnico '),
+				CambioEstadoRecepcion(estado: EstadoRecepcion.esperandoPresupuesto),
+				CambioEstadoRecepcion(estado: EstadoRecepcion.enReparacion, observacion: 'Por WhatsApp'),
+				CambioEstadoRecepcion(estado: EstadoRecepcion.esperandoPresupuesto),
+				CambioEstadoRecepcion(estado: EstadoRecepcion.listoParaDevolver, observacion: '  '),
+				CambioEstadoRecepcion(estado: EstadoRecepcion.enReparacion),
+			];
+
+			final pasos = pasosHistorialRecepcion(historial);
+
+			expect(pasos.map((p) => p.titulo), [
+				'Recibido',
+				'Esperando presupuesto',
+				'Aceptó el presupuesto',
+				'Esperando presupuesto',
+				'No aceptó el presupuesto',
+				'En reparación',
+			]);
+			expect(pasos.map((p) => p.estado), historial.map((c) => c.estado));
+			expect(pasos.first.usuario, 'Juan Tecnico');
+			expect(pasos[2].observacion, 'Por WhatsApp');
+			expect(pasos[4].observacion, isNull);
+		});
+
+		test('titulo del servicio vinculado: con la fecha y sin el id', () {
+			expect(tituloServicioVinculado(null), 'Servicio de fábrica');
+			expect(tituloServicioVinculado(const ServicioVinculado(id: _servicioId)), 'Servicio de fábrica');
+			expect(
+				tituloServicioVinculado(ServicioVinculado(id: _servicioId, fecha: DateTime(2026, 10, 5, 9, 30))),
+				'Servicio de fábrica del 05/10/2026',
+			);
 		});
 
 		test('devolver solo desde listo para devolver', () {
@@ -412,6 +466,7 @@ void main() {
 				GuardarVinculacionPendienteUseCase(backend.fabrica),
 				ObtenerVinculacionesPendientesUseCase(backend.fabrica),
 				QuitarVinculacionPendienteUseCase(backend.fabrica),
+				GenerarPdfServicioGuardadoUseCase(backend.servicios, GenerarPdfOrdenServicioUseCase()),
 				ahora: _hoy,
 			);
 		});
@@ -510,7 +565,7 @@ void main() {
 			);
 
 			expect(backend.requests, isEmpty);
-			expect(estado.errorAccion, ReglasRecepcion.motivoFaltaServicio);
+			expect(estado.errorAccion, ReglasRecepcion.motivoFaltaServicio('Listo para devolver'));
 		});
 
 		test('regla rechazada: muestra el mensaje tal cual, conserva la recepcion y la vuelve a pedir', () async {
@@ -549,6 +604,78 @@ void main() {
 
 			expect(backend.requests, isEmpty);
 			expect(estado.errorAccion, 'Elegí cómo se devuelve el equipo.');
+		});
+
+		test('devolucion: al elegir la forma el aviso anterior se borra', () async {
+			await abrir(_recepcionJson(estado: 'listo_para_devolver', servicioId: _servicioId));
+			await accion(const RecepcionDevolucionSolicitada(forma: null));
+
+			// Lo que manda el dialogo al elegir como se devuelve.
+			final corregido = bloc.stream.firstWhere((s) => s.errorAccion == null);
+			bloc.add(const RecepcionErrorAccionDescartado());
+
+			expect((await corregido).errorAccion, isNull);
+			expect(backend.requests, isEmpty);
+		});
+
+		test('historial del detalle: aceptar y rechazar el presupuesto se ven como tales', () async {
+			Map<String, dynamic> cambio(String estado) => {
+						'estado': estado,
+						'fecha': '2026-10-24T13:00:00.000Z',
+						'usuarioId': _tecnicoId,
+						'usuarioNombre': 'Juan Tecnico',
+						'observacion': null,
+					};
+			final estado = await abrir(
+				_recepcionJson(
+					estado: 'listo_para_devolver',
+					servicioId: _servicioId,
+					historial: [
+						cambio('recibido'),
+						cambio('esperando_presupuesto'),
+						cambio('en_reparacion'),
+						cambio('esperando_presupuesto'),
+						cambio('listo_para_devolver'),
+					],
+				),
+			);
+
+			expect(estado.pasosHistorial.map((p) => p.titulo), [
+				'Recibido',
+				'Esperando presupuesto',
+				'Aceptó el presupuesto',
+				'Esperando presupuesto',
+				'No aceptó el presupuesto',
+			]);
+		});
+
+		test('listo para devolver con servicio vinculado: ofrece el PDF de la orden', () async {
+			await abrir(_recepcionJson(estado: 'en_reparacion', servicioId: _servicioId));
+			backend.responder = (_) => _json(_recepcionJson(estado: 'listo_para_devolver', servicioId: _servicioId));
+
+			final estado = await accion(
+				const RecepcionEstadoCambioSolicitado(estado: EstadoRecepcion.listoParaDevolver),
+			);
+
+			expect(estado.recepcion!.estado, EstadoRecepcion.listoParaDevolver);
+			expect(estado.ofrecerPdfServicio, isTrue);
+
+			// Es de un solo uso: el siguiente estado ya no lo trae.
+			final siguiente = bloc.stream.first;
+			bloc.add(const RecepcionDetalleRefrescado());
+			expect((await siguiente).ofrecerPdfServicio, isFalse);
+		});
+
+		test('otros cambios de estado no ofrecen el PDF', () async {
+			await abrir(_recepcionJson(estado: 'esperando_presupuesto', servicioId: _servicioId));
+			backend.responder = (_) => _json(_recepcionJson(estado: 'en_reparacion', servicioId: _servicioId));
+
+			final estado = await accion(
+				const RecepcionEstadoCambioSolicitado(estado: EstadoRecepcion.enReparacion),
+			);
+
+			expect(estado.recepcion!.estado, EstadoRecepcion.enReparacion);
+			expect(estado.ofrecerPdfServicio, isFalse);
 		});
 
 		test('devolucion: PATCH con la forma y queda devuelta', () async {
@@ -642,6 +769,28 @@ void main() {
 			bloc.add(const NuevaRecepcionGuardada());
 			return listo;
 		}
+
+		test('con datos cargados pide confirmar la salida; vacia o guardando, no', () async {
+			expect(bloc.state.pideConfirmarSalida, isFalse);
+
+			final conSerie = bloc.stream.first;
+			bloc.add(const NuevaRecepcionCambiada(indicadorNroSerie: '  '));
+			expect((await conSerie).pideConfirmarSalida, isFalse, reason: 'solo espacios no es dato');
+
+			final conCliente = bloc.stream.first;
+			bloc.add(const NuevaRecepcionClienteSeleccionado(cliente: cliente));
+			expect((await conCliente).pideConfirmarSalida, isTrue);
+
+			expect(const NuevaRecepcionState(queLlego: 'Indicador').pideConfirmarSalida, isTrue);
+			expect(
+				const NuevaRecepcionState(indicadorProductoId: _productoIndicadorId).pideConfirmarSalida,
+				isTrue,
+			);
+			expect(
+				const NuevaRecepcionState(observaciones: 'x', guardando: true).pideConfirmarSalida,
+				isFalse,
+			);
+		});
 
 		test('busca clientes con el buscador existente y selecciona uno', () async {
 			backend.responder = (_) => _json([

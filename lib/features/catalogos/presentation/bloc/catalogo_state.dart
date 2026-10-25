@@ -90,8 +90,9 @@ class CatalogoLoaded extends CatalogoState {
 	}
 
 	/// Modelos activos de una pieza (`palabra`: "placa", "celda"): productos de
-	/// una categoria con esa palabra o con la palabra en el nombre. Si ninguno
-	/// coincide, todos los activos, para que igual se pueda elegir el modelo.
+	/// una categoria con esa palabra o con la palabra en el nombre. Si no hay
+	/// ninguno queda vacio: no se ofrecen indicadores o apps como modelo de la
+	/// pieza, y se sigue sin modelo.
 	List<Producto> modelosActivosDe(String palabra) {
 		final buscada = palabra.toLowerCase();
 		final categoriasIds = categorias
@@ -99,16 +100,23 @@ class CatalogoLoaded extends CatalogoState {
 				.map((categoria) => categoria.id)
 				.toSet();
 
-		final activos = productos.where((producto) => producto.activo).toList();
-		final coinciden = activos
+		return productos
 				.where(
 					(producto) =>
-							categoriasIds.contains(producto.categoriaId) ||
-							producto.nombre.toLowerCase().contains(buscada),
+							producto.activo &&
+							(categoriasIds.contains(producto.categoriaId) ||
+									producto.nombre.toLowerCase().contains(buscada)),
 				)
 				.toList();
-		return coinciden.isEmpty ? activos : coinciden;
 	}
+
+	/// El catalogo ya llego y no hay ningun modelo de esa pieza. Mientras carga
+	/// (o antes de pedirlo) no se avisa nada.
+	bool sinModelosDe(String palabra) =>
+			!cargandoBasicos &&
+			!cargandoProductos &&
+			categorias.isNotEmpty &&
+			modelosActivosDe(palabra).isEmpty;
 
 	bool get tieneBasicos =>
 			diagnosticos.isNotEmpty || resoluciones.isNotEmpty || zonas.isNotEmpty || categorias.isNotEmpty;

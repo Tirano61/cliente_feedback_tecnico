@@ -201,7 +201,8 @@ class IngresoDetalleBloc extends Bloc<IngresoDetalleEvent, IngresoDetalleState> 
 		final componenteOtro = event.componenteOtro.trim();
 		final causaId = (event.causaId ?? '').trim();
 		final faltantes = [
-			if (componenteId.isEmpty && componenteOtro.isEmpty) 'componente que falló',
+			if (componenteId.isEmpty && componenteOtro.isEmpty)
+				event.usaOtro ? 'escribir qué componente (marcaste "Otro")' : 'componente que falló',
 			if (causaId.isEmpty) 'causa',
 		];
 		if (faltantes.isNotEmpty) {

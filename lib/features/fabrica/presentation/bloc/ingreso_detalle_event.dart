@@ -53,12 +53,15 @@ class IngresoCatalogosFallaSolicitados extends IngresoDetalleEvent {
 /// Falla de una celda. Va `componenteId` (del catalogo del modelo) o, si no
 /// esta en el catalogo, `componenteOtro` escrito por el tecnico.
 class IngresoFallaSolicitada extends IngresoDetalleEvent {
+	/// El tecnico marco "Otro": falta escribir el componente, no elegirlo.
+	final bool usaOtro;
 	final String? componenteId;
 	final String componenteOtro;
 	final String? causaId;
 	final String detalle;
 
 	const IngresoFallaSolicitada({
+		this.usaOtro = false,
 		this.componenteId,
 		this.componenteOtro = '',
 		this.causaId,
@@ -66,7 +69,7 @@ class IngresoFallaSolicitada extends IngresoDetalleEvent {
 	});
 
 	@override
-	List<Object?> get props => [componenteId, componenteOtro, causaId, detalle];
+	List<Object?> get props => [usaOtro, componenteId, componenteOtro, causaId, detalle];
 }
 
 /// Reparacion de una celda. `resultado` null: el tecnico todavia no eligio

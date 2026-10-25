@@ -1,13 +1,27 @@
+import 'dart:typed_data';
+
 import 'package:cliente_feedback_tecnico/features/fabrica/domain/entities/estados_fabrica.dart';
 import 'package:cliente_feedback_tecnico/features/fabrica/domain/entities/recepcion.dart';
 import 'package:cliente_feedback_tecnico/features/fabrica/domain/entities/servicio_vinculado.dart';
 import 'package:cliente_feedback_tecnico/features/fabrica/presentation/bloc/asignacion_unidad_state.dart';
 import 'package:cliente_feedback_tecnico/features/fabrica/presentation/bloc/nuevo_ingreso_state.dart';
 import 'package:cliente_feedback_tecnico/features/fabrica/presentation/bloc/reglas_recepcion.dart';
+import 'package:cliente_feedback_tecnico/features/fabrica/presentation/bloc/textos_recepcion.dart';
 import 'package:cliente_feedback_tecnico/features/servicios/domain/entities/cliente.dart';
 import 'package:cliente_feedback_tecnico/features/servicios/domain/entities/servicio.dart';
 import 'package:cliente_feedback_tecnico/features/servicios/presentation/bloc/precarga_formulario_servicio.dart';
 import 'package:equatable/equatable.dart';
+
+/// PDF de la orden del servicio vinculado, listo para compartir.
+class PdfServicioRecepcion extends Equatable {
+	final String nombreArchivo;
+	final Uint8List bytes;
+
+	const PdfServicioRecepcion({required this.nombreArchivo, required this.bytes});
+
+	@override
+	List<Object?> get props => [nombreArchivo, bytes];
+}
 
 class RecepcionDetalleState extends Equatable {
 	final String? recepcionId;
@@ -44,9 +58,19 @@ class RecepcionDetalleState extends Equatable {
 	/// Cualquier otro error al traer el resumen (queda con "Reintentar").
 	final String? errorServicioVinculado;
 
+	/// Se esta generando el PDF de la orden del servicio vinculado.
+	final bool generandoPdfServicio;
+
 	/// Mensajes de un solo uso para el snackbar.
 	final String? exitoMensaje;
 	final String? errorMensaje;
+
+	/// De un solo uso: el equipo quedo listo para devolver con su servicio
+	/// vinculado; se ofrece generar y compartir el PDF de la orden.
+	final bool ofrecerPdfServicio;
+
+	/// De un solo uso: el PDF ya generado, para que la vista lo comparta.
+	final PdfServicioRecepcion? pdfParaCompartir;
 
 	/// "Hoy" de la ultima carga, para contar los dias en fabrica.
 	final DateTime? fechaReferencia;
@@ -66,8 +90,11 @@ class RecepcionDetalleState extends Equatable {
 		this.cargandoServicioVinculado = false,
 		this.servicioVinculadoNoDisponible = false,
 		this.errorServicioVinculado,
+		this.generandoPdfServicio = false,
 		this.exitoMensaje,
 		this.errorMensaje,
+		this.ofrecerPdfServicio = false,
+		this.pdfParaCompartir,
 		this.fechaReferencia,
 	});
 
@@ -107,6 +134,18 @@ class RecepcionDetalleState extends Equatable {
 	ServicioVinculado? get resumenServicioVinculado {
 		final resumen = servicioVinculado;
 		return resumen != null && resumen.id == servicioVinculadoId ? resumen : null;
+	}
+
+	/// Titulo del servicio vinculado: con su fecha, sin el id.
+	String get tituloServicio => tituloServicioVinculado(resumenServicioVinculado);
+
+	/// "PDF de la orden": con servicio vinculado y sin otro PDF en camino.
+	bool get puedeGenerarPdfServicio => servicioVinculadoId != null && !generandoPdfServicio;
+
+	/// Historial de estados con lo que decidio el cliente en el presupuesto.
+	List<PasoHistorialRecepcion> get pasosHistorial {
+		final actual = recepcion;
+		return actual == null ? const [] : pasosHistorialRecepcion(actual.historialEstados);
 	}
 
 	/// "Ingresar pieza retirada": mientras el equipo siga en fabrica.
@@ -185,7 +224,8 @@ class RecepcionDetalleState extends Equatable {
 		return ReglasRecepcion.diasEnFabrica(actual, referencia);
 	}
 
-	/// `exitoMensaje` y `errorMensaje` no se arrastran: valen para un emit.
+	/// `exitoMensaje`, `errorMensaje`, `ofrecerPdfServicio` y
+	/// `pdfParaCompartir` no se arrastran: valen para un emit.
 	RecepcionDetalleState copyWith({
 		Recepcion? recepcion,
 		bool? cargando,
@@ -206,8 +246,11 @@ class RecepcionDetalleState extends Equatable {
 		bool? servicioVinculadoNoDisponible,
 		String? errorServicioVinculado,
 		bool limpiarErrorServicioVinculado = false,
+		bool? generandoPdfServicio,
 		String? exitoMensaje,
 		String? errorMensaje,
+		bool ofrecerPdfServicio = false,
+		PdfServicioRecepcion? pdfParaCompartir,
 		DateTime? fechaReferencia,
 	}) {
 		return RecepcionDetalleState(
@@ -231,8 +274,11 @@ class RecepcionDetalleState extends Equatable {
 			errorServicioVinculado: limpiarErrorServicioVinculado
 					? null
 					: (errorServicioVinculado ?? this.errorServicioVinculado),
+			generandoPdfServicio: generandoPdfServicio ?? this.generandoPdfServicio,
 			exitoMensaje: exitoMensaje,
 			errorMensaje: errorMensaje,
+			ofrecerPdfServicio: ofrecerPdfServicio,
+			pdfParaCompartir: pdfParaCompartir,
 			fechaReferencia: fechaReferencia ?? this.fechaReferencia,
 		);
 	}
@@ -253,8 +299,11 @@ class RecepcionDetalleState extends Equatable {
 				cargandoServicioVinculado,
 				servicioVinculadoNoDisponible,
 				errorServicioVinculado,
+				generandoPdfServicio,
 				exitoMensaje,
 				errorMensaje,
+				ofrecerPdfServicio,
+				pdfParaCompartir,
 				fechaReferencia,
 			];
 }

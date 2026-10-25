@@ -729,6 +729,30 @@ void main() {
 			expect(estado.errorAccion, 'Falta completar: componente que falló, causa.');
 		});
 
+		test('falla con "Otro" marcado y sin escribir: pide escribir el componente', () async {
+			await abrir(_ingresoJson(tipo: 'celda'));
+
+			final estado = await accion(
+				const IngresoFallaSolicitada(usaOtro: true, componenteOtro: '  ', causaId: _causaId),
+			);
+
+			expect(backend.requests, isEmpty);
+			expect(estado.errorAccion, 'Falta completar: escribir qué componente (marcaste "Otro").');
+		});
+
+		test('al corregir la falla el aviso anterior se borra', () async {
+			await abrir(_ingresoJson(tipo: 'celda'));
+			final conAviso = await accion(const IngresoFallaSolicitada(usaOtro: true));
+			expect(conAviso.errorAccion, isNotNull);
+
+			// Lo que manda el dialogo cuando el tecnico escribe o elige algo.
+			final corregido = bloc.stream.firstWhere((s) => s.errorAccion == null);
+			bloc.add(const IngresoErrorAccionDescartado());
+
+			expect((await corregido).errorAccion, isNull);
+			expect(backend.requests, isEmpty);
+		});
+
 		test('falla con componente del catalogo: PUT con todas las claves', () async {
 			await abrir(_ingresoJson(tipo: 'celda'));
 			backend.responder = (_) => _json(_ingresoJson(tipo: 'celda', falla: _fallaJson()));
