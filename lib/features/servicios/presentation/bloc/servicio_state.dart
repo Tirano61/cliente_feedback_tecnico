@@ -1,11 +1,14 @@
 import 'dart:typed_data';
 
+import 'package:cliente_feedback_tecnico/features/fabrica/domain/entities/asignacion_pendiente.dart';
+import 'package:cliente_feedback_tecnico/features/fabrica/domain/entities/estados_fabrica.dart';
 import 'package:cliente_feedback_tecnico/features/servicios/domain/entities/cliente.dart';
 import 'package:cliente_feedback_tecnico/features/servicios/domain/entities/facturacion_item.dart';
 import 'package:cliente_feedback_tecnico/features/servicios/domain/entities/orden_servicio_respuesta.dart';
 import 'package:cliente_feedback_tecnico/features/servicios/domain/entities/producto_falla.dart';
 import 'package:cliente_feedback_tecnico/features/servicios/domain/entities/repuesto.dart';
 import 'package:cliente_feedback_tecnico/features/servicios/domain/entities/servicio.dart';
+import 'package:cliente_feedback_tecnico/features/servicios/presentation/bloc/cambios_pieza_formulario.dart';
 import 'package:cliente_feedback_tecnico/features/servicios/presentation/bloc/campos_formulario_servicio.dart';
 import 'package:cliente_feedback_tecnico/features/servicios/presentation/bloc/filtro_estado_servicio.dart';
 import 'package:equatable/equatable.dart';
@@ -36,6 +39,10 @@ class ServicioFormularioState extends ServicioState {
 	final String lugarDetalle;
 	final String equipoNroSerie;
 	final String equipoModelo;
+
+	/// Producto del modelo del indicador. Va como `indicadorProductoId` en los
+	/// cambios de placa/celda por si el indicador no estaba registrado.
+	final String equipoModeloProductoId;
 	final String equipoUbicacion;
 	final String equipoAnio;
 	final String partesFallaronTexto;
@@ -47,6 +54,16 @@ class ServicioFormularioState extends ServicioState {
 	final List<String> resolucionIdsSeleccionados;
 	final String observaciones;
 	final List<ProductoFalla> productosFallaSeleccionados;
+
+	/// Placas o celdas que se ponen en el indicador (solo canal campo).
+	final List<CambioPiezaFormulario> cambiosPieza;
+
+	/// Reacondicionadas disponibles por tipo, para elegir la que se pone.
+	final Map<TipoUnidad, ReacondicionadasPieza> reacondicionadas;
+
+	/// Los cambios del ultimo servicio guardado: puestos y pendientes. Sobrevive
+	/// al formulario nuevo para que el aviso de exito los siga mostrando.
+	final ResultadoCambiosPieza? resultadoCambiosPieza;
 	final bool cargandoFacturacion;
 	final bool buscandoRepuestos;
 	final double cotizacionDolarSnapshot;
@@ -100,6 +117,7 @@ class ServicioFormularioState extends ServicioState {
 		this.lugarDetalle = '',
 		this.equipoNroSerie = '',
 		this.equipoModelo = '',
+		this.equipoModeloProductoId = '',
 		this.equipoUbicacion = '',
 		this.equipoAnio = '',
 		this.partesFallaronTexto = '',
@@ -111,6 +129,9 @@ class ServicioFormularioState extends ServicioState {
 		this.resolucionIdsSeleccionados = const [],
 		this.observaciones = '',
 		this.productosFallaSeleccionados = const [],
+		this.cambiosPieza = const [],
+		this.reacondicionadas = const {},
+		this.resultadoCambiosPieza,
 		this.cargandoFacturacion = false,
 		this.buscandoRepuestos = false,
 		this.cotizacionDolarSnapshot = 0,
@@ -158,7 +179,8 @@ class ServicioFormularioState extends ServicioState {
 			CampoFormularioServicio.lugarDetalle ||
 			CampoFormularioServicio.km => requiereDatosDeCampo,
 			CampoFormularioServicio.precioServicio ||
-			CampoFormularioServicio.valoresFacturacion => false,
+			CampoFormularioServicio.valoresFacturacion ||
+			CampoFormularioServicio.cambiosPieza => false,
 			_ => true,
 		};
 	}
@@ -177,6 +199,7 @@ class ServicioFormularioState extends ServicioState {
 		String? lugarDetalle,
 		String? equipoNroSerie,
 		String? equipoModelo,
+		String? equipoModeloProductoId,
 		String? equipoUbicacion,
 		String? equipoAnio,
 		String? partesFallaronTexto,
@@ -188,6 +211,9 @@ class ServicioFormularioState extends ServicioState {
 		List<String>? resolucionIdsSeleccionados,
 		String? observaciones,
 		List<ProductoFalla>? productosFallaSeleccionados,
+		List<CambioPiezaFormulario>? cambiosPieza,
+		Map<TipoUnidad, ReacondicionadasPieza>? reacondicionadas,
+		ResultadoCambiosPieza? resultadoCambiosPieza,
 		bool? cargandoFacturacion,
 		bool? buscandoRepuestos,
 		double? cotizacionDolarSnapshot,
@@ -242,6 +268,7 @@ class ServicioFormularioState extends ServicioState {
 			lugarDetalle: lugarDetalle ?? this.lugarDetalle,
 			equipoNroSerie: equipoNroSerie ?? this.equipoNroSerie,
 			equipoModelo: equipoModelo ?? this.equipoModelo,
+			equipoModeloProductoId: equipoModeloProductoId ?? this.equipoModeloProductoId,
 			equipoUbicacion: equipoUbicacion ?? this.equipoUbicacion,
 			equipoAnio: equipoAnio ?? this.equipoAnio,
 			partesFallaronTexto: partesFallaronTexto ?? this.partesFallaronTexto,
@@ -256,6 +283,9 @@ class ServicioFormularioState extends ServicioState {
 			observaciones: observaciones ?? this.observaciones,
 			productosFallaSeleccionados:
 					productosFallaSeleccionados ?? this.productosFallaSeleccionados,
+			cambiosPieza: cambiosPieza ?? this.cambiosPieza,
+			reacondicionadas: reacondicionadas ?? this.reacondicionadas,
+			resultadoCambiosPieza: resultadoCambiosPieza ?? this.resultadoCambiosPieza,
 			cargandoFacturacion: cargandoFacturacion ?? this.cargandoFacturacion,
 			buscandoRepuestos: buscandoRepuestos ?? this.buscandoRepuestos,
 			cotizacionDolarSnapshot:
@@ -298,6 +328,20 @@ class ServicioFormularioState extends ServicioState {
 		);
 	}
 
+	/// En que indicador se ponen las piezas: el equipo del formulario.
+	String get textoIndicadorCambiosPieza {
+		final serie = equipoNroSerie.trim();
+		return serie.isEmpty
+				? 'Indicador: cargá el número de serie del equipo en el paso 2.'
+				: 'Indicador: $serie';
+	}
+
+	/// Los cambios de placa/celda de ese servicio, si es el ultimo guardado.
+	ResultadoCambiosPieza? resultadoCambiosPiezaDe(String servicioId) {
+		final resultado = resultadoCambiosPieza;
+		return resultado != null && resultado.servicioId == servicioId ? resultado : null;
+	}
+
 	/// Km facturados (linea de viatico); 0 si no hay viatico.
 	double get kmFacturados {
 		for (final item in itemsFacturacion) {
@@ -321,6 +365,7 @@ class ServicioFormularioState extends ServicioState {
 				lugarDetalle,
 				equipoNroSerie,
 				equipoModelo,
+				equipoModeloProductoId,
 				equipoUbicacion,
 				equipoAnio,
 				partesFallaronTexto,
@@ -332,6 +377,9 @@ class ServicioFormularioState extends ServicioState {
 				resolucionIdsSeleccionados,
 				observaciones,
 				productosFallaSeleccionados,
+				cambiosPieza,
+				reacondicionadas,
+				resultadoCambiosPieza,
 				cargandoFacturacion,
 				buscandoRepuestos,
 				cotizacionDolarSnapshot,
@@ -451,6 +499,10 @@ class MisServiciosLoaded extends ServicioState {
 	final String? errorPaginacion;
 	final int documentosPendientes;
 	final bool reintentandoPendientes;
+
+	/// Cambios de placa/celda de servicios ya guardados que no se registraron.
+	final List<AsignacionPendiente> asignacionesPendientes;
+	final bool reintentandoAsignaciones;
 	final String? servicioIdSubiendoPdf;
 	final String? servicioIdDescargandoPdf;
 	final String? servicioIdCopiandoEnlacePdf;
@@ -476,6 +528,8 @@ class MisServiciosLoaded extends ServicioState {
 		this.errorPaginacion,
 		this.documentosPendientes = 0,
 		this.reintentandoPendientes = false,
+		this.asignacionesPendientes = const [],
+		this.reintentandoAsignaciones = false,
 		this.servicioIdSubiendoPdf,
 		this.servicioIdDescargandoPdf,
 		this.servicioIdCopiandoEnlacePdf,
@@ -512,6 +566,8 @@ class MisServiciosLoaded extends ServicioState {
 		bool limpiarErrorPaginacion = false,
 		int? documentosPendientes,
 		bool? reintentandoPendientes,
+		List<AsignacionPendiente>? asignacionesPendientes,
+		bool? reintentandoAsignaciones,
 		String? servicioIdSubiendoPdf,
 		bool limpiarServicioIdSubiendoPdf = false,
 		String? servicioIdDescargandoPdf,
@@ -544,6 +600,8 @@ class MisServiciosLoaded extends ServicioState {
 			documentosPendientes: documentosPendientes ?? this.documentosPendientes,
 			reintentandoPendientes:
 					reintentandoPendientes ?? this.reintentandoPendientes,
+			asignacionesPendientes: asignacionesPendientes ?? this.asignacionesPendientes,
+			reintentandoAsignaciones: reintentandoAsignaciones ?? this.reintentandoAsignaciones,
 			servicioIdSubiendoPdf: limpiarServicioIdSubiendoPdf
 					? null
 					: (servicioIdSubiendoPdf ?? this.servicioIdSubiendoPdf),
@@ -581,6 +639,8 @@ class MisServiciosLoaded extends ServicioState {
 				errorPaginacion,
 				documentosPendientes,
 				reintentandoPendientes,
+				asignacionesPendientes,
+				reintentandoAsignaciones,
 				servicioIdSubiendoPdf,
 				servicioIdDescargandoPdf,
 				servicioIdCopiandoEnlacePdf,

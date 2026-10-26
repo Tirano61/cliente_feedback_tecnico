@@ -1,3 +1,4 @@
+import 'package:cliente_feedback_tecnico/features/fabrica/domain/entities/asignacion_pendiente.dart';
 import 'package:cliente_feedback_tecnico/features/fabrica/domain/entities/causa.dart';
 import 'package:cliente_feedback_tecnico/features/fabrica/domain/entities/componente.dart';
 import 'package:cliente_feedback_tecnico/features/fabrica/domain/entities/estados_fabrica.dart';
@@ -123,4 +124,14 @@ abstract class IFabricaRepository {
 	Future<List<VinculacionPendiente>> obtenerVinculacionesPendientes();
 
 	Future<void> quitarVinculacionPendiente(String recepcionId);
+
+	// Cambios de placa/celda de servicios de campo que quedaron sin registrar,
+	// guardados en el dispositivo (uno por `AsignacionPendiente.clave`).
+
+	/// Agrega o reemplaza el de la misma clave.
+	Future<void> guardarAsignacionPendiente(AsignacionPendiente asignacion);
+
+	Future<List<AsignacionPendiente>> obtenerAsignacionesPendientes();
+
+	Future<void> quitarAsignacionPendiente(String clave);
 }

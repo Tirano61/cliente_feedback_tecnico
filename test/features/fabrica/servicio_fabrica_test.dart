@@ -1,6 +1,11 @@
 import 'dart:convert';
 
 import 'package:cliente_feedback_tecnico/core/api/api_client.dart';
+import 'package:cliente_feedback_tecnico/features/fabrica/application/asignar_unidad_use_case.dart';
+import 'package:cliente_feedback_tecnico/features/fabrica/application/buscar_unidades_use_case.dart';
+import 'package:cliente_feedback_tecnico/features/fabrica/application/guardar_asignacion_pendiente_use_case.dart';
+import 'package:cliente_feedback_tecnico/features/fabrica/application/obtener_asignaciones_pendientes_use_case.dart';
+import 'package:cliente_feedback_tecnico/features/fabrica/application/quitar_asignacion_pendiente_use_case.dart';
 import 'package:cliente_feedback_tecnico/features/fabrica/application/cambiar_estado_recepcion_use_case.dart';
 import 'package:cliente_feedback_tecnico/features/fabrica/application/crear_recepcion_use_case.dart';
 import 'package:cliente_feedback_tecnico/features/fabrica/application/devolver_recepcion_use_case.dart';
@@ -221,6 +226,11 @@ ServicioFabricaBloc _servicioBloc(_Backend backend) {
 		ObtenerEnlacePdfDocumentoUseCase(repositorio),
 		DescargarPdfDocumentoUseCase(repositorio),
 		ObtenerClienteUseCase(repositorio),
+		AsignarUnidadUseCase(backend.fabrica),
+		BuscarUnidadesUseCase(backend.fabrica),
+		GuardarAsignacionPendienteUseCase(backend.fabrica),
+		ObtenerAsignacionesPendientesUseCase(backend.fabrica),
+		QuitarAsignacionPendienteUseCase(backend.fabrica),
 	);
 }
 

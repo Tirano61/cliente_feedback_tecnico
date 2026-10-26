@@ -1,6 +1,12 @@
 import 'dart:convert';
 
 import 'package:cliente_feedback_tecnico/core/api/api_client.dart';
+import 'package:cliente_feedback_tecnico/features/fabrica/application/asignar_unidad_use_case.dart';
+import 'package:cliente_feedback_tecnico/features/fabrica/application/buscar_unidades_use_case.dart';
+import 'package:cliente_feedback_tecnico/features/fabrica/application/guardar_asignacion_pendiente_use_case.dart';
+import 'package:cliente_feedback_tecnico/features/fabrica/application/obtener_asignaciones_pendientes_use_case.dart';
+import 'package:cliente_feedback_tecnico/features/fabrica/application/quitar_asignacion_pendiente_use_case.dart';
+import 'package:cliente_feedback_tecnico/features/fabrica/infrastructure/repositories/fabrica_repository_impl.dart';
 import 'package:cliente_feedback_tecnico/features/servicios/application/buscar_clientes_use_case.dart';
 import 'package:cliente_feedback_tecnico/features/servicios/application/buscar_repuestos_use_case.dart';
 import 'package:cliente_feedback_tecnico/features/servicios/application/cargar_servicio_use_case.dart';
@@ -54,6 +60,7 @@ class _Escenario {
 			storage,
 		);
 		final repositorio = ServicioRepositoryImpl(_apiClient, storage);
+		final fabrica = FabricaRepositoryImpl(_apiClient, storage);
 		bloc = ServicioBloc(
 			CargarServicioUseCase(repositorio),
 			ObtenerMisServiciosUseCase(repositorio),
@@ -69,6 +76,11 @@ class _Escenario {
 			ObtenerEnlacePdfDocumentoUseCase(repositorio),
 			DescargarPdfDocumentoUseCase(repositorio),
 			ObtenerClienteUseCase(repositorio),
+			AsignarUnidadUseCase(fabrica),
+			BuscarUnidadesUseCase(fabrica),
+			GuardarAsignacionPendienteUseCase(fabrica),
+			ObtenerAsignacionesPendientesUseCase(fabrica),
+			QuitarAsignacionPendienteUseCase(fabrica),
 		);
 	}
 

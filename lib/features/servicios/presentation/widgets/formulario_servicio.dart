@@ -15,6 +15,7 @@ import 'package:cliente_feedback_tecnico/features/servicios/presentation/bloc/se
 import 'package:cliente_feedback_tecnico/features/servicios/presentation/bloc/servicio_event.dart';
 import 'package:cliente_feedback_tecnico/features/servicios/presentation/bloc/precarga_formulario_servicio.dart';
 import 'package:cliente_feedback_tecnico/features/servicios/presentation/bloc/servicio_state.dart';
+import 'package:cliente_feedback_tecnico/features/servicios/presentation/widgets/cambios_pieza_seccion.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -366,6 +367,20 @@ class _FormularioServicioState extends State<FormularioServicio> {
 														),
 													),
 													const SizedBox(height: 10),
+													if (estadoFormulario.resultadoCambiosPiezaDe(orden.servicioId)
+															case final resultadoCambios?) ...[
+														ResultadoCambiosPiezaVista(
+															resultado: resultadoCambios,
+															onReintentar: () {
+																servicioBloc.add(
+																	ServicioAsignacionesPendientesReintentadas(
+																		servicioId: orden.servicioId,
+																	),
+																);
+															},
+														),
+														const SizedBox(height: 10),
+													],
 													if (!firmaHabilitada)
 														Container(
 															width: double.infinity,
@@ -1605,6 +1620,10 @@ class _FormularioServicioState extends State<FormularioServicio> {
 								}).toList(),
 					),
 				),
+				if (estadoFormulario.requiereDatosDeCampo) ...[
+					const SizedBox(height: 16),
+					SeccionCambiosPieza(estado: estadoFormulario),
+				],
 			],
 		);
 	}
@@ -2603,7 +2622,10 @@ class _FormularioServicioState extends State<FormularioServicio> {
 						(producto) => producto.id == valor,
 					);
 					context.read<ServicioBloc>().add(
-						ServicioFormularioCambiado(equipoModelo: productoSeleccionado.nombre),
+						ServicioFormularioCambiado(
+							equipoModelo: productoSeleccionado.nombre,
+							equipoModeloProductoId: productoSeleccionado.id,
+						),
 					);
 				},
 			),

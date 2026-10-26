@@ -1,4 +1,6 @@
+import 'package:cliente_feedback_tecnico/features/fabrica/domain/entities/asignacion_pendiente.dart';
 import 'package:cliente_feedback_tecnico/features/servicios/domain/entities/servicio.dart';
+import 'package:cliente_feedback_tecnico/features/servicios/presentation/bloc/cambios_pieza_formulario.dart';
 import 'package:cliente_feedback_tecnico/features/servicios/presentation/bloc/filtro_estado_servicio.dart';
 import 'package:cliente_feedback_tecnico/features/servicios/presentation/bloc/servicio_bloc.dart';
 import 'package:cliente_feedback_tecnico/features/servicios/presentation/bloc/servicio_event.dart';
@@ -142,6 +144,13 @@ class _MisServiciosPageState extends State<MisServiciosPage> {
 			},
 		);
 
+		final panelAsignaciones = state.asignacionesPendientes.isEmpty
+				? const SizedBox.shrink()
+				: _PanelAsignacionesPendientes(
+						pendientes: state.asignacionesPendientes,
+						reintentando: state.reintentandoAsignaciones,
+					);
+
 		final sinServiciosCargados = state.servicios.isEmpty &&
 				!state.hayFiltrosActivos &&
 				!state.actualizando &&
@@ -150,6 +159,7 @@ class _MisServiciosPageState extends State<MisServiciosPage> {
 			return Column(
 				children: [
 					panelPendientes,
+					panelAsignaciones,
 					const Expanded(
 						child: Center(child: Text('No hay servicios cargados.')),
 					),
@@ -190,6 +200,7 @@ class _MisServiciosPageState extends State<MisServiciosPage> {
 					},
 				),
 				panelPendientes,
+				panelAsignaciones,
 				Padding(
 					padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
 					child: SizedBox(
@@ -748,4 +759,111 @@ class _PanelPendientesDocumentos extends StatelessWidget {
 	}
 }
 
+/// Cambios de placa/celda de servicios ya guardados que no se registraron.
+/// Reintentar nunca vuelve a crear el servicio.
+class _PanelAsignacionesPendientes extends StatelessWidget {
+	final List<AsignacionPendiente> pendientes;
+	final bool reintentando;
 
+	const _PanelAsignacionesPendientes({
+		required this.pendientes,
+		required this.reintentando,
+	});
+
+	@override
+	Widget build(BuildContext context) {
+		final colorScheme = Theme.of(context).colorScheme;
+		final textTheme = Theme.of(context).textTheme;
+
+		return Padding(
+			padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+			child: Container(
+				padding: const EdgeInsets.all(12),
+				decoration: BoxDecoration(
+					color: colorScheme.errorContainer.withValues(alpha: 0.45),
+					borderRadius: BorderRadius.circular(12),
+				),
+				child: Column(
+					crossAxisAlignment: CrossAxisAlignment.start,
+					children: [
+						Row(
+							children: [
+								const Icon(Icons.sync_problem),
+								const SizedBox(width: 10),
+								Expanded(
+									child: Text(
+										'Cambios de placa/celda sin registrar: ${pendientes.length}',
+									),
+								),
+								const SizedBox(width: 10),
+								OutlinedButton.icon(
+									onPressed: reintentando
+											? null
+											: () {
+													context.read<ServicioBloc>().add(
+														const ServicioAsignacionesPendientesReintentadas(),
+													);
+												},
+									icon: reintentando
+											? const SizedBox(
+													height: 14,
+													width: 14,
+													child: CircularProgressIndicator(strokeWidth: 2),
+												)
+											: const Icon(Icons.refresh),
+									label: Text(reintentando ? 'Reintentando...' : 'Reintentar'),
+								),
+							],
+						),
+						for (final pendiente in pendientes)
+							ListTile(
+								dense: true,
+								contentPadding: EdgeInsets.zero,
+								title: Text(descripcionAsignacionPendiente(pendiente)),
+								subtitle: pendiente.mensajeError == null
+										? null
+										: Text(
+												pendiente.mensajeError!,
+												style: textTheme.bodySmall?.copyWith(color: colorScheme.error),
+											),
+								trailing: IconButton(
+									tooltip: 'Descartar',
+									onPressed: reintentando ? null : () => _confirmarDescarte(context, pendiente),
+									icon: const Icon(Icons.delete_outline),
+								),
+							),
+					],
+				),
+			),
+		);
+	}
+
+	Future<void> _confirmarDescarte(BuildContext context, AsignacionPendiente pendiente) async {
+		final servicioBloc = context.read<ServicioBloc>();
+		final confirmado = await showDialog<bool>(
+			context: context,
+			builder: (dialogContext) {
+				return AlertDialog(
+					title: const Text('Descartar cambio pendiente'),
+					content: Text(
+						'${descripcionAsignacionPendiente(pendiente)} no se va a registrar en fábrica. '
+						'El servicio no cambia.',
+					),
+					actions: [
+						TextButton(
+							onPressed: () => Navigator.of(dialogContext).pop(false),
+							child: const Text('Cancelar'),
+						),
+						TextButton(
+							onPressed: () => Navigator.of(dialogContext).pop(true),
+							child: const Text('Descartar'),
+						),
+					],
+				);
+			},
+		);
+		if (confirmado == true) {
+			servicioBloc.add(ServicioAsignacionPendienteDescartada(clave: pendiente.clave));
+		}
+	}
+}
