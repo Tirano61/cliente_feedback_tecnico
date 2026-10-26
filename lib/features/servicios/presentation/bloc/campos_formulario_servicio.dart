@@ -19,6 +19,7 @@ enum CampoFormularioServicio {
 	diagnosticoDetalle(PasoFormularioServicio.falla),
 	resolucion(PasoFormularioServicio.falla),
 	productosFalla(PasoFormularioServicio.falla),
+	cambiosPieza(PasoFormularioServicio.falla),
 	km(PasoFormularioServicio.facturacion),
 	precioServicio(PasoFormularioServicio.facturacion),
 	valoresFacturacion(PasoFormularioServicio.facturacion);

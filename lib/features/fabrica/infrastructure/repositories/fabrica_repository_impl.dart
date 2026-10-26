@@ -4,6 +4,7 @@ import 'package:cliente_feedback_tecnico/core/api/api_client.dart';
 import 'package:cliente_feedback_tecnico/core/api/api_constants.dart';
 import 'package:cliente_feedback_tecnico/core/auth/secure_storage.dart';
 import 'package:cliente_feedback_tecnico/core/error/failures.dart';
+import 'package:cliente_feedback_tecnico/features/fabrica/domain/entities/asignacion_pendiente.dart';
 import 'package:cliente_feedback_tecnico/features/fabrica/domain/entities/causa.dart';
 import 'package:cliente_feedback_tecnico/features/fabrica/domain/entities/componente.dart';
 import 'package:cliente_feedback_tecnico/features/fabrica/domain/entities/estados_fabrica.dart';
@@ -18,6 +19,7 @@ import 'package:cliente_feedback_tecnico/features/fabrica/domain/entities/unidad
 import 'package:cliente_feedback_tecnico/features/fabrica/domain/entities/vinculacion_pendiente.dart';
 import 'package:cliente_feedback_tecnico/features/fabrica/domain/errors/regla_fabrica_exception.dart';
 import 'package:cliente_feedback_tecnico/features/fabrica/domain/repositories/i_fabrica_repository.dart';
+import 'package:cliente_feedback_tecnico/features/fabrica/infrastructure/dtos/asignacion_pendiente_dto.dart';
 import 'package:cliente_feedback_tecnico/features/fabrica/infrastructure/dtos/catalogos_fabrica_dto.dart';
 import 'package:cliente_feedback_tecnico/features/fabrica/infrastructure/dtos/codigos_fabrica.dart';
 import 'package:cliente_feedback_tecnico/features/fabrica/infrastructure/dtos/historial_unidad_dto.dart';
@@ -35,6 +37,8 @@ class FabricaRepositoryImpl implements IFabricaRepository {
 
 	static const String _vinculacionesPendientesStorageKey =
 			'fabrica_vinculaciones_pendientes_v1';
+	static const String _asignacionesPendientesStorageKey =
+			'fabrica_asignaciones_pendientes_v1';
 
 	/// Claves del body de error que no son datos extra de la regla.
 	static const Set<String> _clavesBaseError = {
@@ -361,6 +365,59 @@ class FabricaRepositoryImpl implements IFabricaRepository {
 			key: _vinculacionesPendientesStorageKey,
 			value: jsonEncode(
 				pendientes.map((p) => VinculacionPendienteDto.desdeEntidad(p).toJson()).toList(),
+			),
+		);
+	}
+
+	@override
+	Future<void> guardarAsignacionPendiente(AsignacionPendiente asignacion) async {
+		final pendientes = await obtenerAsignacionesPendientes();
+		final indice = pendientes.indexWhere((p) => p.clave == asignacion.clave);
+		// Reemplazar en el lugar conserva el orden en que se cargaron los cambios:
+		// dos placas en el mismo indicador se reintentan en ese orden.
+		await _guardarAsignacionesPendientes(
+			indice < 0
+					? [...pendientes, asignacion]
+					: ([...pendientes]..[indice] = asignacion),
+		);
+	}
+
+	@override
+	Future<List<AsignacionPendiente>> obtenerAsignacionesPendientes() async {
+		final jsonCrudo = await secureStorage.obtenerValor(_asignacionesPendientesStorageKey);
+		if (jsonCrudo == null || jsonCrudo.trim().isEmpty) {
+			return const [];
+		}
+
+		// Un valor ilegible no impide trabajar: se descarta.
+		final json = _decodeJsonSeguro(jsonCrudo);
+		if (json is! List) {
+			return const [];
+		}
+		return json
+				.whereType<Map<String, dynamic>>()
+				.map(AsignacionPendienteDto.fromJson)
+				.whereType<AsignacionPendienteDto>()
+				.map((dto) => dto.aEntidad())
+				.toList();
+	}
+
+	@override
+	Future<void> quitarAsignacionPendiente(String clave) async {
+		final pendientes = await obtenerAsignacionesPendientes();
+		if (!pendientes.any((p) => p.clave == clave)) {
+			return;
+		}
+		await _guardarAsignacionesPendientes(
+			pendientes.where((p) => p.clave != clave).toList(),
+		);
+	}
+
+	Future<void> _guardarAsignacionesPendientes(List<AsignacionPendiente> pendientes) {
+		return secureStorage.guardarValor(
+			key: _asignacionesPendientesStorageKey,
+			value: jsonEncode(
+				pendientes.map((p) => AsignacionPendienteDto.desdeEntidad(p).toJson()).toList(),
 			),
 		);
 	}

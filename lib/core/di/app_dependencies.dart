@@ -53,6 +53,9 @@ import 'package:cliente_feedback_tecnico/features/fabrica/application/obtener_se
 import 'package:cliente_feedback_tecnico/features/fabrica/application/guardar_vinculacion_pendiente_use_case.dart';
 import 'package:cliente_feedback_tecnico/features/fabrica/application/obtener_vinculaciones_pendientes_use_case.dart';
 import 'package:cliente_feedback_tecnico/features/fabrica/application/quitar_vinculacion_pendiente_use_case.dart';
+import 'package:cliente_feedback_tecnico/features/fabrica/application/guardar_asignacion_pendiente_use_case.dart';
+import 'package:cliente_feedback_tecnico/features/fabrica/application/obtener_asignaciones_pendientes_use_case.dart';
+import 'package:cliente_feedback_tecnico/features/fabrica/application/quitar_asignacion_pendiente_use_case.dart';
 import 'package:cliente_feedback_tecnico/features/fabrica/domain/repositories/i_fabrica_repository.dart';
 import 'package:cliente_feedback_tecnico/features/fabrica/infrastructure/repositories/fabrica_repository_impl.dart';
 import 'package:http/http.dart' as http;
@@ -111,6 +114,9 @@ class AppDependencies {
 	final GuardarVinculacionPendienteUseCase guardarVinculacionPendienteUseCase;
 	final ObtenerVinculacionesPendientesUseCase obtenerVinculacionesPendientesUseCase;
 	final QuitarVinculacionPendienteUseCase quitarVinculacionPendienteUseCase;
+	final GuardarAsignacionPendienteUseCase guardarAsignacionPendienteUseCase;
+	final ObtenerAsignacionesPendientesUseCase obtenerAsignacionesPendientesUseCase;
+	final QuitarAsignacionPendienteUseCase quitarAsignacionPendienteUseCase;
 
 	AppDependencies._({
 		required this.secureStorage,
@@ -164,6 +170,9 @@ class AppDependencies {
 		required this.guardarVinculacionPendienteUseCase,
 		required this.obtenerVinculacionesPendientesUseCase,
 		required this.quitarVinculacionPendienteUseCase,
+		required this.guardarAsignacionPendienteUseCase,
+		required this.obtenerAsignacionesPendientesUseCase,
+		required this.quitarAsignacionPendienteUseCase,
 	});
 
 	factory AppDependencies.create() {
@@ -244,6 +253,9 @@ class AppDependencies {
 			guardarVinculacionPendienteUseCase: GuardarVinculacionPendienteUseCase(fabricaRepository),
 			obtenerVinculacionesPendientesUseCase: ObtenerVinculacionesPendientesUseCase(fabricaRepository),
 			quitarVinculacionPendienteUseCase: QuitarVinculacionPendienteUseCase(fabricaRepository),
+			guardarAsignacionPendienteUseCase: GuardarAsignacionPendienteUseCase(fabricaRepository),
+			obtenerAsignacionesPendientesUseCase: ObtenerAsignacionesPendientesUseCase(fabricaRepository),
+			quitarAsignacionPendienteUseCase: QuitarAsignacionPendienteUseCase(fabricaRepository),
 		);
 	}
 }

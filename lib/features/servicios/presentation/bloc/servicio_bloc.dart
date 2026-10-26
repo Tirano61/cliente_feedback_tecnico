@@ -2,6 +2,17 @@ import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:cliente_feedback_tecnico/core/error/failures.dart';
+import 'package:cliente_feedback_tecnico/features/fabrica/application/asignar_unidad_use_case.dart';
+import 'package:cliente_feedback_tecnico/features/fabrica/application/buscar_unidades_use_case.dart';
+import 'package:cliente_feedback_tecnico/features/fabrica/application/guardar_asignacion_pendiente_use_case.dart';
+import 'package:cliente_feedback_tecnico/features/fabrica/application/obtener_asignaciones_pendientes_use_case.dart';
+import 'package:cliente_feedback_tecnico/features/fabrica/application/quitar_asignacion_pendiente_use_case.dart';
+import 'package:cliente_feedback_tecnico/features/fabrica/domain/entities/asignacion_pendiente.dart';
+import 'package:cliente_feedback_tecnico/features/fabrica/domain/entities/estados_fabrica.dart';
+import 'package:cliente_feedback_tecnico/features/fabrica/domain/entities/solicitudes_fabrica.dart';
+import 'package:cliente_feedback_tecnico/features/fabrica/domain/errors/regla_fabrica_exception.dart';
+import 'package:cliente_feedback_tecnico/features/fabrica/presentation/bloc/asignacion_unidad_state.dart'
+		show normalizarSerie;
 import 'package:cliente_feedback_tecnico/features/servicios/application/buscar_clientes_use_case.dart';
 import 'package:cliente_feedback_tecnico/features/servicios/application/buscar_repuestos_use_case.dart';
 import 'package:cliente_feedback_tecnico/features/servicios/application/cargar_servicio_use_case.dart';
@@ -26,6 +37,7 @@ import 'package:cliente_feedback_tecnico/features/servicios/domain/entities/repu
 import 'package:cliente_feedback_tecnico/features/servicios/domain/entities/servicio.dart';
 import 'package:cliente_feedback_tecnico/features/servicios/domain/entities/solicitud_documento_firmado.dart';
 import 'package:cliente_feedback_tecnico/features/servicios/domain/errors/valores_orden_rechazados_exception.dart';
+import 'package:cliente_feedback_tecnico/features/servicios/presentation/bloc/cambios_pieza_formulario.dart';
 import 'package:cliente_feedback_tecnico/features/servicios/presentation/bloc/campos_formulario_servicio.dart';
 import 'package:cliente_feedback_tecnico/features/servicios/presentation/bloc/filtro_estado_servicio.dart';
 import 'package:cliente_feedback_tecnico/features/servicios/presentation/bloc/precarga_formulario_servicio.dart';
@@ -69,7 +81,31 @@ class ServicioBloc extends Bloc<ServicioEvent, ServicioState> {
 	final ObtenerEnlacePdfDocumentoUseCase _obtenerEnlacePdfDocumentoUseCase;
 	final DescargarPdfDocumentoUseCase _descargarPdfDocumentoUseCase;
 	final ObtenerClienteUseCase _obtenerClienteUseCase;
+	final AsignarUnidadUseCase _asignarUnidadUseCase;
+	final BuscarUnidadesUseCase _buscarUnidadesUseCase;
+	final GuardarAsignacionPendienteUseCase _guardarAsignacionPendienteUseCase;
+	final ObtenerAsignacionesPendientesUseCase _obtenerAsignacionesPendientesUseCase;
+	final QuitarAsignacionPendienteUseCase _quitarAsignacionPendienteUseCase;
 	final List<SolicitudDocumentoFirmado> _documentosPendientes = <SolicitudDocumentoFirmado>[];
+
+	/// Cambios de placa/celda de servicios ya guardados que no se registraron.
+	/// Tambien se guardan en el dispositivo; si no se puede escribir, quedan
+	/// en memoria mientras dure la sesion.
+	final List<AsignacionPendiente> _asignacionesPendientes = <AsignacionPendiente>[];
+
+	/// Lectura de los cambios pendientes guardados, una sola vez por sesion.
+	Future<void>? _lecturaAsignacionesPendientes;
+
+	/// Las escrituras en el dispositivo van de a una y en orden.
+	Future<void> _escrituraAsignacionesPendientes = Future<void>.value();
+	bool _reintentandoAsignaciones = false;
+
+	/// Identifica cada fila de cambio de placa/celda del formulario.
+	int _ultimoIdCambioPieza = 0;
+
+	/// Un formulario nuevo o una consulta mas reciente del mismo tipo deja sin
+	/// efecto la lista de reacondicionadas que siga en vuelo.
+	final Map<TipoUnidad, int> _secuenciaReacondicionadas = <TipoUnidad, int>{};
 
 	/// Ordenes cuyo PDF confirmo el backend aunque el listado no lo traiga.
 	final Set<String> _serviciosConPdfConfirmado = <String>{};
@@ -104,6 +140,11 @@ class ServicioBloc extends Bloc<ServicioEvent, ServicioState> {
 		this._obtenerEnlacePdfDocumentoUseCase,
 		this._descargarPdfDocumentoUseCase,
 		this._obtenerClienteUseCase,
+		this._asignarUnidadUseCase,
+		this._buscarUnidadesUseCase,
+		this._guardarAsignacionPendienteUseCase,
+		this._obtenerAsignacionesPendientesUseCase,
+		this._quitarAsignacionPendienteUseCase,
 	) : super(_crearEstadoFormularioInicial()) {
 		on<ServicioFormularioCambiado>(_onServicioFormularioCambiado);
 		on<ServicioBuscarClienteSolicitado>(_onServicioBuscarClienteSolicitado);
@@ -115,6 +156,13 @@ class ServicioBloc extends Bloc<ServicioEvent, ServicioState> {
 		on<ServicioRepuestoCantidadCambiada>(_onServicioRepuestoCantidadCambiada);
 		on<ServicioRepuestoEliminado>(_onServicioRepuestoEliminado);
 		on<ServicioFacturacionParametrosCambiados>(_onServicioFacturacionParametrosCambiados);
+		on<ServicioCambioPiezaAgregado>(_onServicioCambioPiezaAgregado);
+		on<ServicioCambioPiezaCambiado>(_onServicioCambioPiezaCambiado);
+		on<ServicioCambioPiezaReacondicionadaElegida>(_onServicioCambioPiezaReacondicionadaElegida);
+		on<ServicioCambioPiezaQuitado>(_onServicioCambioPiezaQuitado);
+		on<ServicioReacondicionadasSolicitadas>(_onServicioReacondicionadasSolicitadas);
+		on<ServicioAsignacionesPendientesReintentadas>(_onServicioAsignacionesPendientesReintentadas);
+		on<ServicioAsignacionPendienteDescartada>(_onServicioAsignacionPendienteDescartada);
 		on<ServicioGuardarPressed>(_onServicioGuardarPressed);
 		on<ServicioDocumentoSubidaSolicitada>(_onServicioDocumentoSubidaSolicitada);
 		on<ServicioDocumentoPendientesReintentarSolicitado>(
@@ -196,6 +244,7 @@ class ServicioBloc extends Bloc<ServicioEvent, ServicioState> {
 				lugarDetalle: event.lugarDetalle,
 				equipoNroSerie: event.equipoNroSerie,
 				equipoModelo: event.equipoModelo,
+				equipoModeloProductoId: event.equipoModeloProductoId,
 				equipoUbicacion: event.equipoUbicacion,
 				equipoAnio: event.equipoAnio,
 				partesFallaronTexto: event.partesFallaronTexto,
@@ -672,6 +721,397 @@ class ServicioBloc extends Bloc<ServicioEvent, ServicioState> {
 		}
 	}
 
+	Future<void> _onServicioCambioPiezaAgregado(
+		ServicioCambioPiezaAgregado event,
+		Emitter<ServicioState> emit,
+	) async {
+		final actual = _estadoFormularioActual();
+		final tipo = event.tipo;
+		if (!actual.requiereDatosDeCampo ||
+				actual.guardando ||
+				!CambioPiezaFormulario.tipos.contains(tipo)) {
+			return;
+		}
+		emit(
+			actual.copyWith(
+				cambiosPieza: [
+					...actual.cambiosPieza,
+					CambioPiezaFormulario(id: ++_ultimoIdCambioPieza, tipo: tipo),
+				],
+			),
+		);
+		await _asegurarReacondicionadas(emit, tipo);
+	}
+
+	Future<void> _onServicioCambioPiezaCambiado(
+		ServicioCambioPiezaCambiado event,
+		Emitter<ServicioState> emit,
+	) async {
+		final actual = _estadoFormularioActual();
+		final cambio = _cambioPieza(actual, event.id);
+		if (cambio == null || actual.guardando) {
+			return;
+		}
+
+		// El modelo es del tipo: si cambia ya no vale.
+		final tipo = event.tipo;
+		final cambioTipo =
+				tipo != null && tipo != cambio.tipo && CambioPiezaFormulario.tipos.contains(tipo);
+		emit(
+			actual.copyWith(
+				cambiosPieza: _reemplazarCambioPieza(
+					actual.cambiosPieza,
+					cambio.copyWith(
+						tipo: cambioTipo ? tipo : null,
+						nroSerie: event.nroSerie,
+						productoId: event.productoId,
+						limpiarProducto: event.limpiarProducto || (cambioTipo && event.productoId == null),
+						retiradaNroSerie: event.retiradaNroSerie,
+					),
+				),
+			),
+		);
+		if (cambioTipo) {
+			await _asegurarReacondicionadas(emit, tipo);
+		}
+	}
+
+	void _onServicioCambioPiezaReacondicionadaElegida(
+		ServicioCambioPiezaReacondicionadaElegida event,
+		Emitter<ServicioState> emit,
+	) {
+		final actual = _estadoFormularioActual();
+		final cambio = _cambioPieza(actual, event.id);
+		final unidad = event.unidad;
+		if (cambio == null || actual.guardando || unidad.tipo != cambio.tipo) {
+			return;
+		}
+		emit(
+			actual.copyWith(
+				cambiosPieza: _reemplazarCambioPieza(
+					actual.cambiosPieza,
+					cambio.copyWith(
+						nroSerie: unidad.nroSerie,
+						productoId: unidad.producto?.id,
+						limpiarProducto: unidad.producto == null,
+					),
+				),
+			),
+		);
+	}
+
+	void _onServicioCambioPiezaQuitado(
+		ServicioCambioPiezaQuitado event,
+		Emitter<ServicioState> emit,
+	) {
+		final actual = _estadoFormularioActual();
+		if (actual.guardando) {
+			return;
+		}
+		emit(
+			actual.copyWith(
+				cambiosPieza: actual.cambiosPieza.where((c) => c.id != event.id).toList(),
+			),
+		);
+	}
+
+	Future<void> _onServicioReacondicionadasSolicitadas(
+		ServicioReacondicionadasSolicitadas event,
+		Emitter<ServicioState> emit,
+	) async {
+		final actual = _estadoFormularioActual();
+		if (actual.reacondicionadas[event.tipo]?.cargando == true) {
+			return;
+		}
+		await _cargarReacondicionadas(emit, event.tipo);
+	}
+
+	CambioPiezaFormulario? _cambioPieza(ServicioFormularioState estado, int id) {
+		return estado.cambiosPieza.where((c) => c.id == id).firstOrNull;
+	}
+
+	List<CambioPiezaFormulario> _reemplazarCambioPieza(
+		List<CambioPiezaFormulario> cambios,
+		CambioPiezaFormulario nuevo,
+	) {
+		return cambios.map((c) => c.id == nuevo.id ? nuevo : c).toList();
+	}
+
+	/// Las reacondicionadas de un tipo se piden una vez por formulario (o de
+	/// nuevo si la ultima vez fallo).
+	Future<void> _asegurarReacondicionadas(Emitter<ServicioState> emit, TipoUnidad tipo) async {
+		final actuales = _estadoFormularioActual().reacondicionadas[tipo];
+		if (actuales != null && actuales.error == null) {
+			return;
+		}
+		await _cargarReacondicionadas(emit, tipo);
+	}
+
+	Future<void> _cargarReacondicionadas(Emitter<ServicioState> emit, TipoUnidad tipo) async {
+		final consulta = (_secuenciaReacondicionadas[tipo] ?? 0) + 1;
+		_secuenciaReacondicionadas[tipo] = consulta;
+
+		void emitir(ReacondicionadasPieza reacondicionadas) {
+			final actual = state;
+			if (emit.isDone ||
+					_secuenciaReacondicionadas[tipo] != consulta ||
+					actual is! ServicioFormularioState) {
+				return;
+			}
+			emit(
+				actual.copyWith(
+					reacondicionadas: {...actual.reacondicionadas, tipo: reacondicionadas},
+				),
+			);
+		}
+
+		emitir(const ReacondicionadasPieza.cargando());
+		String error;
+		try {
+			final pagina = await _buscarUnidadesUseCase.ejecutar(
+				pagina: 1,
+				tipo: tipo,
+				estado: EstadoUnidad.reacondicionadaDisponible,
+			);
+			emitir(ReacondicionadasPieza(unidades: pagina.items, total: pagina.total));
+			return;
+		} on ServerException catch (e) {
+			error = e.mensaje;
+		} on NetworkException catch (e) {
+			error = e.mensaje;
+		} catch (_) {
+			error = 'No se pudieron cargar las piezas reacondicionadas.';
+		}
+		emitir(ReacondicionadasPieza(error: error));
+	}
+
+	void _invalidarReacondicionadas() {
+		for (final tipo in CambioPiezaFormulario.tipos) {
+			_secuenciaReacondicionadas[tipo] = (_secuenciaReacondicionadas[tipo] ?? 0) + 1;
+		}
+	}
+
+	/// Registra en el indicador del equipo cada cambio de placa/celda del
+	/// servicio de campo recien guardado. Null si no hay cambios.
+	///
+	/// Cada cambio queda guardado como pendiente antes de pedirlo: si la app se
+	/// cierra en el medio, se reintenta desde Mis servicios. Nunca lanza: el
+	/// servicio ya esta guardado y lo que falle queda pendiente.
+	Future<ResultadoCambiosPieza?> _registrarCambiosPieza(
+		ServicioFormularioState estado,
+		String servicioId,
+	) async {
+		final servicio = servicioId.trim();
+		if (!estado.requiereDatosDeCampo || estado.cambiosPieza.isEmpty || servicio.isEmpty) {
+			return null;
+		}
+
+		await _asegurarAsignacionesPendientesLeidas();
+		final indicador = estado.equipoNroSerie.trim();
+		final productoIndicador = estado.equipoModeloProductoId.trim();
+		final pendientes = estado.cambiosPieza.map((cambio) {
+			final retirada = cambio.retiradaNroSerie.trim();
+			return AsignacionPendiente(
+				solicitud: SolicitudAsignacion(
+					indicadorNroSerie: indicador,
+					tipo: cambio.tipo,
+					nroSerie: cambio.nroSerie.trim(),
+					productoId: cambio.productoId,
+					indicadorProductoId: productoIndicador.isEmpty ? null : productoIndicador,
+					retiradaNroSerie: retirada.isEmpty ? null : retirada,
+					servicioId: servicio,
+				),
+			);
+		}).toList();
+
+		for (final pendiente in pendientes) {
+			await _recordarAsignacionPendiente(pendiente);
+		}
+		// En orden: dos placas en el mismo indicador se ponen una despues de otra.
+		final resultados = <ResultadoCambioPieza>[];
+		for (final pendiente in pendientes) {
+			resultados.add(await _intentarAsignacion(pendiente, reintento: false));
+		}
+		return ResultadoCambiosPieza(servicioId: servicio, cambios: resultados);
+	}
+
+	/// Si sale bien deja de estar pendiente; si no, queda pendiente con el
+	/// mensaje del backend.
+	Future<ResultadoCambioPieza> _intentarAsignacion(
+		AsignacionPendiente pendiente, {
+		required bool reintento,
+	}) async {
+		final solicitud = pendiente.solicitud;
+		String mensaje;
+		try {
+			final asignacion = await _asignarUnidadUseCase.ejecutar(solicitud);
+			await _olvidarAsignacionPendiente(pendiente.clave);
+			return ResultadoCambioPieza(solicitud: solicitud, asignacion: asignacion);
+		} on ReglaFabricaException catch (e) {
+			// En un reintento, que la pieza ya este en ese indicador quiere decir
+			// que el intento anterior llego al backend aunque se perdio la respuesta.
+			if (reintento && e.codigo == CodigoReglaFabrica.unidadYaInstalada) {
+				await _olvidarAsignacionPendiente(pendiente.clave);
+				return ResultadoCambioPieza(solicitud: solicitud);
+			}
+			mensaje = e.mensaje;
+		} on ServerException catch (e) {
+			mensaje = e.mensaje;
+		} on NetworkException catch (e) {
+			mensaje = e.mensaje;
+		} catch (_) {
+			mensaje = 'No se pudo registrar el cambio de pieza. Revisá la conexión y reintentá.';
+		}
+		await _recordarAsignacionPendiente(pendiente.conError(mensaje));
+		return ResultadoCambioPieza(solicitud: solicitud, error: mensaje);
+	}
+
+	Future<void> _onServicioAsignacionesPendientesReintentadas(
+		ServicioAsignacionesPendientesReintentadas event,
+		Emitter<ServicioState> emit,
+	) async {
+		if (_reintentandoAsignaciones) {
+			return;
+		}
+		_reintentandoAsignaciones = true;
+		try {
+			await _asegurarAsignacionesPendientesLeidas();
+			final servicioId = event.servicioId?.trim();
+			final aReintentar = _asignacionesPendientes
+					.where((p) => servicioId == null || p.servicioId == servicioId)
+					.toList();
+
+			_emitirReintentoAsignaciones(emit, reintentando: true);
+			final resultados = <ResultadoCambioPieza>[];
+			for (final pendiente in aReintentar) {
+				resultados.add(await _intentarAsignacion(pendiente, reintento: true));
+			}
+			_emitirReintentoAsignaciones(emit, reintentando: false, resultados: resultados);
+		} finally {
+			_reintentandoAsignaciones = false;
+		}
+	}
+
+	/// En Mis servicios actualiza la lista de pendientes y avisa; en el aviso de
+	/// exito del formulario, el resultado de cada cambio.
+	void _emitirReintentoAsignaciones(
+		Emitter<ServicioState> emit, {
+		required bool reintentando,
+		List<ResultadoCambioPieza>? resultados,
+	}) {
+		final actual = state;
+		if (emit.isDone) {
+			return;
+		}
+		if (actual is MisServiciosLoaded) {
+			emit(
+				resultados == null
+						? actual.copyWith(
+								reintentandoAsignaciones: reintentando,
+								limpiarMensajePendientes: true,
+							)
+						: actual.copyWith(
+								asignacionesPendientes: List.unmodifiable(_asignacionesPendientes),
+								reintentandoAsignaciones: reintentando,
+								mensajePendientes: _mensajeReintentoAsignaciones(resultados),
+							),
+			);
+			return;
+		}
+		final resultado = actual is ServicioFormularioState ? actual.resultadoCambiosPieza : null;
+		if (actual is! ServicioFormularioState || resultado == null) {
+			return;
+		}
+		emit(
+			actual.copyWith(
+				resultadoCambiosPieza: resultados == null
+						? resultado.copyWith(reintentando: reintentando)
+						: resultado.conReintentos(resultados),
+			),
+		);
+	}
+
+	String _mensajeReintentoAsignaciones(List<ResultadoCambioPieza> resultados) {
+		if (resultados.isEmpty) {
+			return 'No hay cambios de placa/celda pendientes.';
+		}
+		final pendientes = resultados.where((r) => r.pendiente).toList();
+		if (pendientes.isNotEmpty) {
+			return 'Quedaron ${pendientes.length} cambio(s) de placa/celda sin registrar: '
+					'${pendientes.first.error}';
+		}
+		const registrados = 'Cambios de placa/celda registrados.';
+		return resultados.any((r) => r.textosRetiradas.isNotEmpty)
+				? '$registrados ${ResultadoCambiosPieza.recordatorioRetiradas}'
+				: registrados;
+	}
+
+	Future<void> _onServicioAsignacionPendienteDescartada(
+		ServicioAsignacionPendienteDescartada event,
+		Emitter<ServicioState> emit,
+	) async {
+		if (_reintentandoAsignaciones) {
+			return;
+		}
+		await _asegurarAsignacionesPendientesLeidas();
+		await _olvidarAsignacionPendiente(event.clave);
+		final actual = state;
+		if (!emit.isDone && actual is MisServiciosLoaded) {
+			emit(
+				actual.copyWith(
+					asignacionesPendientes: List.unmodifiable(_asignacionesPendientes),
+					mensajePendientes: 'Cambio de placa/celda descartado: no se va a registrar.',
+				),
+			);
+		}
+	}
+
+	Future<void> _asegurarAsignacionesPendientesLeidas() {
+		return _lecturaAsignacionesPendientes ??= _leerAsignacionesPendientes();
+	}
+
+	Future<void> _leerAsignacionesPendientes() async {
+		try {
+			final guardadas = await _obtenerAsignacionesPendientesUseCase.ejecutar();
+			for (final guardada in guardadas) {
+				// Lo que ya esta en memoria es mas nuevo que lo guardado.
+				if (!_asignacionesPendientes.any((p) => p.clave == guardada.clave)) {
+					_asignacionesPendientes.add(guardada);
+				}
+			}
+		} catch (_) {
+			// Sin lo guardado se sigue con lo que haya en memoria.
+		}
+	}
+
+	Future<void> _recordarAsignacionPendiente(AsignacionPendiente pendiente) {
+		final indice = _asignacionesPendientes.indexWhere((p) => p.clave == pendiente.clave);
+		if (indice < 0) {
+			_asignacionesPendientes.add(pendiente);
+		} else {
+			_asignacionesPendientes[indice] = pendiente;
+		}
+		return _enColaAsignacionesPendientes(
+			() => _guardarAsignacionPendienteUseCase.ejecutar(pendiente),
+		);
+	}
+
+	Future<void> _olvidarAsignacionPendiente(String clave) {
+		_asignacionesPendientes.removeWhere((p) => p.clave == clave);
+		return _enColaAsignacionesPendientes(() => _quitarAsignacionPendienteUseCase.ejecutar(clave));
+	}
+
+	/// Un error al escribir no corta el flujo: el pendiente sigue en memoria.
+	Future<void> _enColaAsignacionesPendientes(Future<void> Function() escritura) {
+		return _escrituraAsignacionesPendientes = _escrituraAsignacionesPendientes.then((_) async {
+			try {
+				await escritura();
+			} catch (_) {
+				// Queda en memoria.
+			}
+		});
+	}
+
 	Future<void> _onServicioGuardarPressed(
 		ServicioGuardarPressed event,
 		Emitter<ServicioState> emit,
@@ -715,13 +1155,20 @@ class ServicioBloc extends Bloc<ServicioEvent, ServicioState> {
 		try {
 			final servicio = _mapearServicio(estadoConClave);
 			final orden = await _cargarServicioUseCase.ejecutar(servicio);
+			// El servicio ya existe: lo que sigue no lo vuelve a crear. Un cambio
+			// de placa/celda que falle queda pendiente para reintentarlo solo.
+			final resultadoCambios = await _registrarCambiosPieza(estadoConClave, orden.servicioId);
 			final fechaHoraOrden = orden.fechaHoraServicio ?? estadoConClave.fechaHoraServicio;
 			final fechaHoraTexto = fechaHoraOrden == null
 					? null
 					: _formatearFechaHoraLocal(fechaHoraOrden);
+			final pendientesCambios = resultadoCambios?.pendientes ?? 0;
+			final avisoCambios = pendientesCambios == 0
+					? ''
+					: ' $pendientesCambios cambio(s) de placa/celda no se registraron: quedaron pendientes para reintentar.';
 			final mensajeExitoBase = orden.replayed
-					? 'Orden recuperada por idempotencia (${orden.servicioId})${fechaHoraTexto == null ? '' : ' - Fecha y hora: $fechaHoraTexto'}.'
-					: 'Orden de servicio creada correctamente (${orden.servicioId})${fechaHoraTexto == null ? '' : ' - Fecha y hora: $fechaHoraTexto'}.';
+					? 'Orden recuperada por idempotencia (${orden.servicioId})${fechaHoraTexto == null ? '' : ' - Fecha y hora: $fechaHoraTexto'}.$avisoCambios'
+					: 'Orden de servicio creada correctamente (${orden.servicioId})${fechaHoraTexto == null ? '' : ' - Fecha y hora: $fechaHoraTexto'}.$avisoCambios';
 			String mensajeExito = mensajeExitoBase;
 			final nombreArchivoPdf = 'orden_servicio_${orden.servicioId}.pdf';
 			Uint8List? pdfBytes;
@@ -732,6 +1179,9 @@ class ServicioBloc extends Bloc<ServicioEvent, ServicioState> {
 				mensajeExito = '$mensajeExitoBase PDF no generado en este intento.';
 			}
 
+			// Las reacondicionadas que se usaron ya no estan disponibles.
+			_invalidarReacondicionadas();
+
 			emit(
 				_crearEstadoFormularioInicial().copyWith(
 					exitoMensaje: mensajeExito,
@@ -740,6 +1190,7 @@ class ServicioBloc extends Bloc<ServicioEvent, ServicioState> {
 					pdfOrdenBytes: pdfBytes,
 					pdfOrdenNombre: nombreArchivoPdf,
 					documentosPendientes: _documentosPendientes.length,
+					resultadoCambiosPieza: resultadoCambios,
 				),
 			);
 		} on ValoresOrdenRechazadosException catch (e) {
@@ -1039,6 +1490,7 @@ class ServicioBloc extends Bloc<ServicioEvent, ServicioState> {
 		emit(const MisServiciosLoading());
 		try {
 			await _cargarPendientesDesdeStorage();
+			await _asegurarAsignacionesPendientesLeidas();
 			final pagina = await _obtenerMisServiciosUseCase.ejecutar(
 				pagina: 1,
 				busqueda: busqueda,
@@ -1061,6 +1513,7 @@ class ServicioBloc extends Bloc<ServicioEvent, ServicioState> {
 					pagina: pagina.pagina,
 					totalPaginas: pagina.totalPaginas,
 					documentosPendientes: _documentosPendientes.length,
+					asignacionesPendientes: List.unmodifiable(_asignacionesPendientes),
 				),
 			);
 			add(const MisServiciosDisponibilidadPdfSolicitada());
@@ -1602,8 +2055,15 @@ class ServicioBloc extends Bloc<ServicioEvent, ServicioState> {
 		Emitter<ServicioState> emit,
 	) async {
 		await _cargarPendientesDesdeStorage();
+		await _asegurarAsignacionesPendientesLeidas();
+		_invalidarReacondicionadas();
+		// El aviso de exito del servicio anterior sigue mostrando sus cambios de
+		// placa/celda mientras el formulario arranca de nuevo.
+		final anterior = state;
 		final inicial = _crearEstadoFormularioInicial().copyWith(
 			documentosPendientes: _documentosPendientes.length,
+			resultadoCambiosPieza:
+					anterior is ServicioFormularioState ? anterior.resultadoCambiosPieza : null,
 		);
 		final precarga = event.precarga;
 		emit(precarga == null ? inicial : _aplicarPrecarga(inicial, precarga));
@@ -1654,6 +2114,7 @@ class ServicioBloc extends Bloc<ServicioEvent, ServicioState> {
 				clienteId: cliente?.id,
 				equipoNroSerie: precarga.equipoNroSerie.trim(),
 				equipoModelo: precarga.equipoModelo.trim(),
+				equipoModeloProductoId: precarga.equipoModeloProductoId?.trim(),
 				sintoma: precarga.sintoma.trim(),
 			),
 		);
@@ -1682,8 +2143,8 @@ class ServicioBloc extends Bloc<ServicioEvent, ServicioState> {
 				(texto.contains('canal') || texto.contains('remoto') || texto.contains('fabrica'));
 	}
 
-	/// Provincia, lugar de atencion y km solo existen en `canal = campo`. Al
-	/// pasar a remoto o fabrica se limpian para no arrastrar datos cargados
+	/// Provincia, lugar de atencion, km y cambios de placa/celda solo existen en
+	/// `canal = campo`. Al pasar a remoto o fabrica se limpian para no arrastrar datos cargados
 	/// antes del cambio de canal: el backend resuelve el lugar y el payload
 	/// viaja sin esas claves.
 	ServicioFormularioState _aplicarReglasDeCanal(ServicioFormularioState estado) {
@@ -1695,6 +2156,7 @@ class ServicioBloc extends Bloc<ServicioEvent, ServicioState> {
 			lugarProvinciaId: '',
 			lugarDetalle: '',
 			km: '',
+			cambiosPieza: const [],
 		);
 	}
 
@@ -1776,6 +2238,35 @@ class ServicioBloc extends Bloc<ServicioEvent, ServicioState> {
 		}
 		if (_productosFallaNormalizados(estado.productosFallaSeleccionados).isEmpty) {
 			return (campo: CampoFormularioServicio.productosFalla, mensaje: 'Selecciona al menos un producto en Partes que mostraban falla.');
+		}
+		return _validarCambiosPieza(estado);
+	}
+
+	/// Cada cambio necesita el numero de serie de la pieza que se pone, y una
+	/// pieza no puede aparecer dos veces (ni puesta y sacada a la vez). El resto
+	/// lo valida el backend al registrar cada cambio.
+	_Faltante? _validarCambiosPieza(ServicioFormularioState estado) {
+		if (!estado.requiereDatosDeCampo) {
+			return null;
+		}
+		final cambios = estado.cambiosPieza;
+		final vistas = <String>{};
+		for (var i = 0; i < cambios.length; i++) {
+			final cambio = cambios[i];
+			final cual = cambios.length == 1 ? '' : ' (cambio ${i + 1})';
+			final puesta = normalizarSerie(cambio.nroSerie);
+			final retirada = normalizarSerie(cambio.retiradaNroSerie);
+			if (puesta.isEmpty) {
+				return (campo: CampoFormularioServicio.cambiosPieza, mensaje: 'Completa el número de serie de la ${cambio.nombreTipo} que se pone$cual.');
+			}
+			if (puesta == retirada) {
+				return (campo: CampoFormularioServicio.cambiosPieza, mensaje: 'La pieza que se saca no puede ser la misma que se pone$cual.');
+			}
+			for (final serie in [puesta, retirada]) {
+				if (serie.isNotEmpty && !vistas.add(serie)) {
+					return (campo: CampoFormularioServicio.cambiosPieza, mensaje: 'La pieza $serie está dos veces en los cambios de placa/celda.');
+				}
+			}
 		}
 		return null;
 	}

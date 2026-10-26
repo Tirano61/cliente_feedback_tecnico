@@ -10,7 +10,10 @@ import 'package:cliente_feedback_tecnico/features/fabrica/application/cargar_rep
 import 'package:cliente_feedback_tecnico/features/fabrica/application/crear_ingreso_use_case.dart';
 import 'package:cliente_feedback_tecnico/features/fabrica/application/crear_recepcion_use_case.dart';
 import 'package:cliente_feedback_tecnico/features/fabrica/application/derivar_ingreso_use_case.dart';
+import 'package:cliente_feedback_tecnico/features/fabrica/application/guardar_asignacion_pendiente_use_case.dart';
 import 'package:cliente_feedback_tecnico/features/fabrica/application/guardar_vinculacion_pendiente_use_case.dart';
+import 'package:cliente_feedback_tecnico/features/fabrica/application/obtener_asignaciones_pendientes_use_case.dart';
+import 'package:cliente_feedback_tecnico/features/fabrica/application/quitar_asignacion_pendiente_use_case.dart';
 import 'package:cliente_feedback_tecnico/features/fabrica/application/devolver_recepcion_use_case.dart';
 import 'package:cliente_feedback_tecnico/features/fabrica/application/obtener_causas_use_case.dart';
 import 'package:cliente_feedback_tecnico/features/fabrica/application/obtener_componentes_use_case.dart';
@@ -25,6 +28,7 @@ import 'package:cliente_feedback_tecnico/features/fabrica/application/obtener_vi
 import 'package:cliente_feedback_tecnico/features/fabrica/application/quitar_vinculacion_pendiente_use_case.dart';
 import 'package:cliente_feedback_tecnico/features/fabrica/application/recibir_de_desarrollo_use_case.dart';
 import 'package:cliente_feedback_tecnico/features/fabrica/application/vincular_servicio_recepcion_use_case.dart';
+import 'package:cliente_feedback_tecnico/features/fabrica/domain/entities/asignacion_pendiente.dart';
 import 'package:cliente_feedback_tecnico/features/fabrica/domain/entities/estados_fabrica.dart';
 import 'package:cliente_feedback_tecnico/features/fabrica/domain/entities/solicitudes_fabrica.dart';
 import 'package:cliente_feedback_tecnico/features/fabrica/domain/entities/vinculacion_pendiente.dart';
@@ -668,6 +672,69 @@ void main() {
 			escenario.storage.valores['fabrica_vinculaciones_pendientes_v1'] =
 					'[{"recepcionId":"$_recepcionId"},{"recepcionId":"$_recepcionId","servicioId":"$_servicioId"}]';
 			expect(await ObtenerVinculacionesPendientesUseCase(repositorio).ejecutar(), [pendiente]);
+			await escenario.cerrar();
+		});
+	});
+
+	group('cambios de placa/celda pendientes en el dispositivo', () {
+		AsignacionPendiente pendiente(String nroSerie, {String? retirada, String? error}) {
+			return AsignacionPendiente(
+				solicitud: SolicitudAsignacion(
+					indicadorNroSerie: 'IND-1001',
+					tipo: TipoUnidad.placa,
+					nroSerie: nroSerie,
+					productoId: 'producto-placa',
+					retiradaNroSerie: retirada,
+					servicioId: _servicioId,
+				),
+				mensajeError: error,
+			);
+		}
+
+		test('se guardan con el body y el mensaje, en orden, y se quitan por clave', () async {
+			final escenario = _Escenario((_) => _json({}));
+			final repositorio = escenario.repositorio;
+			final primera = pendiente('PL-1', retirada: 'PL-900');
+			final segunda = pendiente('PL-2');
+
+			await GuardarAsignacionPendienteUseCase(repositorio).ejecutar(primera);
+			await GuardarAsignacionPendienteUseCase(repositorio).ejecutar(segunda);
+			// El mismo cambio con el mensaje del intento fallido reemplaza al anterior
+			// sin cambiar el orden.
+			final conError = primera.conError('La placa PL-1 está descartada.');
+			await GuardarAsignacionPendienteUseCase(repositorio).ejecutar(conError);
+			expect(await ObtenerAsignacionesPendientesUseCase(repositorio).ejecutar(), [conError, segunda]);
+
+			// La clave no distingue mayusculas ni espacios en el numero de serie.
+			expect(pendiente(' pl-2 ').clave, segunda.clave);
+			await QuitarAsignacionPendienteUseCase(repositorio).ejecutar(segunda.clave);
+			expect(await ObtenerAsignacionesPendientesUseCase(repositorio).ejecutar(), [conError]);
+			await escenario.cerrar();
+
+			// No hablan con el backend.
+			expect(escenario.requests, isEmpty);
+		});
+
+		test('un valor ilegible o incompleto en el dispositivo se descarta', () async {
+			final escenario = _Escenario((_) => _json({}));
+			final repositorio = escenario.repositorio;
+			escenario.storage.valores['fabrica_asignaciones_pendientes_v1'] = '{roto';
+			expect(await ObtenerAsignacionesPendientesUseCase(repositorio).ejecutar(), isEmpty);
+
+			escenario.storage.valores['fabrica_asignaciones_pendientes_v1'] = jsonEncode([
+				{'solicitud': {'indicadorNroSerie': 'IND-1001', 'tipo': 'placa', 'nroSerie': 'PL-1'}},
+				{'solicitud': {'indicadorNroSerie': 'IND-1001', 'tipo': 'indicador', 'nroSerie': 'X', 'servicioId': _servicioId}},
+				{
+					'solicitud': {
+						'indicadorNroSerie': 'IND-1001',
+						'tipo': 'placa',
+						'nroSerie': 'PL-1',
+						'productoId': 'producto-placa',
+						'servicioId': _servicioId,
+					},
+				},
+			]);
+			expect(await ObtenerAsignacionesPendientesUseCase(repositorio).ejecutar(), [pendiente('PL-1')]);
 			await escenario.cerrar();
 		});
 	});

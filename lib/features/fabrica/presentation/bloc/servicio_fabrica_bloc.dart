@@ -21,5 +21,10 @@ class ServicioFabricaBloc extends ServicioBloc {
 		super.obtenerEnlacePdfDocumentoUseCase,
 		super.descargarPdfDocumentoUseCase,
 		super.obtenerClienteUseCase,
+		super.asignarUnidadUseCase,
+		super.buscarUnidadesUseCase,
+		super.guardarAsignacionPendienteUseCase,
+		super.obtenerAsignacionesPendientesUseCase,
+		super.quitarAsignacionPendienteUseCase,
 	);
 }
